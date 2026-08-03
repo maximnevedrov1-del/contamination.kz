@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contamination.kz — Контроль загрязнения и чистые помещения в Казахстане</title>
+    <meta name="description" content="Профессиональный консалтинг по contamination control в Казахстане. Аудит чистых помещений, валидация ISO 14644, обучение персонала, GMP консультации.">
+    <meta name="keywords" content="contamination control, чистые помещения, ISO 14644, GMP, валидация, Казахстан, Алматы, аудит cleanroom">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #0a2540;
+            --primary-light: #1a3a5c;
+            --accent: #00a8e8;
+            --accent-dark: #0077b6;
+            --text: #2d3748;
+            --text-light: #718096;
+            --bg: #ffffff;
+            --bg-light: #f7fafc;
+            --border: #e2e8f0;
+            --success: #38a169;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        
+        /* Header */
+        header {
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--primary);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        
+        .logo span {
+            color: var(--accent);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+        
+        .nav-links a:hover {
+            color: var(--accent);
+        }
+        
+        .cta-button {
+            background: var(--accent);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        .cta-button:hover {
+            background: var(--accent-dark);
+            transform: translateY(-1px);
+        }
+        
+        .cta-button.outline {
+            background: transparent;
+            color: var(--accent);
+            border: 2px solid var(--accent);
+        }
+        
+        .cta-button.outline:hover {
+            background: var(--accent);
+            color: white;
+        }
+        
+        /* Hero */
+        .hero {
+            padding: 160px 0 100px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(0,168,232,0.15) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 700px;
+        }
+        
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 14px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .hero h1 {
+            font-size: 52px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+        }
+        
+        .hero h1 span {
+            color: var(--accent);
+        }
+        
+        .hero p {
+            font-size: 20px;
+            line-height: 1.6;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            max-width: 560px;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .hero-buttons .cta-button {
+            padding: 16px 32px;
+            font-size: 16px;
+        }
+        
+        /* Trusted By */
+        .trusted {
+            padding: 40px 0;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .trusted-text {
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+        }
+        
+        .trusted-logos {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 48px;
+            flex-wrap: wrap;
+        }
+        
+        .trusted-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-light);
+            opacity: 0.6;
+        }
+        
+        /* Section Styles */
+        .section {
+            padding: 100px 0;
+        }
+        
+        .section-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 60px;
+        }
+        
+        .section-header h2 {
+            font-size: 40px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+        
+        .section-header p {
+            font-size: 18px;
+            color: var(--text-light);
+        }
+        
+        /* Problem/Solution */
+        .problem-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: center;
+        }
+        
+        .problem-box {
+            background: #fff5f5;
+            border-left: 4px solid #e53e3e;
+            padding: 32px;
+            border-radius: 8px;
+        }
+        
+        .problem-box h3 {
+            color: #c53030;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .problem-box ul {
+            list-style: none;
+        }
+        
+        .problem-box li {
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+        
+        .problem-box li::before {
+            content: '✕';
+            position: absolute;
+            left: 0;
+            color: #e53e3e;
+            font-weight: bold;
+        }
+        
+        .solution-box {
+            background: #f0fff4;
+            border-left: 4px solid var(--success);
+            padding: 32px;
+            border-radius: 8px;
+        }
+        
+        .solution-box h3 {
+            color: var(--success);
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .solution-box ul {
+            list-style: none;
+        }
+        
+        .solution-box li {
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+        
+        .solution-box li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--success);
+            font-weight: bold;
+        }
+        
+        /* Services */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        
+        .service-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px 32px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--accent);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+        
+        .service-card:hover {
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+        }
+        
+        .service-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .service-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            font-size: 24px;
+        }
+        
+        .service-card h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+        
+        .service-card p {
+            color: var(--text-light);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        .service-price {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        /* Process */
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        
+        .process-step {
+            text-align: center;
+            padding: 32px;
+            position: relative;
+        }
+        
+        .process-step:not(:last-child)::after {
+            content: '→';
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: var(--accent);
+            font-weight: bold;
+        }
+        
+        .process-number {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 800;
+            margin: 0 auto 20px;
+        }
+        
+        .process-step h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+        
+        .process-step p {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+        
+        /* Stats */
+        .stats {
+            background: var(--primary);
+            color: white;
+            padding: 80px 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 100px 0;
+            text-align: center;
+        }
+        
+        .cta-section h2 {
+            font-size: 40px;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+        
+        .cta-section p {
+            font-size: 18px;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* Contact */
+        .contact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: start;
+        }
+        
+        .contact-info h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: var(--primary);
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .contact-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--bg-light);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .contact-item h4 {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .contact-item p {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .contact-form {
+            background: var(--bg-light);
+            padding: 40px;
+            border-radius: 12px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--primary);
+            color: white;
+            padding: 60px 0 30px;
+        }
+        
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 48px;
+            margin-bottom: 48px;
+        }
+        
+        .footer-brand {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 16px;
+        }
+        
+        .footer-brand span {
+            color: var(--accent);
+        }
+        
+        .footer-desc {
+            opacity: 0.7;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .footer-links h4 {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+        }
+        
+        .footer-links ul {
+            list-style: none;
+        }
+        
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+        
+        .footer-links a {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: white;
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            opacity: 0.6;
+        }
+        
+        /* Mobile */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+            
+            .hero p {
+                font-size: 18px;
+            }
+            
+            .problem-grid,
+            .contact-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .process-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .process-step:not(:last-child)::after {
+                content: '↓';
+                right: 50%;
+                top: 100%;
+                transform: translateX(50%);
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .section {
+                padding: 60px 0;
+            }
+            
+            .section-header h2 {
+                font-size: 32px;
+            }
+        }
+        
+        /* Schema.org JSON-LD */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Schema.org -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Contamination.kz",
+        "description": "Консалтинг по контролю загрязнения и чистым помещениям в Казахстане",
+        "url": "https://contamination.kz",
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Алматы",
+            "addressCountry": "KZ"
+        },
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "sales",
+            "availableLanguage": ["Russian", "English"]
+        }
+    }
+    </script>
+
+    <!-- Header -->
+    <header>
+        <nav class="container">
+            <a href="#" class="logo">Contamination<span>.kz</span></a>
+            <ul class="nav-links">
+                <li><a href="#services">Услуги</a></li>
+                <li><a href="#process">Процесс</a></li>
+                <li><a href="#about">О нас</a></li>
+                <li><a href="#contact">Контакты</a></li>
+            </ul>
+            <a href="#contact" class="cta-button">Бесплатная консультация</a>
+        </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">🛡️ ISO 14644 • GMP • FDA</div>
+                <h1>Контроль загрязнения <span>в Казахстане</span></h1>
+                <p>Профессиональный консалтинг по чистым помещениям, валидации и contamination control для фармы, медицины, IT и нефтегаза</p>
+                <div class="hero-buttons">
+                    <a href="#contact" class="cta-button">Получить аудит</a>
+                    <a href="#services" class="cta-button outline">Наши услуги</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="trusted">
+        <div class="container">
+            <p class="trusted-text">Нам доверяют лидеры отраслей</p>
+            <div class="trusted-logos">
+                <span class="trusted-logo">TengizChevroil</span>
+                <span class="trusted-logo">KazAtomProm</span>
+                <span class="trusted-logo">Kaspi Bank</span>
+                <span class="trusted-logo">Wood Group</span>
+                <span class="trusted-logo">Karachaganak</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem/Solution -->
+    <section class="section" id="about">
+        <div class="container">
+            <div class="section-header">
+                <h2>Почему contamination control — это важно</h2>
+                <p>Одна ошибка в чистом помещении может стоить миллионы</p>
+            </div>
+            <div class="problem-grid">
+                <div class="problem-box">
+                    <h3>Без нас вы рискуете</h3>
+                    <ul>
+                        <li>Штрафы от регуляторов за несоответствие GMP</li>
+                        <li>Порча продукции из-за микробиологической контаминации</li>
+                        <li>Отзыв сертификатов и остановка производства</li>
+                        <li>Повреждение оборудования от статического электричества</li>
+                        <li>Потеря контрактов с международными партнёрами</li>
+                    </ul>
+                </div>
+                <div class="solution-box">
+                    <h3>С нами вы получаете</h3>
+                    <ul>
+                        <li>Соответствие ISO 14644 и GMP стандартам</li>
+                        <li>Сертификация чистых помещений с первого раза</li>
+                        <li>Обученный персонал и прописанные SOP</li>
+                        <li>ESD-защита и контроль критических зон</li>
+                        <li>Готовность к аудитам и инспекциям FDA/EMA</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services -->
+    <section class="section" id="services" style="background: var(--bg-light);">
+        <div class="container">
+            <div class="section-header">
+                <h2>Наши услуги</h2>
+                <p>Комплексные решения от аудита до внедрения</p>
+            </div>
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-icon">🔍</div>
+                    <h3>Аудит чистых помещений</h3>
+                    <p>Полный анализ соответствия ISO 14644, выявление рисков контаминации, оценка HVAC и фильтрации. Детальный отчёт с рекомендациями.</p>
+                    <div class="service-price">от 300 000 тг</div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">✅</div>
+                    <h3>Валидация IQ/OQ/PQ</h3>
+                    <p>Проведение квалификации оборудования и помещений. Подготовка документации для GMP аудитов и инспекций регуляторов.</p>
+                    <div class="service-price">от 500 000 тг</div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">📚</div>
+                    <h3>Обучение персонала</h3>
+                    <p>Программы gowning procedures, SOP training, базовая микробиология. Сертификация специалистов по стандартам чистых помещений.</p>
+                    <div class="service-price">от 200 000 тг</div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">⚡</div>
+                    <h3>ESD-контроль</h3>
+                    <p>Аудит электростатической защиты, подбор ESD-safe оборудования, внедрение систем контроля для ЦОД и электроники.</p>
+                    <div class="service-price">от 400 000 тг</div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🏗️</div>
+                    <h3>Проектирование Cleanroom</h3>
+                    <p>Разработка концепции чистых помещений, расчёт классов чистоты, подбор оборудования HVAC, HEPA-фильтрации и систем мониторинга.</p>
+                    <div class="service-price">от 800 000 тг</div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🔄</div>
+                    <h3>Абонентское обслуживание</h3>
+                    <p>Ежемесячный мониторинг, плановые проверки, обновление SOP, подготовка к инспекциям. Ваш личный отдел quality.</p>
+                    <div class="service-price">от 1 000 000 тг/мес</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Process -->
+    <section class="section" id="process">
+        <div class="container">
+            <div class="section-header">
+                <h2>Как мы работаем</h2>
+                <p>От первого звонка до сертификата — 4 простых шага</p>
+            </div>
+            <div class="process-grid">
+                <div class="process-step">
+                    <div class="process-number">1</div>
+                    <h3>Диагностика</h3>
+                    <p>Бесплатный созвон, анализ ваших задач и текущего состояния. Определяем scope работ.</p>
+                </div>
+                <div class="process-step">
+                    <div class="process-number">2</div>
+                    <h3>Аудит</h3>
+                    <p>Выезд на объект, измерения, тестирование. Полный отчёт с фото, данными и рекомендациями.</p>
+                </div>
+                <div class="process-step">
+                    <div class="process-number">3</div>
+                    <h3>Внедрение</h3>
+                    <p>Разработка SOP, обучение персонала, настройка оборудования. Подготовка к сертификации.</p>
+                </div>
+                <div class="process-step">
+                    <div class="process-number">4</div>
+                    <h3>Сертификация</h3>
+                    <p>Получение сертификата ISO 14644. Поддержка и мониторинг для поддержания стандарта.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">45+</div>
+                    <div class="stat-label">лет опыта Atrix</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">40+</div>
+                    <div class="stat-label">стран присутствия</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">99.999%</div>
+                    <div class="stat-label">эффективность ULPA</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">18</div>
+                    <div class="stat-label">месяцев гарантии</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Готовы к чистым стандартам?</h2>
+            <p>Получите бесплатную консультацию по вашему проекту. Мы ответим в течение 2 часов в рабочее время.</p>
+            <a href="#contact" class="cta-button" style="font-size: 18px; padding: 18px 40px;">Заказать бесплатный аудит</a>
+        </div>
+    </section>
+
+    <!-- Contact -->
+    <section class="section" id="contact" style="background: var(--bg-light);">
+        <div class="container">
+            <div class="section-header">
+                <h2>Свяжитесь с нами</h2>
+                <p>Работаем по всему Казахстану. Офис в Алматы.</p>
+            </div>
+            <div class="contact-grid">
+                <div class="contact-info">
+                    <h3>Контактная информация</h3>
+                    <div class="contact-item">
+                        <div class="contact-icon">📍</div>
+                        <div>
+                            <h4>Адрес</h4>
+                            <p>Алматы, Казахстан</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">📞</div>
+                        <div>
+                            <h4>Телефон</h4>
+                            <p>+7 706 421 75 36</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">✉️</div>
+                        <div>
+                            <h4>Email</h4>
+                            <p>info@contamination.kz</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">💬</div>
+                        <div>
+                            <h4>WhatsApp</h4>
+                            <p>+7 706 421 75 36</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="contact-form">
+                    <form action="#" method="POST">
+                        <div class="form-group">
+                            <label for="name">Ваше имя</label>
+                            <input type="text" id="name" name="name" placeholder="Иван Иванов" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="company">Компания</label>
+                            <input type="text" id="company" name="company" placeholder="ООО «Пример»">
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Телефон</label>
+                            <input type="tel" id="phone" name="phone" placeholder="+7 707 123 4567" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="service">Интересующая услуга</label>
+                            <select id="service" name="service">
+                                <option value="">Выберите услугу</option>
+                                <option value="audit">Аудит чистых помещений</option>
+                                <option value="validation">Валидация IQ/OQ/PQ</option>
+                                <option value="training">Обучение персонала</option>
+                                <option value="esd">ESD-контроль</option>
+                                <option value="design">Проектирование Cleanroom</option>
+                                <option value="subscription">Абонентское обслуживание</option>
+                                <option value="other">Другое</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Описание задачи</label>
+                            <textarea id="message" name="message" placeholder="Расскажите о вашем проекте..."></textarea>
+                        </div>
+                        <button type="submit" class="cta-button" style="width: 100%; padding: 16px;">Отправить заявку</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <div class="footer-brand">Contamination<span>.kz</span></div>
+                    <p class="footer-desc">Профессиональный консалтинг по контролю загрязнения и чистым помещениям в Казахстане. Сертификация ISO 14644, GMP, ESD.</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Услуги</h4>
+                    <ul>
+                        <li><a href="#services">Аудит чистых помещений</a></li>
+                        <li><a href="#services">Валидация</a></li>
+                        <li><a href="#services">Обучение</a></li>
+                        <li><a href="#services">ESD-контроль</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Компания</h4>
+                    <ul>
+                        <li><a href="#about">О нас</a></li>
+                        <li><a href="#">Кейсы</a></li>
+                        <li><a href="#">Блог</a></li>
+                        <li><a href="#contact">Контакты</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Стандарты</h4>
+                    <ul>
+                        <li><a href="#">ISO 14644</a></li>
+                        <li><a href="#">GMP EU</a></li>
+                        <li><a href="#">FDA Guidance</a></li>
+                        <li><a href="#">SanPiN RK</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 Contamination.kz — Все права защищены</p>
+                <p>Официальный партнёр Atrix Kazakhstan</p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
