@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contamination.kz — Контроль загрязнения в Казахстане</title>
     <meta name="description" content="Инновационные решения по контролю загрязнения, чистым помещениям и валидации для фармы, медицины и нефтегаза в Казахстане.">
-    
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        
+
         :root {
             --bg: #0a0a0f;
             --bg-elevated: #12121a;
@@ -23,17 +23,17 @@
             --glass: rgba(255,255,255,0.04);
             --glass-border: rgba(255,255,255,0.08);
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         html {
             scroll-behavior: smooth;
         }
-        
+
         body {
             font-family: 'Inter', -apple-system, sans-serif;
             background: var(--bg);
@@ -41,7 +41,7 @@
             line-height: 1.6;
             overflow-x: hidden;
         }
-        
+
         /* Animated Background */
         .bg-mesh {
             position: fixed;
@@ -50,19 +50,19 @@
             width: 100%;
             height: 100%;
             z-index: -2;
-            background: 
+            background:
                 radial-gradient(ellipse at 20% 20%, rgba(0,212,255,0.08) 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 80%, rgba(139,92,246,0.06) 0%, transparent 50%),
                 radial-gradient(ellipse at 50% 50%, rgba(0,212,255,0.03) 0%, transparent 70%);
             animation: meshMove 20s ease-in-out infinite;
         }
-        
+
         @keyframes meshMove {
             0%, 100% { transform: translate(0, 0) scale(1); }
             33% { transform: translate(30px, -30px) scale(1.05); }
             66% { transform: translate(-20px, 20px) scale(0.95); }
         }
-        
+
         /* Noise Texture */
         .noise {
             position: fixed;
@@ -75,7 +75,7 @@
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
             pointer-events: none;
         }
-        
+
         /* Gradient Orbs */
         .orb {
             position: fixed;
@@ -85,7 +85,7 @@
             opacity: 0.15;
             pointer-events: none;
         }
-        
+
         .orb-1 {
             width: 600px;
             height: 600px;
@@ -94,7 +94,7 @@
             right: -200px;
             animation: orbFloat 15s ease-in-out infinite;
         }
-        
+
         .orb-2 {
             width: 500px;
             height: 500px;
@@ -103,19 +103,19 @@
             left: -150px;
             animation: orbFloat 18s ease-in-out infinite reverse;
         }
-        
+
         @keyframes orbFloat {
             0%, 100% { transform: translate(0, 0) rotate(0deg); }
             50% { transform: translate(50px, -30px) rotate(180deg); }
         }
-        
+
         /* Container */
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 24px;
         }
-        
+
         /* Header */
         header {
             position: fixed;
@@ -126,20 +126,20 @@
             padding: 20px 0;
             transition: all 0.4s ease;
         }
-        
+
         header.scrolled {
             background: rgba(10,10,15,0.8);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
             padding: 12px 0;
         }
-        
+
         nav {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .logo {
             font-size: 22px;
             font-weight: 800;
@@ -149,7 +149,7 @@
             align-items: center;
             gap: 8px;
         }
-        
+
         .logo-icon {
             width: 36px;
             height: 36px;
@@ -160,17 +160,17 @@
             justify-content: center;
             font-size: 18px;
         }
-        
+
         .logo span {
             color: var(--accent);
         }
-        
+
         .nav-links {
             display: flex;
             gap: 40px;
             list-style: none;
         }
-        
+
         .nav-links a {
             color: var(--text-dim);
             text-decoration: none;
@@ -179,7 +179,7 @@
             transition: color 0.3s;
             position: relative;
         }
-        
+
         .nav-links a::after {
             content: '';
             position: absolute;
@@ -190,15 +190,15 @@
             background: var(--accent);
             transition: width 0.3s;
         }
-        
+
         .nav-links a:hover {
             color: var(--text);
         }
-        
+
         .nav-links a:hover::after {
             width: 100%;
         }
-        
+
         .btn {
             display: inline-flex;
             align-items: center;
@@ -213,30 +213,30 @@
             border: none;
             font-family: inherit;
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, var(--accent), #0891b2);
             color: white;
             box-shadow: 0 4px 20px rgba(0,212,255,0.3);
         }
-        
+
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 30px rgba(0,212,255,0.4);
         }
-        
+
         .btn-glass {
             background: var(--glass);
             border: 1px solid var(--glass-border);
             color: var(--text);
             backdrop-filter: blur(10px);
         }
-        
+
         .btn-glass:hover {
             background: rgba(255,255,255,0.08);
             border-color: rgba(255,255,255,0.15);
         }
-        
+
         /* Hero */
         .hero {
             min-height: 100vh;
@@ -245,14 +245,14 @@
             padding: 140px 0 80px;
             position: relative;
         }
-        
+
         .hero-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 80px;
             align-items: center;
         }
-        
+
         .hero-badge {
             display: inline-flex;
             align-items: center;
@@ -266,7 +266,7 @@
             margin-bottom: 32px;
             backdrop-filter: blur(10px);
         }
-        
+
         .hero-badge::before {
             content: '';
             width: 8px;
@@ -275,12 +275,12 @@
             border-radius: 50%;
             animation: pulse 2s ease-in-out infinite;
         }
-        
+
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.5; transform: scale(0.8); }
         }
-        
+
         .hero h1 {
             font-size: 64px;
             font-weight: 900;
@@ -288,14 +288,14 @@
             letter-spacing: -2px;
             margin-bottom: 24px;
         }
-        
+
         .hero h1 .gradient-text {
             background: linear-gradient(135deg, var(--accent), #8b5cf6, #ec4899);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .hero-subtitle {
             font-size: 20px;
             color: var(--text-dim);
@@ -303,13 +303,13 @@
             margin-bottom: 40px;
             max-width: 520px;
         }
-        
+
         .hero-buttons {
             display: flex;
             gap: 16px;
             flex-wrap: wrap;
         }
-        
+
         /* Hero Visual */
         .hero-visual {
             position: relative;
@@ -318,7 +318,7 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .hero-card {
             position: absolute;
             background: var(--glass);
@@ -328,40 +328,40 @@
             backdrop-filter: blur(20px);
             animation: floatCard 6s ease-in-out infinite;
         }
-        
+
         .hero-card-1 {
             top: 20%;
             left: 0;
             width: 220px;
             animation-delay: 0s;
         }
-        
+
         .hero-card-2 {
             top: 10%;
             right: 0;
             width: 200px;
             animation-delay: -2s;
         }
-        
+
         .hero-card-3 {
             bottom: 15%;
             left: 15%;
             width: 260px;
             animation-delay: -4s;
         }
-        
+
         @keyframes floatCard {
             0%, 100% { transform: translateY(0) rotate(0deg); }
             50% { transform: translateY(-15px) rotate(1deg); }
         }
-        
+
         .card-header {
             display: flex;
             align-items: center;
             gap: 12px;
             margin-bottom: 16px;
         }
-        
+
         .card-icon {
             width: 40px;
             height: 40px;
@@ -371,27 +371,27 @@
             justify-content: center;
             font-size: 18px;
         }
-        
+
         .card-icon.blue { background: rgba(0,212,255,0.15); }
         .card-icon.purple { background: rgba(139,92,246,0.15); }
         .card-icon.green { background: rgba(52,211,153,0.15); }
-        
+
         .card-title {
             font-size: 14px;
             font-weight: 600;
         }
-        
+
         .card-value {
             font-size: 28px;
             font-weight: 800;
             margin-bottom: 4px;
         }
-        
+
         .card-subtitle {
             font-size: 12px;
             color: var(--text-muted);
         }
-        
+
         .progress-bar {
             height: 4px;
             background: rgba(255,255,255,0.1);
@@ -399,26 +399,26 @@
             margin-top: 12px;
             overflow: hidden;
         }
-        
+
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, var(--accent), #8b5cf6);
             border-radius: 2px;
             animation: progressFill 3s ease-out infinite;
         }
-        
+
         @keyframes progressFill {
             0% { width: 0%; }
             50% { width: 85%; }
             100% { width: 100%; }
         }
-        
+
         /* Section Styles */
         .section {
             padding: 120px 0;
             position: relative;
         }
-        
+
         .section-label {
             display: inline-block;
             font-size: 12px;
@@ -428,7 +428,7 @@
             color: var(--accent);
             margin-bottom: 16px;
         }
-        
+
         .section h2 {
             font-size: 48px;
             font-weight: 800;
@@ -436,14 +436,14 @@
             margin-bottom: 20px;
             line-height: 1.1;
         }
-        
+
         .section-desc {
             font-size: 18px;
             color: var(--text-dim);
             max-width: 600px;
             line-height: 1.7;
         }
-        
+
         /* Stats Bar */
         .stats-bar {
             display: grid;
@@ -451,7 +451,7 @@
             gap: 32px;
             margin-top: 80px;
         }
-        
+
         .stat-item {
             text-align: center;
             padding: 32px;
@@ -460,12 +460,12 @@
             border-radius: 20px;
             transition: all 0.4s;
         }
-        
+
         .stat-item:hover {
             border-color: rgba(0,212,255,0.2);
             transform: translateY(-4px);
         }
-        
+
         .stat-number {
             font-size: 48px;
             font-weight: 900;
@@ -475,120 +475,320 @@
             background-clip: text;
             margin-bottom: 8px;
         }
-        
+
         .stat-label {
             font-size: 14px;
             color: var(--text-muted);
         }
-        
-        /* Services Grid */
-        .services-grid {
+
+        /* ===== NEW PRICING SECTIONS ===== */
+
+        /* Service Category */
+        .service-category {
+            margin-bottom: 80px;
+        }
+
+        .service-category:last-child {
+            margin-bottom: 0;
+        }
+
+        .service-category-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .service-category-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .service-category-icon.blue { background: rgba(0,212,255,0.1); }
+        .service-category-icon.purple { background: rgba(139,92,246,0.1); }
+        .service-category-icon.green { background: rgba(52,211,153,0.1); }
+        .service-category-icon.orange { background: rgba(251,146,60,0.1); }
+        .service-category-icon.pink { background: rgba(236,72,153,0.1); }
+
+        .service-category-title {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .service-category-desc {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Pricing Tiers */
+        .pricing-tiers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .tier-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 32px;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tier-card:hover {
+            border-color: rgba(0,212,255,0.2);
+            transform: translateY(-4px);
+        }
+
+        .tier-card.popular {
+            border-color: rgba(0,212,255,0.3);
+            background: linear-gradient(180deg, rgba(0,212,255,0.05), var(--bg-card));
+        }
+
+        .tier-card.popular::before {
+            content: 'РЕКОМЕНДУЕМ';
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-bottom-left-radius: 12px;
+        }
+
+        .tier-name {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .tier-price {
+            font-size: 36px;
+            font-weight: 900;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .tier-price span {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .tier-desc {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tier-features {
+            list-style: none;
+            margin-bottom: 24px;
+        }
+
+        .tier-features li {
+            font-size: 14px;
+            color: var(--text-dim);
+            padding: 8px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .tier-features li::before {
+            content: '✓';
+            color: var(--accent);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .tier-features li.cross::before {
+            content: '—';
+            color: var(--text-muted);
+        }
+
+        .tier-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .tier-btn-primary {
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            color: white;
+            box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+        }
+
+        .tier-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,212,255,0.4);
+        }
+
+        .tier-btn-outline {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+        }
+
+        .tier-btn-outline:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        /* Annual Packages */
+        .packages-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 24px;
             margin-top: 64px;
         }
-        
-        .service-card {
+
+        .package-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 24px;
             padding: 40px;
             transition: all 0.4s ease;
             position: relative;
-            overflow: hidden;
-            cursor: pointer;
         }
-        
-        .service-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            opacity: 0;
-            transition: opacity 0.4s;
-        }
-        
-        .service-card:hover {
+
+        .package-card:hover {
             border-color: rgba(0,212,255,0.2);
             transform: translateY(-8px);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
         }
-        
-        .service-card:hover::before {
-            opacity: 1;
+
+        .package-card.featured {
+            border-color: rgba(139,92,246,0.3);
+            background: linear-gradient(180deg, rgba(139,92,246,0.05), var(--bg-card));
         }
-        
-        .service-icon-wrap {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            margin-bottom: 24px;
-            position: relative;
-        }
-        
-        .service-icon-wrap::after {
-            content: '';
+
+        .package-card.featured::before {
+            content: 'BEST VALUE';
             position: absolute;
-            inset: -2px;
-            border-radius: 18px;
-            padding: 2px;
-            background: linear-gradient(135deg, var(--accent), #8b5cf6);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            opacity: 0;
-            transition: opacity 0.3s;
+            top: 0;
+            right: 0;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-bottom-left-radius: 12px;
         }
-        
-        .service-card:hover .service-icon-wrap::after {
-            opacity: 1;
-        }
-        
-        .service-icon-wrap.blue { background: rgba(0,212,255,0.1); }
-        .service-icon-wrap.purple { background: rgba(139,92,246,0.1); }
-        .service-icon-wrap.green { background: rgba(52,211,153,0.1); }
-        .service-icon-wrap.orange { background: rgba(251,146,60,0.1); }
-        .service-icon-wrap.pink { background: rgba(236,72,153,0.1); }
-        .service-icon-wrap.cyan { background: rgba(34,211,238,0.1); }
-        
-        .service-card h3 {
+
+        .package-name {
             font-size: 20px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
-        
-        .service-card p {
+
+        .package-price {
+            font-size: 42px;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+        }
+
+        .package-period {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .package-for {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 24px;
+            padding: 8px 12px;
+            background: var(--accent-dim);
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .package-features {
+            list-style: none;
+            margin-bottom: 32px;
+        }
+
+        .package-features li {
             font-size: 14px;
             color: var(--text-dim);
-            line-height: 1.7;
-            margin-bottom: 20px;
-        }
-        
-        .service-price {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--accent);
+            padding: 10px 0;
             display: flex;
-            align-items: center;
-            gap: 8px;
+            align-items: flex-start;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
         }
-        
-        .service-price::before {
-            content: '';
-            width: 20px;
-            height: 1px;
-            background: var(--accent);
+
+        .package-features li::before {
+            content: '✓';
+            color: var(--accent);
+            font-weight: 700;
+            flex-shrink: 0;
         }
-        
+
+        /* ROI Section */
+        .roi-card {
+            background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(139,92,246,0.05));
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 48px;
+            text-align: center;
+            margin-top: 64px;
+        }
+
+        .roi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        .roi-item {
+            padding: 24px;
+        }
+
+        .roi-number {
+            font-size: 36px;
+            font-weight: 900;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .roi-label {
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+
         /* Process Timeline */
         .process-timeline {
             display: grid;
@@ -597,7 +797,7 @@
             margin-top: 64px;
             position: relative;
         }
-        
+
         .process-timeline::before {
             content: '';
             position: absolute;
@@ -608,13 +808,13 @@
             background: linear-gradient(90deg, var(--accent), #8b5cf6, #ec4899);
             opacity: 0.3;
         }
-        
+
         .process-step {
             text-align: center;
             padding: 0 24px;
             position: relative;
         }
-        
+
         .step-number {
             width: 80px;
             height: 80px;
@@ -631,38 +831,38 @@
             z-index: 1;
             transition: all 0.4s;
         }
-        
+
         .process-step:hover .step-number {
             border-color: var(--accent);
             box-shadow: 0 0 30px rgba(0,212,255,0.2);
         }
-        
+
         .step-number .gradient {
             background: linear-gradient(135deg, var(--accent), #8b5cf6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .process-step h3 {
             font-size: 18px;
             font-weight: 700;
             margin-bottom: 8px;
         }
-        
+
         .process-step p {
             font-size: 14px;
             color: var(--text-dim);
             line-height: 1.6;
         }
-        
+
         /* CTA Section */
         .cta-section {
             text-align: center;
             padding: 120px 0;
             position: relative;
         }
-        
+
         .cta-card {
             background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(139,92,246,0.05));
             border: 1px solid var(--glass-border);
@@ -671,7 +871,7 @@
             position: relative;
             overflow: hidden;
         }
-        
+
         .cta-card::before {
             content: '';
             position: absolute;
@@ -682,30 +882,30 @@
             background: radial-gradient(circle, rgba(0,212,255,0.1) 0%, transparent 70%);
             animation: rotateGlow 20s linear infinite;
         }
-        
+
         @keyframes rotateGlow {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
+
         .cta-content {
             position: relative;
             z-index: 1;
         }
-        
+
         .cta-section h2 {
             font-size: 48px;
             font-weight: 900;
             margin-bottom: 20px;
         }
-        
+
         .cta-section p {
             font-size: 18px;
             color: var(--text-dim);
             max-width: 500px;
             margin: 0 auto 40px;
         }
-        
+
         /* Contact */
         .contact-grid {
             display: grid;
@@ -713,25 +913,25 @@
             gap: 64px;
             margin-top: 64px;
         }
-        
+
         .contact-info-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 24px;
             padding: 40px;
         }
-        
+
         .contact-item {
             display: flex;
             align-items: flex-start;
             gap: 16px;
             margin-bottom: 32px;
         }
-        
+
         .contact-item:last-child {
             margin-bottom: 0;
         }
-        
+
         .contact-icon {
             width: 48px;
             height: 48px;
@@ -743,7 +943,7 @@
             font-size: 20px;
             flex-shrink: 0;
         }
-        
+
         .contact-item h4 {
             font-size: 12px;
             font-weight: 700;
@@ -752,30 +952,30 @@
             color: var(--text-muted);
             margin-bottom: 4px;
         }
-        
+
         .contact-item p {
             font-size: 16px;
             font-weight: 600;
             color: var(--text);
         }
-        
+
         .contact-form {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 24px;
             padding: 48px;
         }
-        
+
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
-        
+
         .form-group {
             margin-bottom: 24px;
         }
-        
+
         .form-group label {
             display: block;
             font-size: 13px;
@@ -783,7 +983,7 @@
             margin-bottom: 8px;
             color: var(--text-dim);
         }
-        
+
         .form-group input,
         .form-group textarea,
         .form-group select {
@@ -797,7 +997,7 @@
             color: var(--text);
             transition: all 0.3s;
         }
-        
+
         .form-group input:focus,
         .form-group textarea:focus,
         .form-group select:focus {
@@ -805,17 +1005,17 @@
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
         }
-        
+
         .form-group input::placeholder,
         .form-group textarea::placeholder {
             color: var(--text-muted);
         }
-        
+
         .form-group textarea {
             resize: vertical;
             min-height: 120px;
         }
-        
+
         .form-group select {
             cursor: pointer;
             appearance: none;
@@ -824,25 +1024,25 @@
             background-position: right 16px center;
             padding-right: 40px;
         }
-        
+
         .form-group select option {
             background: var(--bg-elevated);
             color: var(--text);
         }
-        
+
         /* Footer */
         footer {
             border-top: 1px solid var(--border);
             padding: 60px 0 30px;
         }
-        
+
         .footer-grid {
             display: grid;
             grid-template-columns: 2fr 1fr 1fr 1fr;
             gap: 48px;
             margin-bottom: 48px;
         }
-        
+
         .footer-brand {
             display: flex;
             align-items: center;
@@ -852,17 +1052,17 @@
             color: white;
             margin-bottom: 16px;
         }
-        
+
         .footer-brand span {
             color: var(--accent);
         }
-        
+
         .footer-desc {
             color: var(--text-muted);
             font-size: 14px;
             line-height: 1.7;
         }
-        
+
         .footer-links h4 {
             font-size: 12px;
             font-weight: 700;
@@ -871,26 +1071,26 @@
             color: var(--text-dim);
             margin-bottom: 20px;
         }
-        
+
         .footer-links ul {
             list-style: none;
         }
-        
+
         .footer-links li {
             margin-bottom: 12px;
         }
-        
+
         .footer-links a {
             color: var(--text-muted);
             text-decoration: none;
             font-size: 14px;
             transition: color 0.3s;
         }
-        
+
         .footer-links a:hover {
             color: var(--text);
         }
-        
+
         .footer-bottom {
             border-top: 1px solid var(--border);
             padding-top: 30px;
@@ -900,88 +1100,108 @@
             font-size: 13px;
             color: var(--text-muted);
         }
-        
+
         /* Scroll Animations */
         .reveal {
             opacity: 0;
             transform: translateY(30px);
             transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        
+
         .reveal.visible {
             opacity: 1;
             transform: translateY(0);
         }
-        
+
         /* Responsive */
         @media (max-width: 1024px) {
             .hero-grid {
                 grid-template-columns: 1fr;
                 gap: 60px;
             }
-            
+
             .hero-visual {
                 display: none;
             }
-            
-            .services-grid {
+
+            .pricing-tiers {
                 grid-template-columns: repeat(2, 1fr);
             }
-            
+
+            .packages-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .roi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
             .process-timeline {
                 grid-template-columns: repeat(2, 1fr);
                 gap: 40px;
             }
-            
+
             .process-timeline::before {
                 display: none;
             }
-            
+
             .stats-bar {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
-        
+
         @media (max-width: 768px) {
             .hero h1 {
                 font-size: 40px;
             }
-            
+
             .section h2 {
                 font-size: 32px;
             }
-            
-            .services-grid {
+
+            .pricing-tiers {
                 grid-template-columns: 1fr;
             }
-            
+
+            .packages-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .roi-grid {
+                grid-template-columns: 1fr;
+            }
+
             .process-timeline {
                 grid-template-columns: 1fr;
             }
-            
+
             .stats-bar {
                 grid-template-columns: 1fr;
             }
-            
+
             .contact-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .form-row {
                 grid-template-columns: 1fr;
             }
-            
+
             .footer-grid {
                 grid-template-columns: 1fr;
                 gap: 32px;
             }
-            
+
             .nav-links {
                 display: none;
             }
-            
+
             .cta-card {
                 padding: 48px 24px;
+            }
+
+            .roi-card {
+                padding: 32px 24px;
             }
         }
     </style>
@@ -1002,8 +1222,8 @@
             </a>
             <ul class="nav-links">
                 <li><a href="#services">Услуги</a></li>
+                <li><a href="#packages">Пакеты</a></li>
                 <li><a href="#process">Процесс</a></li>
-                <li><a href="#about">О нас</a></li>
                 <li><a href="#contact">Контакты</a></li>
             </ul>
             <a href="#contact" class="btn btn-primary">Бесплатный аудит</a>
@@ -1086,50 +1306,353 @@
         </div>
     </section>
 
-    <!-- Services -->
+    <!-- Services with Pricing Tiers -->
     <section class="section" id="services">
         <div class="container">
             <div class="reveal">
                 <span class="section-label">Наши услуги</span>
-                <h2>Комплексные решения<br>от аудита до сертификации</h2>
-                <p class="section-desc">Полный цикл услуг по контролю загрязнения для критически важных производственных сред</p>
+                <h2>Три уровня под каждую задачу</h2>
+                <p class="section-desc">Выберите глубину погружения: от быстрой диагностики до полного сопровождения с годовой гарантией</p>
             </div>
-            <div class="services-grid">
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap blue">🔍</div>
-                    <h3>Аудит чистых помещений</h3>
-                    <p>Полный анализ соответствия ISO 14644, выявление рисков контаминации, оценка HVAC и фильтрации</p>
-                    <div class="service-price">от 300 000 тг</div>
+
+            <!-- Audit -->
+            <div class="service-category reveal">
+                <div class="service-category-header">
+                    <div class="service-category-icon blue">🔍</div>
+                    <div>
+                        <div class="service-category-title">Аудит чистых помещений</div>
+                        <div class="service-category-desc">Полный анализ соответствия ISO 14644, выявление рисков контаминации, оценка HVAC и фильтрации</div>
+                    </div>
                 </div>
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap purple">✅</div>
-                    <h3>Валидация IQ/OQ/PQ</h3>
-                    <p>Проведение квалификации оборудования и помещений. Подготовка документации для GMP аудитов</p>
-                    <div class="service-price">от 500 000 тг</div>
+                <div class="pricing-tiers">
+                    <div class="tier-card">
+                        <div class="tier-name">Базовый</div>
+                        <div class="tier-price">500 000 <span>тг</span></div>
+                        <div class="tier-desc">Минимальный scope, шаблонный отчёт, без поддержки</div>
+                        <ul class="tier-features">
+                            <li>Выезд на объект до 4 часов</li>
+                            <li>Визуальный осмотр и замеры</li>
+                            <li>Шаблонный отчёт (5–7 стр.)</li>
+                            <li class="cross">Нет рекомендаций по устранению</li>
+                            <li class="cross">Нет поддержки после аудита</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Базовый</a>
+                    </div>
+                    <div class="tier-card popular">
+                        <div class="tier-name">Стандарт</div>
+                        <div class="tier-price">1 200 000 <span>тг</span></div>
+                        <div class="tier-desc">Полный scope, кастомный отчёт, 30 дней поддержки</div>
+                        <ul class="tier-features">
+                            <li>Выезд на объект до 8 часов</li>
+                            <li>Полная проверка ISO 14644</li>
+                            <li>Детальный отчёт (20–30 стр.)</li>
+                            <li>План устранения несоответствий</li>
+                            <li>30 дней поддержки по email</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-primary">Выбрать Стандарт</a>
+                    </div>
+                    <div class="tier-card">
+                        <div class="tier-name">Премиум</div>
+                        <div class="tier-price">2 500 000 <span>тг</span></div>
+                        <div class="tier-desc">Всё включено, приоритет, выезд в любую точку РК, год поддержки</div>
+                        <ul class="tier-features">
+                            <li>Выезд на объект до 2 дней</li>
+                            <li>Полная диагностика + семплирование</li>
+                            <li>Индивидуальный отчёт (50+ стр.)</li>
+                            <li>Сопровождение внедрения</li>
+                            <li>1 год поддержки 24/7</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Премиум</a>
+                    </div>
                 </div>
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap green">📚</div>
-                    <h3>Обучение персонала</h3>
-                    <p>Программы gowning procedures, SOP training, базовая микробиология. Сертификация специалистов</p>
-                    <div class="service-price">от 200 000 тг</div>
+            </div>
+
+            <!-- Validation -->
+            <div class="service-category reveal">
+                <div class="service-category-header">
+                    <div class="service-category-icon purple">✅</div>
+                    <div>
+                        <div class="service-category-title">Валидация IQ/OQ/PQ</div>
+                        <div class="service-category-desc">Проведение квалификации оборудования и помещений. Подготовка документации для GMP аудитов</div>
+                    </div>
                 </div>
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap orange">⚡</div>
-                    <h3>ESD-контроль</h3>
-                    <p>Аудит электростатической защиты, подбор ESD-safe оборудования, контроль критических зон</p>
-                    <div class="service-price">от 400 000 тг</div>
+                <div class="pricing-tiers">
+                    <div class="tier-card">
+                        <div class="tier-name">Базовый</div>
+                        <div class="tier-price">1 000 000 <span>тг</span></div>
+                        <div class="tier-desc">IQ + OQ для одной зоны, шаблонные протоколы</div>
+                        <ul class="tier-features">
+                            <li>IQ + OQ для 1 зоны</li>
+                            <li>Шаблонные протоколы</li>
+                            <li>Базовые измерения</li>
+                            <li class="cross">Без PQ</li>
+                            <li class="cross">Без сопровождения аудита</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Базовый</a>
+                    </div>
+                    <div class="tier-card popular">
+                        <div class="tier-name">Стандарт</div>
+                        <div class="tier-price">2 500 000 <span>тг</span></div>
+                        <div class="tier-desc">Полный цикл IQ/OQ/PQ, кастомные протоколы, поддержка</div>
+                        <ul class="tier-features">
+                            <li>IQ + OQ + PQ для 1–2 зон</li>
+                            <li>Кастомные протоколы под URS</li>
+                            <li>Полный пакет документации</li>
+                            <li>Сопровождение при аудите</li>
+                            <li>60 дней поддержки</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-primary">Выбрать Стандарт</a>
+                    </div>
+                    <div class="tier-card">
+                        <div class="tier-name">Премиум</div>
+                        <div class="tier-price">5 000 000 <span>тг</span></div>
+                        <div class="tier-desc">Полный цикл для всего объекта, год поддержки, приоритет</div>
+                        <ul class="tier-features">
+                            <li>IQ/OQ/PQ для всего объекта</li>
+                            <li>Разработка URS и VMP</li>
+                            <li>Смоук-стади и визуализация</li>
+                            <li>Сопровождение инспекции FDA/EU</li>
+                            <li>1 год поддержки + реквалификация</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Премиум</a>
+                    </div>
                 </div>
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap pink">🏗️</div>
-                    <h3>Проектирование Cleanroom</h3>
-                    <p>Разработка концепции, расчёт классов чистоты, подбор HVAC, HEPA-фильтрации и мониторинга</p>
-                    <div class="service-price">от 800 000 тг</div>
+            </div>
+
+            <!-- Training -->
+            <div class="service-category reveal">
+                <div class="service-category-header">
+                    <div class="service-category-icon green">📚</div>
+                    <div>
+                        <div class="service-category-title">Обучение персонала</div>
+                        <div class="service-category-desc">Программы gowning procedures, SOP training, базовая микробиология. Сертификация специалистов</div>
+                    </div>
                 </div>
-                <div class="service-card reveal">
-                    <div class="service-icon-wrap cyan">🔄</div>
-                    <h3>Абонентское обслуживание</h3>
-                    <p>Ежемесячный мониторинг, плановые проверки, обновление SOP, подготовка к инспекциям</p>
-                    <div class="service-price">от 1 000 000 тг/мес</div>
+                <div class="pricing-tiers">
+                    <div class="tier-card">
+                        <div class="tier-name">Базовый</div>
+                        <div class="tier-price">300 000 <span>тг</span></div>
+                        <div class="tier-desc">Однодневный семинар, группа до 10 человек</div>
+                        <ul class="tier-features">
+                            <li>4 часа теории</li>
+                            <li>Группа до 10 человек</li>
+                            <li>Электронные материалы</li>
+                            <li class="cross">Без практики</li>
+                            <li class="cross">Без сертификата</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Базовый</a>
+                    </div>
+                    <div class="tier-card popular">
+                        <div class="tier-name">Стандарт</div>
+                        <div class="tier-price">600 000 <span>тг</span></div>
+                        <div class="tier-desc">Двухдневный курс, теория + практика, сертификация</div>
+                        <ul class="tier-features">
+                            <li>8 часов теории + практики</li>
+                            <li>Группа до 15 человек</li>
+                            <li>Практика в cleanroom</li>
+                            <li>Сертификат KAKK</li>
+                            <li>Материалы + записи</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-primary">Выбрать Стандарт</a>
+                    </div>
+                    <div class="tier-card">
+                        <div class="tier-name">Премиум</div>
+                        <div class="tier-price">1 200 000 <span>тг</span></div>
+                        <div class="tier-desc">Корпоративный тренинг под ключ, индивидуальная программа</div>
+                        <ul class="tier-features">
+                            <li>Индивидуальная программа</li>
+                            <li>Неограниченное число участников</li>
+                            <li>Выезд к заказчику</li>
+                            <li>Сертификация 2 уровня KAKK</li>
+                            <li>3 месяца post-training поддержки</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Премиум</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ESD -->
+            <div class="service-category reveal">
+                <div class="service-category-header">
+                    <div class="service-category-icon orange">⚡</div>
+                    <div>
+                        <div class="service-category-title">ESD-контроль</div>
+                        <div class="service-category-desc">Аудит электростатической защиты, подбор ESD-safe оборудования, контроль критических зон</div>
+                    </div>
+                </div>
+                <div class="pricing-tiers">
+                    <div class="tier-card">
+                        <div class="tier-name">Базовый</div>
+                        <div class="tier-price">600 000 <span>тг</span></div>
+                        <div class="tier-desc">Базовый аудит ESD, замеры, рекомендации</div>
+                        <ul class="tier-features">
+                            <li>Осмотр до 5 рабочих мест</li>
+                            <li>Измерения заземления</li>
+                            <li>Базовый отчёт</li>
+                            <li class="cross">Без плана внедрения</li>
+                            <li class="cross">Без оборудования</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Базовый</a>
+                    </div>
+                    <div class="tier-card popular">
+                        <div class="tier-name">Стандарт</div>
+                        <div class="tier-price">1 200 000 <span>тг</span></div>
+                        <div class="tier-desc">Полный ESD-аудит, план внедрения, подбор оборудования</div>
+                        <ul class="tier-features">
+                            <li>Аудит всей зоны</li>
+                            <li>Полный комплекс измерений</li>
+                            <li>План внедрения ESD-защиты</li>
+                            <li>Рекомендации по оборудованию</li>
+                            <li>30 дней поддержки</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-primary">Выбрать Стандарт</a>
+                    </div>
+                    <div class="tier-card">
+                        <div class="tier-name">Премиум</div>
+                        <div class="tier-price">2 000 000 <span>тг</span></div>
+                        <div class="tier-desc">Под ключ: аудит, поставка, внедрение, обучение, год поддержки</div>
+                        <ul class="tier-features">
+                            <li>Полный аудит + поставка оборудования</li>
+                            <li>Монтаж и настройка</li>
+                            <li>Обучение персонала</li>
+                            <li>ESD-сертификация зоны</li>
+                            <li>1 год мониторинга</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Премиум</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Design -->
+            <div class="service-category reveal">
+                <div class="service-category-header">
+                    <div class="service-category-icon pink">🏗️</div>
+                    <div>
+                        <div class="service-category-title">Проектирование Cleanroom</div>
+                        <div class="service-category-desc">Разработка концепции, расчёт классов чистоты, подбор HVAC, HEPA-фильтрации и мониторинга</div>
+                    </div>
+                </div>
+                <div class="pricing-tiers">
+                    <div class="tier-card">
+                        <div class="tier-name">Базовый</div>
+                        <div class="tier-price">1 500 000 <span>тг</span></div>
+                        <div class="tier-desc">Концепция и предпроектное предложение</div>
+                        <ul class="tier-features">
+                            <li>Анализ требований</li>
+                            <li>Концептуальная схема</li>
+                            <li>Предварительная спецификация</li>
+                            <li class="cross">Без рабочего проекта</li>
+                            <li class="cross">Без сметы</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Базовый</a>
+                    </div>
+                    <div class="tier-card popular">
+                        <div class="tier-name">Стандарт</div>
+                        <div class="tier-price">3 500 000 <span>тг</span></div>
+                        <div class="tier-desc">Полный рабочий проект, спецификации, смета</div>
+                        <ul class="tier-features">
+                            <li>Полный рабочий проект</li>
+                            <li>Расчёт HVAC и фильтрации</li>
+                            <li>Спецификация оборудования</li>
+                            <li>Сметная документация</li>
+                            <li>30 дней поддержки при стройке</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-primary">Выбрать Стандарт</a>
+                    </div>
+                    <div class="tier-card">
+                        <div class="tier-name">Премиум</div>
+                        <div class="tier-price">8 000 000 <span>тг</span></div>
+                        <div class="tier-desc">Под ключ: от концепции до ввода в эксплуатацию с гарантией</div>
+                        <ul class="tier-features">
+                            <li>Всё из Стандарта</li>
+                            <li>Авторский надзор</li>
+                            <li>Валидация после стройки</li>
+                            <li>Обучение персонала</li>
+                            <li>1 год гарантии + поддержка</li>
+                        </ul>
+                        <a href="#contact" class="tier-btn tier-btn-outline">Выбрать Премиум</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Annual Packages -->
+    <section class="section" id="packages" style="background: linear-gradient(180deg, transparent, rgba(0,212,255,0.02), transparent);">
+        <div class="container">
+            <div class="reveal">
+                <span class="section-label">Годовые пакеты</span>
+                <h2>Предсказуемый бюджет — надёжный результат</h2>
+                <p class="section-desc">Рекуррентное обслуживание для компаний, которым важно соответствие стандартам круглый год</p>
+            </div>
+
+            <div class="packages-grid">
+                <div class="package-card reveal">
+                    <div class="package-name">Мониторинг Lite</div>
+                    <div class="package-price">3 000 000</div>
+                    <div class="package-period">тенге в год</div>
+                    <div class="package-for">Для малых компаний до 50 сотрудников</div>
+                    <ul class="package-features">
+                        <li>2 выездных аудита в год</li>
+                        <li>Базовый мониторинг параметров</li>
+                        <li>Обновление SOP (1 раз в квартал)</li>
+                        <li>Телефонная консультация</li>
+                        <li>Скидка 10% на отдельные услуги</li>
+                    </ul>
+                    <a href="#contact" class="tier-btn tier-btn-outline">Оставить заявку</a>
+                </div>
+
+                <div class="package-card featured reveal">
+                    <div class="package-name">Мониторинг Pro</div>
+                    <div class="package-price">6 000 000</div>
+                    <div class="package-period">тенге в год</div>
+                    <div class="package-for">Для среднего бизнеса 50–200 сотрудников</div>
+                    <ul class="package-features">
+                        <li>4 выездных аудита в год</li>
+                        <li>Полный мониторинг 24/7</li>
+                        <li>Обучение до 10 сотрудников</li>
+                        <li>2 места на KAKK Summit</li>
+                        <li>Поддержка 24/7</li>
+                        <li>Скидка 20% на отдельные услуги</li>
+                    </ul>
+                    <a href="#contact" class="tier-btn tier-btn-primary">Оставить заявку</a>
+                </div>
+
+                <div class="package-card reveal">
+                    <div class="package-name">Enterprise</div>
+                    <div class="package-price">12 000 000</div>
+                    <div class="package-period">тенге в год</div>
+                    <div class="package-for">Для крупных заводов от 200 сотрудников</div>
+                    <ul class="package-features">
+                        <li>Безлимитные консультации</li>
+                        <li>Ежемесячные выезды на объект</li>
+                        <li>Полная валидация + реквалификация</li>
+                        <li>Обучение всего персонала</li>
+                        <li>5 мест на KAKK Summit</li>
+                        <li>Приоритетная поддержка 24/7</li>
+                        <li>Скидка 30% на отдельные услуги</li>
+                    </ul>
+                    <a href="#contact" class="tier-btn tier-btn-outline">Оставить заявку</a>
+                </div>
+            </div>
+
+            <!-- ROI Block -->
+            <div class="roi-card reveal">
+                <h3 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">Почему это выгодно?</h3>
+                <p style="color: var(--text-dim); margin-bottom: 0;">Один несоответствующий аудит FDA или EU GMP может стоить гораздо дороже годового контракта</p>
+                <div class="roi-grid">
+                    <div class="roi-item">
+                        <div class="roi-number">$50 000+</div>
+                        <div class="roi-label">Средний штраф FDA за нарушения в cleanroom</div>
+                    </div>
+                    <div class="roi-item">
+                        <div class="roi-number">6–18 мес</div>
+                        <div class="roi-label">Время остановки производства после Warning Letter</div>
+                    </div>
+                    <div class="roi-item">
+                        <div class="roi-number">10×</div>
+                        <div class="roi-label">ROI профилактического аудита vs устранение последствий</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1239,15 +1762,17 @@
                                 <input type="tel" placeholder="+7 707 123 4567" required>
                             </div>
                             <div class="form-group">
-                                <label>Услуга</label>
+                                <label>Интересует</label>
                                 <select>
-                                    <option value="">Выберите услугу</option>
+                                    <option value="">Выберите вариант</option>
                                     <option>Аудит чистых помещений</option>
                                     <option>Валидация IQ/OQ/PQ</option>
                                     <option>Обучение персонала</option>
                                     <option>ESD-контроль</option>
                                     <option>Проектирование Cleanroom</option>
-                                    <option>Абонентское обслуживание</option>
+                                    <option>Годовой пакет Lite</option>
+                                    <option>Годовой пакет Pro</option>
+                                    <option>Годовой пакет Enterprise</option>
                                 </select>
                             </div>
                         </div>
@@ -1276,19 +1801,19 @@
                 <div class="footer-links">
                     <h4>Услуги</h4>
                     <ul>
-                        <li><a href="#">Аудит чистых помещений</a></li>
-                        <li><a href="#">Валидация</a></li>
-                        <li><a href="#">Обучение</a></li>
-                        <li><a href="#">ESD-контроль</a></li>
+                        <li><a href="#services">Аудит чистых помещений</a></li>
+                        <li><a href="#services">Валидация</a></li>
+                        <li><a href="#services">Обучение</a></li>
+                        <li><a href="#services">ESD-контроль</a></li>
                     </ul>
                 </div>
                 <div class="footer-links">
                     <h4>Компания</h4>
                     <ul>
-                        <li><a href="#">О нас</a></li>
-                        <li><a href="#">Кейсы</a></li>
-                        <li><a href="#">Блог</a></li>
-                        <li><a href="#">Контакты</a></li>
+                        <li><a href="#about">О нас</a></li>
+                        <li><a href="#packages">Годовые пакеты</a></li>
+                        <li><a href="#process">Процесс</a></li>
+                        <li><a href="#contact">Контакты</a></li>
                     </ul>
                 </div>
                 <div class="footer-links">
@@ -1330,7 +1855,7 @@
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('visible');
-                    
+
                     // Animate counters
                     const counters = entry.target.querySelectorAll('.stat-number[data-count]');
                     counters.forEach(counter => {
@@ -1339,7 +1864,7 @@
                         const duration = 2000;
                         const step = target / (duration / 16);
                         let current = 0;
-                        
+
                         const timer = setInterval(() => {
                             current += step;
                             if (current >= target) {
