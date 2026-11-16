@@ -32,6 +32,7 @@ import {
   setApiEntries,
   getCosts,
   setCosts,
+  getCatalog,
   KEYS,
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
@@ -480,7 +481,7 @@ async function onContentUpdate(snap) {
 
 /** State consumed by popup and dashboard. */
 async function getState() {
-  const [settings, snapshots, lastSync, registry] = await Promise.all([getSettings(), getSnapshots(), getLastSync(), getRegistry()]);
+  const [settings, snapshots, lastSync, registry, tokens, catalog] = await Promise.all([getSettings(), getSnapshots(), getLastSync(), getRegistry(), getApiTokens(), getCatalog()]);
   const tabs = Object.values(registry);
   const license = await currentLicense().catch(() => ({ status: 'offline', canUse: false, storeLimit: 0 }));
   return {
@@ -491,6 +492,9 @@ async function getState() {
     unauthTabs: tabs.filter((e) => !e.authenticated && e.isCabinet).length,
     license,
     allowedStoreIds: allowedStoreIds(settings, license),
+    // for the home page checklist (ids only, never the tokens)
+    apiStores: Object.keys(tokens).filter((id) => settings.stores[id]),
+    catalogReady: Object.keys(catalog).length > 0,
   };
 }
 

@@ -55,16 +55,16 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
+const ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
-const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, selected: new Set(), focus: 0 });
+const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, tab: 'all', selected: new Set(), focus: 0 });
 
 const state = {
   /** @type {{settings:any, snapshots:Record<string,any>, lastSync:number, tabs:any[], unauthTabs:number}|null} */
   data: null,
   chat: {},
-  route: 'orders',
+  route: 'home',
   syncing: false,
   filters: { shopId: 'all', preset: '30', from: '', to: '' },
   tables: Object.fromEntries(TABLE_ROUTES.map((r) => [r, tableState()])),
@@ -253,6 +253,7 @@ function filterAndSort(route, rows) {
   let out = rows.filter(
     (r) =>
       (ts.status === 'all' || r.status === ts.status) &&
+      (route !== 'orders' || orderTabMatch(ts.tab, r)) &&
       (ts.payment === 'all' || r.paymentStatus === ts.payment) &&
       (!ts.urgent || ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()))) &&
       (!q || [r.id, r.customer, r.reason, storeName(r.shopId)].some((v) => v && String(v).toLowerCase().includes(q))),
@@ -261,6 +262,15 @@ function filterAndSort(route, rows) {
   const col = COLUMNS[ts.sort.key];
   if (col) out.sort((a, b) => compareValues(col.value(a), col.value(b)) * (ts.sort.dir === 'asc' ? 1 : -1));
   return out;
+}
+
+/** Orders quick tabs: «Горящие / Новые / В работе / Все». */
+const ORDER_TABS = ['urgent', 'new', 'work', 'all'];
+function orderTabMatch(tab, r) {
+  if (tab === 'urgent') return ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()));
+  if (tab === 'new') return r.status === 'new';
+  if (tab === 'work') return ['accepted', 'packed', 'delivering'].includes(r.status);
+  return true;
 }
 
 /** Bulk actions per section. */
@@ -291,9 +301,29 @@ function renderTable(route, allRows) {
   const visibleKeys = new Set(rows.map((r) => r.key));
   [...ts.selected].forEach((k) => !visibleKeys.has(k) && ts.selected.delete(k)); // drop hidden selections
   const selectedRows = rows.filter((r) => ts.selected.has(r.key));
-  const cols = SECTION_COLUMNS[route];
+  // Columns with nothing to show are hidden (e.g. customer for API orders, profit without cost prices).
+  const cols = SECTION_COLUMNS[route].filter((key) => {
+    if (key === 'customer') return allRows.some((r) => r.customer);
+    if (key === 'profit') return Object.keys(state.costs || {}).length > 0;
+    return true;
+  });
 
   const statuses = [...new Set(allRows.map((r) => r.status))];
+  const tabs =
+    route === 'orders' &&
+    h(
+      'div',
+      { class: 'tabs', role: 'tablist', 'aria-label': t('orders.tabsLabel') },
+      ORDER_TABS.map((tab) => {
+        const n = tab === 'all' ? allRows.length : allRows.filter((r) => orderTabMatch(tab, r)).length;
+        return h(
+          'button',
+          { type: 'button', role: 'tab', class: ['tab', tab === 'urgent' && n && 'tab--danger'], 'aria-selected': String(ts.tab === tab), onclick: () => ((ts.tab = tab), ts.selected.clear(), renderView()) },
+          t(`orders.tab.${tab}`),
+          h('span', { class: 'tab__count' }, formatNumber(n)),
+        );
+      }),
+    );
   const toolbar = h(
     'div',
     { class: 'toolbar' },
@@ -309,6 +339,7 @@ function renderTable(route, allRows) {
         renderView();
       }, 200),
     }),
+    route !== 'orders' &&
     h(
       'select',
       { class: 'select', 'aria-label': t('table.status'), dataset: { fkey: `${route}-status` }, onchange: (e) => ((ts.status = e.target.value), renderView()) },
@@ -321,13 +352,7 @@ function renderTable(route, allRows) {
         { class: 'select', 'aria-label': t('table.payment'), dataset: { fkey: `${route}-payment` }, onchange: (e) => ((ts.payment = e.target.value), renderView()) },
         ['all', 'paid', 'pending', 'failed', 'refunded', 'unknown'].map((p) => h('option', { value: p, selected: ts.payment === p }, t(`payment.${p}`))),
       ),
-    route === 'orders' &&
-      h(
-        'label',
-        { class: 'check' },
-        h('input', { type: 'checkbox', checked: ts.urgent, dataset: { fkey: 'orders-urgent' }, onchange: (e) => ((ts.urgent = e.target.checked), renderView()) }),
-        t('deadline.onlyUrgent'),
-      ),
+
     h('div', { class: 'toolbar__spacer' }),
     route === 'orders' && h('button', { type: 'button', class: 'btn btn--sm', onclick: () => openPickList(allRows) }, t('pick.button')),
     h('span', { class: 'toolbar__count' }, t('table.rows', { count: rows.length })),
@@ -348,7 +373,7 @@ function renderTable(route, allRows) {
 
   if (!rows.length) {
     const body = state.syncing && !allRows.length ? skeletonTable(cols.length) : emptyState(t('table.emptyTitle'), allRows.length ? t('table.emptyFiltered') : t('table.emptyNoData'));
-    return h('section', { class: 'card' }, toolbar, notes, body);
+    return h('section', { class: 'card' }, tabs, toolbar, notes, body);
   }
 
   const allChecked = selectedRows.length === rows.length;
@@ -415,6 +440,7 @@ function renderTable(route, allRows) {
   return h(
     'section',
     { class: 'card' },
+    tabs,
     toolbar,
     bulk,
     notes,
@@ -1317,7 +1343,7 @@ function viewSettings() {
                     STORE_COLORS.map((c, i) => h('button', { type: 'button', class: 'swatch', style: { background: c }, 'aria-pressed': String(s.color === c), 'aria-label': `${t('settings.color')} ${i + 1}`, onclick: () => patchStore({ color: c }) })),
                   ),
                 ),
-                h('td', null, storeChip(s.id), h('div', { class: 'muted mono' }, s.id)),
+                h('td', { title: s.id }, storeChip(s.id)),
                 h('td', null, h('input', { class: 'input', value: s.alias || '', placeholder: s.name, 'aria-label': t('settings.alias'), onchange: (e) => patchStore({ alias: e.target.value.trim() }) })),
                 h('td', null, h('span', { class: ['badge', status === 'ok' ? 'badge--ok' : 'badge--warn'] }, t(`store.${status === 'ok' ? 'online' : status}`))),
                 h('td', { class: 'muted' }, s.lastSeen ? formatRelative(s.lastSeen) : '—'),
@@ -1512,7 +1538,7 @@ async function removeStore(s) {
 /* ===================================================================== */
 
 function noStores() {
-  return h('section', { class: 'card' }, emptyState(t('store.noStoresTitle'), t('store.noStoresText'), h('button', { type: 'button', class: 'btn btn--primary', onclick: sync }, t('common.refresh'))));
+  return h('section', { class: 'card' }, emptyState(t('store.noStoresTitle'), t('store.noStoresText'), h('button', { type: 'button', class: 'btn btn--primary', onclick: () => $('connectStoreBtn').click() }, t('connect.button'))));
 }
 
 function applyTheme() {
@@ -1526,6 +1552,7 @@ function renderTopbar() {
   $('pageSubtitle').textContent = t(`${state.route}.subtitle`);
   document.title = `${t(`${state.route}.title`)} · ${t('app.name')}`;
 
+  $('dataFilters').hidden = !['orders', 'returns', 'refusals', 'payments', 'analytics', 'products'].includes(state.route);
   const sel = clear($('storeFilter'));
   sel.append(h('option', { value: 'all' }, t('common.allStores')));
   enabledStores().forEach((s) => sel.append(h('option', { value: s.id, selected: state.filters.shopId === s.id }, s.alias || s.name)));
@@ -2124,10 +2151,120 @@ function viewAccount() {
   return h('div', { class: 'settings' }, statusCard, pendingCard, planCard, historyCard);
 }
 
+/* ===================================================================== */
+/* View: home — what to do now + today's numbers (opened first)           */
+/* ===================================================================== */
+
+/** Orders of every store covered by the subscription, without the date filter. */
+function allOrders() {
+  // dates are ISO strings in snapshots; `ts` = milliseconds for comparisons
+  return dataStores().flatMap((s) => (state.data.snapshots[s.id]?.sections?.orders?.items || []).map((it) => ({ ...it, shopId: s.id, ts: it.date ? new Date(it.date).getTime() : 0 })));
+}
+
+function viewHome() {
+  const orders = allOrders();
+  const sn = settingsNow();
+  const lic = state.data.license || {};
+  const urgent = orders.filter((o) => ['soon', 'overdue'].includes(urgencyOf(deadlineOf(o, sn), sn)));
+  const fresh = orders.filter((o) => o.status === 'new');
+  const unpaid = orders.filter((o) => o.paymentStatus === 'pending');
+  const unread = enabledStores().reduce((n, s) => n + sumBy(state.chat[s.id]?.conversations || [], (c) => c.unread), 0);
+  const tokens = state.data.apiStores || [];
+  const noCost = productRows().filter((p) => state.costs[p.key] == null).length;
+  const goOrders = (tab) => () => {
+    state.tables.orders.tab = tab;
+    location.hash = 'orders';
+  };
+
+  // 1. what to do now (only what needs a click)
+  const todo = [
+    urgent.length && { tone: 'danger', icon: '🔥', text: t('home.todo.urgent', { count: urgent.length }), action: t('home.open'), go: goOrders('urgent') },
+    fresh.length && { tone: 'info', icon: '🆕', text: t('home.todo.new', { count: fresh.length }), action: t('home.open'), go: goOrders('new') },
+    unread && { tone: 'info', icon: '💬', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
+    lic.pendingInvoice && { tone: 'warn', icon: '💳', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
+    lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: '⏳', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
+    unpaid.length && { tone: 'muted', icon: '⌛', text: t('home.todo.unpaid', { count: unpaid.length }), action: t('home.open'), go: () => ((state.paymentGroup = 'pending'), (location.hash = 'payments')) },
+  ].filter(Boolean);
+  const todoCard = h(
+    'section',
+    { class: 'card home-todo' },
+    h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('home.todoTitle'))),
+    todo.length
+      ? h('ul', { class: 'todo' }, todo.map((x) => h('li', { class: ['todo__item', `todo__item--${x.tone}`] }, h('span', { class: 'todo__icon', 'aria-hidden': 'true' }, x.icon), h('span', { class: 'todo__text' }, x.text), h('button', { type: 'button', class: 'btn btn--sm', onclick: x.go }, x.action))))
+      : h('p', { class: 'home-ok' }, '✅ ', t('home.allDone')),
+  );
+
+  // 2. numbers: today / yesterday / 7 / 30 days
+  const day0 = startOfDay(new Date());
+  const period = (fromDays, toDays) => {
+    const from = day0.getTime() - fromDays * 86400000;
+    const to = toDays === 0 ? Date.now() : day0.getTime() - (toDays - 1) * 86400000 - 1;
+    const list = orders.filter((o) => o.ts >= from && o.ts <= to && !REVENUE_EXCLUDED.has(o.status));
+    return { revenue: sumBy(list, (o) => o.amount || 0), count: list.length };
+  };
+  const tiles = [
+    ['home.today', period(0, 0)],
+    ['home.yesterday', period(1, 1)],
+    ['home.week', period(6, 0)],
+    ['home.month', period(29, 0)],
+  ];
+  const tilesEl = h('div', { class: 'tiles' }, tiles.map(([k, v]) => h('div', { class: 'tile' }, h('div', { class: 'tile__label' }, t(k)), h('div', { class: 'tile__value' }, formatMoney(v.revenue)), h('div', { class: 'tile__sub' }, t('home.orders', { count: v.count })))));
+
+  // 3. stores at a glance
+  const storesEl = dataStores().length
+    ? h(
+        'section',
+        { class: 'card' },
+        h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('home.storesTitle'))),
+        h(
+          'div',
+          { class: 'home-stores' },
+          dataStores().map((s) => {
+            const mine = orders.filter((o) => o.shopId === s.id);
+            const today = mine.filter((o) => o.ts >= day0.getTime() && !REVENUE_EXCLUDED.has(o.status));
+            const snap = state.data.snapshots[s.id];
+            const ok = snap?.status === 'ok';
+            return h(
+              'div',
+              { class: 'home-store' },
+              h('div', { class: 'home-store__head' }, storeChip(s.id), h('span', { class: ['badge', ok ? 'badge--ok' : 'badge--warn'] }, t(`store.${ok ? 'online' : snap?.status || 'noTab'}`))),
+              h('div', { class: 'home-store__nums' },
+                h('div', null, h('b', null, formatMoney(sumBy(today, (o) => o.amount || 0))), h('span', null, t('home.today'))),
+                h('div', null, h('b', null, formatNumber(mine.filter((o) => o.status === 'new').length)), h('span', null, t('home.newShort'))),
+              ),
+            );
+          }),
+        ),
+      )
+    : null;
+
+  // 4. first steps (until done)
+  const steps = [
+    { done: enabledStores().length > 0, text: t('home.step.store'), go: () => $('connectStoreBtn').click(), action: t('home.step.storeBtn') },
+    { done: tokens.length > 0, text: t('home.step.api'), go: () => (location.hash = 'settings'), action: t('home.open') },
+    { done: productRows().length > 0 && noCost === 0, text: t('home.step.cost'), go: () => (location.hash = 'products'), action: t('home.open') },
+    { done: !!state.data.catalogReady, text: t('home.step.catalog'), go: () => (location.hash = 'catalog'), action: t('home.open') },
+  ];
+  const left = steps.filter((x) => !x.done).length;
+  const stepsEl =
+    left > 0
+      ? h(
+          'section',
+          { class: 'card home-steps' },
+          h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('home.stepsTitle')), h('div', { class: 'card__sub' }, t('home.stepsSub', { done: steps.length - left, total: steps.length })))),
+          h('ol', { class: 'steps' }, steps.map((x, i) => h('li', { class: ['steps__item', x.done && 'steps__item--done'] }, h('span', { class: 'steps__num' }, x.done ? '✓' : String(i + 1)), h('span', { class: 'steps__text' }, x.text), !x.done && h('button', { type: 'button', class: 'btn btn--sm', onclick: x.go }, x.action)))),
+        )
+      : null;
+
+  // new seller: first steps on top; working seller: today's tasks and numbers first
+  return enabledStores().length ? h('div', { class: 'home' }, todoCard, tilesEl, stepsEl, storesEl) : h('div', { class: 'home' }, stepsEl);
+}
+
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
 const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog });
 
 const VIEWS = {
+  home: viewHome,
   catalog: catalogView.view,
   orders: () => viewTable('orders'),
   returns: () => viewTable('returns'),
@@ -2153,7 +2290,7 @@ function renderView() {
   const lic = state.data.license;
   if (lic && !lic.canUse && state.route !== 'account') view.append(paywall());
   else {
-    const needsStores = !['settings', 'account', 'catalog'].includes(state.route) && !dataStores().length;
+    const needsStores = !['home', 'settings', 'account', 'catalog'].includes(state.route) && !dataStores().length;
     view.append(needsStores ? noStores() : VIEWS[state.route]());
   }
   renderSidebar();
@@ -2225,15 +2362,26 @@ function routeFromHash() {
     state.forcePay = true;
     return 'account';
   }
-  return ROUTES.includes(r) ? r : 'orders';
+  return ROUTES.includes(r) ? r : 'home';
 }
 
 /* ===================================================================== */
 /* Boot                                                                   */
 /* ===================================================================== */
 
+function setMenu(open) {
+  document.body.classList.toggle('nav-open', open);
+  $('scrim').hidden = !open;
+  $('menuBtn').setAttribute('aria-expanded', String(open));
+}
+
 function bindShell() {
   bindConnectDialog();
+  // narrow window: ☰ opens the menu; choosing a section or tapping outside closes it
+  $('menuBtn').addEventListener('click', () => setMenu(!document.body.classList.contains('nav-open')));
+  $('scrim').addEventListener('click', () => setMenu(false));
+  $('sidebar').addEventListener('click', (e) => e.target.closest('a, button') && setMenu(false));
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && document.body.classList.contains('nav-open') && setMenu(false));
   // Esc closes the payment window only when the cabinet is not blocked.
   $('termsDialog').addEventListener('cancel', (e) => e.preventDefault());
   document.addEventListener('visibilitychange', () => !document.hidden && pay.open && checkPayment()); // must answer: accept or log out

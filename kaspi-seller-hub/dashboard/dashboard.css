@@ -1,6 +1,6 @@
 /* Kaspi Seller Hub — dashboard. Tokens come from shared/tokens.css. */
 
-body { min-width: 1280px; }
+/* no fixed page width: the layout adapts down to phone size (menu becomes a slide-in drawer) */
 .mono { font-family: var(--font-mono); font-size: 12.5px; }
 .muted { color: var(--text-3); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -184,7 +184,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .empty .btn { margin-top: var(--space-4); }
 
 /* ---------- payments ---------- */
-.groups { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 .group-card {
   text-align: left; cursor: pointer; font: inherit; color: inherit;
   padding: var(--space-4); border-radius: var(--radius-lg);
@@ -195,7 +195,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .group-card__sub { font-size: 12px; color: var(--text-3); }
 
 /* ---------- analytics ---------- */
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 .kpi { padding: var(--space-4); }
 .kpi__label { font-size: 12px; color: var(--text-3); }
 .kpi__value { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -269,7 +269,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .settings { display: grid; gap: var(--space-4); max-width: 1180px; }
 .settings td .input { width: 180px; }
 .settings td:last-child { white-space: nowrap; text-align: right; }
-.swatches { flex-wrap: wrap; max-width: 120px; }
+.swatches { flex-wrap: wrap; max-width: 96px; gap: 3px; }
 .settings .card__body { display: grid; gap: var(--space-3); }
 .field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .field__label { font-weight: 500; }
@@ -328,3 +328,83 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .feed__url code { font-family: var(--font-mono); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--surface-2); word-break: break-all; }
 .feed__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 @media (max-width: 640px) { .catalog-override { grid-template-columns: 1fr 1fr; } .catalog-override > :first-child { grid-column: 1 / -1; } }
+
+/* the content area gets focus on navigation (for screen readers) — no focus ring around the page */
+.view:focus, .view:focus-visible { box-shadow: none; outline: none; }
+
+/* ---------- navigation groups ---------- */
+.nav__group { margin: var(--space-4) 0 var(--space-1); padding: 0 var(--space-3); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.topbar__filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.topbar__filters[hidden] { display: none !important; }
+
+/* ---------- orders quick tabs ---------- */
+.tabs { display: flex; gap: 2px; padding: var(--space-3) var(--space-4) 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-2); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+.tab__count { min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--surface-2); font-size: 12px; text-align: center; }
+.tab--danger .tab__count { background: var(--danger-bg); color: var(--danger); }
+
+/* ---------- home ---------- */
+.home { display: grid; gap: var(--space-4); }
+.todo { list-style: none; margin: 0; padding: 0 var(--space-5) var(--space-4); display: grid; gap: var(--space-2); }
+.todo__item { display: flex; align-items: center; gap: var(--space-3); padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); }
+.todo__item--danger { background: var(--danger-bg); }
+.todo__item--warn { background: var(--warn-bg); }
+.todo__item--info { background: var(--info-bg); }
+.todo__icon { font-size: 18px; }
+.todo__text { flex: 1; font-weight: 500; }
+.home-ok { margin: 0; padding: 0 var(--space-5) var(--space-5); color: var(--text-2); }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.tile { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.tile__label { color: var(--text-2); font-size: 13px; }
+.tile__value { margin-top: 6px; font-size: 24px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.tile__sub { margin-top: 2px; color: var(--text-3); font-size: 13px; }
+.home-stores { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-3); padding: 0 var(--space-5) var(--space-5); }
+.home-store { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); display: grid; gap: var(--space-2); }
+.home-store__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.home-store__nums { display: flex; gap: var(--space-5); }
+.home-store__nums b { display: block; font-size: 16px; }
+.home-store__nums span { color: var(--text-3); font-size: 12px; }
+.steps { list-style: none; margin: 0; padding: 0 var(--space-5) var(--space-4); display: grid; gap: var(--space-2); }
+.steps__item { display: flex; align-items: center; gap: var(--space-3); padding: 8px 0; border-top: 1px solid var(--border); }
+.steps__item:first-child { border-top: 0; }
+.steps__num { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-weight: 600; font-size: 13px; }
+.steps__item--done .steps__num { background: var(--ok-bg); color: var(--ok); }
+.steps__item--done .steps__text { color: var(--text-3); text-decoration: line-through; }
+.steps__text { flex: 1; }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- phone / narrow window: the menu slides in over the page ---------- */
+.menu-btn { display: none; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: min(280px, 85vw); z-index: 30; transform: translateX(-100%); transition: transform .2s ease; box-shadow: var(--shadow-lg); }
+  body.nav-open .sidebar { transform: none; }
+  .scrim { position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, .35); }
+  .menu-btn { display: inline-flex; flex: none; }
+  .topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; justify-content: flex-start; }
+  .topbar__title { flex: 1; }
+  .topbar__controls { width: 100%; justify-content: flex-start; }
+  .topbar__meta, .banners { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .view { padding: var(--space-4); }
+  .todo__item { flex-wrap: wrap; }
+  .kbd-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+@media (max-width: 760px) {
+  .settings { grid-template-columns: minmax(0, 1fr); }
+  .settings .card { min-width: 0; }
+  .field { flex-wrap: wrap; }
+  .field .input, .field .select { max-width: 100%; }
+  .settings .table-wrap, .settings table { display: block; overflow-x: auto; max-width: 100%; }
+}
+@media (max-width: 900px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .chat { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .composer { padding: var(--space-3); }
+  .composer textarea { min-width: 0; }
+  .settings .field > * { max-width: 100%; }
+  .settings .btn { white-space: normal; }
+}
