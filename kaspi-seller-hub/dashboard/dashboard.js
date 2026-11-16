@@ -1793,7 +1793,8 @@ function closePay() {
 }
 
 /** Re-check the licence; when the invoice is paid, unlock everything at once. */
-async function checkPayment() {
+async function checkPayment(manual = false) {
+  if (!manual && document.hidden) return; // tab in the background: no polling, re-checked when shown
   const lic = await send('ui:billingState', { force: true });
   if (!lic) return;
   state.data.license = lic;
@@ -1860,7 +1861,7 @@ function renderPay() {
     h(
       'div',
       { class: 'pay__actions' },
-      h('button', { type: 'button', class: 'btn btn--primary', autofocus: true, onclick: () => checkPayment() }, t('pay.check')),
+      h('button', { type: 'button', class: 'btn btn--primary', autofocus: true, onclick: () => checkPayment(true) }, t('pay.check')),
       !pay.blocking && h('button', { type: 'button', class: 'btn', onclick: closePay }, t('pay.later')),
       // blocked cabinet: the only other way out is another account
       pay.blocking &&
@@ -2229,7 +2230,8 @@ function routeFromHash() {
 function bindShell() {
   bindConnectDialog();
   // Esc closes the payment window only when the cabinet is not blocked.
-  $('termsDialog').addEventListener('cancel', (e) => e.preventDefault()); // must answer: accept or log out
+  $('termsDialog').addEventListener('cancel', (e) => e.preventDefault());
+  document.addEventListener('visibilitychange', () => !document.hidden && pay.open && checkPayment()); // must answer: accept or log out
   $('payDialog').addEventListener('cancel', (e) => {
     e.preventDefault();
     if (!pay.blocking) closePay();

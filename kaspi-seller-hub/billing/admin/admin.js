@@ -32,6 +32,30 @@
     },
   };
   let tab = 'pending';
+  // Lists come in pages of 100 rows: search + «Показать ещё» instead of loading everything.
+  const PAGE = 100;
+  const view = { search: '', limit: PAGE };
+  let searchTimer = null;
+  /** Search box + «показано X из Y» + «Показать ещё». */
+  function listTools(total, shown, placeholder) {
+    const input = el('input', { class: 'input', type: 'search', placeholder, value: view.search, 'aria-label': 'Поиск' });
+    input.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        view.search = input.value.trim();
+        view.limit = PAGE;
+        render().then(() => {
+          const again = document.querySelector('#panel input[type=search]');
+          if (again) (again.focus(), again.setSelectionRange(again.value.length, again.value.length));
+        });
+      }, 350);
+    });
+    return el('div', { class: 'row', style: 'margin:0 0 12px' }, input, el('span', { class: 'muted' }, `показано ${shown} из ${total}`));
+  }
+  function moreButton(total, shown) {
+    if (shown >= total) return null;
+    return el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', onclick: () => ((view.limit += PAGE), render()) }, `Показать ещё (${Math.min(PAGE, total - shown)})`));
+  }
 
   /* ---------- helpers ---------- */
   function el(tag, props, ...kids) {
@@ -129,16 +153,18 @@
     document.querySelectorAll('.tabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     const panel = $('panel');
     panel.replaceChildren(el('p', { class: 'muted' }, 'Загрузка…'));
-    const pending = await rpc('admin_invoices', { p_status: 'pending' });
-    $('pendingCount').textContent = pending.length || '';
+    const pending = await rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 20, p_offset: 0 });
+    $('pendingCount').textContent = pending.total || '';
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
-    const list = tab === 'pending' ? pending : await rpc('admin_invoices', { p_status: tab === 'paid' ? 'paid' : 'all' });
-    renderInvoices(panel, list);
+    const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
+    renderInvoices(panel, page);
   }
 
-  function renderInvoices(panel, list) {
-    if (!list.length) return panel.replaceChildren(el('p', { class: 'muted' }, tab === 'pending' ? 'Новых счетов нет.' : 'Счетов нет.'));
+  function renderInvoices(panel, page) {
+    const list = page.rows;
+    const tools = listTools(page.total, list.length, 'Поиск: email, телефон или № счёта');
+    if (!list.length) return panel.replaceChildren(tools, el('p', { class: 'muted' }, view.search ? 'Ничего не найдено.' : tab === 'pending' ? 'Новых счетов нет.' : 'Счетов нет.'));
     const help =
       tab === 'pending' &&
       el(
@@ -177,7 +203,9 @@
     );
     panel.replaceChildren(
       ...(help ? [help] : []),
+      tools,
       el('table', null, el('thead', null, el('tr', null, ['Счёт', 'Создан', 'Клиент', 'Тариф', 'Сумма', 'Статус', ''].map((h, n) => el('th', { class: n === 4 ? 'num' : null }, h)))), el('tbody', null, rows)),
+      moreButton(page.total, list.length),
     );
   }
 
@@ -204,14 +232,15 @@
   }
 
   async function renderAccounts(panel) {
-    const list = await rpc('admin_accounts');
+    const page = await rpc('admin_accounts', { p_search: view.search || null, p_status: 'all', p_limit: view.limit, p_offset: 0 });
+    const list = page.rows;
     const badge = { trial: ['badge--info', 'пробный'], active: ['badge--ok', 'оплачен'], expired: ['badge--danger', 'закончился'] };
     const rows = list.map((a) =>
       el(
         'tr',
         null,
         el('td', null, a.email || '—', el('div', { class: 'muted mono' }, phone(a.phone))),
-        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1])),
+        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1]), a.trial_blocked && el('div', { class: 'muted' }, 'пробный уже был на этом магазине')),
         el('td', null, a.status === 'active' ? 'до ' + date(a.paid_until) : 'пробный до ' + date(a.trial_ends_at)),
         el('td', { class: 'num' }, `${a.last_store_count ?? '—'} / ${a.status === 'active' ? a.store_limit : '—'}`),
         el('td', null, date(a.last_seen_at, true)),
@@ -242,10 +271,12 @@
         ),
       ),
     );
-    const totals = list.reduce((m, a) => ((m[a.status] = (m[a.status] || 0) + 1), m), {});
+    const totals = page.totals || {};
     panel.replaceChildren(
-      el('p', { class: 'muted' }, `Всего: ${list.length} · пробный: ${totals.trial || 0} · оплачен: ${totals.active || 0} · закончился: ${totals.expired || 0}`),
+      el('p', { class: 'muted' }, `Всего: ${totals.all || 0} · пробный: ${totals.trial || 0} · оплачен: ${totals.active || 0} · закончился: ${totals.expired || 0}`),
+      listTools(page.total, list.length, 'Поиск: email или телефон'),
       el('table', null, el('thead', null, el('tr', null, ['Клиент', 'Статус', 'Срок', 'Магазины (подкл./оплач.)', 'Был онлайн', 'Регистрация', 'Согласие с офертой', ''].map((h) => el('th', null, h)))), el('tbody', null, rows)),
+      moreButton(page.total, list.length),
     );
   }
 
@@ -345,6 +376,8 @@
   document.querySelectorAll('.tabs [role=tab]').forEach((b) =>
     b.addEventListener('click', () => {
       tab = b.dataset.tab;
+      view.search = '';
+      view.limit = PAGE;
       render().catch((e) => toast(e.message, true));
     }),
   );
@@ -356,9 +389,10 @@
   setInterval(async () => {
     if ($('app').hidden || document.querySelector('.input:focus, textarea:focus')) return;
     try {
-      const pending = await rpc('admin_invoices', { p_status: 'pending' });
-      $('pendingCount').textContent = pending.length || '';
-      document.title = (pending.length ? `(${pending.length}) ` : '') + 'Seller Hub — оплаты';
+      const page = await rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 20, p_offset: 0 });
+      const pending = page.rows; // newest first: enough to spot new invoices
+      $('pendingCount').textContent = page.total || '';
+      document.title = (page.total ? `(${page.total}) ` : '') + 'Seller Hub — оплаты';
       const ids = new Set(pending.map((i) => i.id));
       const fresh = known ? pending.filter((i) => !known.has(i.id)) : [];
       known = ids;

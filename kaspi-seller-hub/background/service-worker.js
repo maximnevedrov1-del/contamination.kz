@@ -143,6 +143,7 @@ async function currentLicense(force = false) {
 }
 
 let lastReconcileAt = 0;
+let lastReconcileKey = null;
 /**
  * Licence + automatic billing: renewal invoice for all stores from remind_days
  * before the end (or once expired), add-on invoice when more stores are connected
@@ -151,10 +152,14 @@ let lastReconcileAt = 0;
 async function billingMaintenance(force = false) {
   let lic = await currentLicense(force);
   if (!B.isConfigured() || lic?.needsConsent) return lic; // no invoices before the offer is accepted
-  if (force || Date.now() - lastReconcileAt > 60000) {
+  const count = enabledStoreList(await getSettings()).length;
+  // The server call is idempotent: repeat it only when something changed (store count,
+  // renewal window, open invoice) or every 30 min — not every minute for every client.
+  const key = JSON.stringify([count, lic?.status, lic?.renewalDue, lic?.storeLimit, lic?.pendingInvoice?.id, lic?.pendingInvoice?.stores]);
+  if (force || key !== lastReconcileKey || Date.now() - lastReconcileAt > 30 * 60000) {
     lastReconcileAt = Date.now();
+    lastReconcileKey = key;
     try {
-      const count = enabledStoreList(await getSettings()).length;
       if (await B.reconcileInvoice(count, lic)) lic = await currentLicense(true);
     } catch (e) {
       console.warn(LOG, 'billing reconcile', e.code || e.message);
