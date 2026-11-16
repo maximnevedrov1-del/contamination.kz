@@ -75,7 +75,8 @@
     "pending": "Ожидает подтверждения",
     "failed": "Ошибка оплаты",
     "unknown": "Нет данных",
-    "all": "Все оплаты"
+    "all": "Все оплаты",
+    "refunded": "Оплата отменена"
   },
   "table": {
     "orderId": "Заказ",
@@ -131,7 +132,18 @@
     "packing": "Упаковка {done} из {total}…",
     "collecting": "Сбор накладных {done} из {total}…",
     "packDone": "Упаковано: {ok} из {total}",
-    "invoicesDone": "Накладных собрано: {ok} из {total}"
+    "invoicesDone": "Накладных собрано: {ok} из {total}",
+    "accept": "Принять выбранные",
+    "confirmAcceptTitle": "Принять заказы в Kaspi?",
+    "confirmAccept": {
+      "one": "{count} заказ будет принят в Kaspi от вашего имени. Отменить принятие нельзя.",
+      "few": "{count} заказа будут приняты в Kaspi от вашего имени. Отменить принятие нельзя.",
+      "many": "{count} заказов будут приняты в Kaspi от вашего имени. Отменить принятие нельзя.",
+      "other": "{count} заказа будут приняты в Kaspi от вашего имени. Отменить принятие нельзя."
+    },
+    "accepting": "Принятие {done} из {total}…",
+    "acceptDone": "Принято: {ok} из {total}",
+    "packApiNote": "Для магазинов, подключённых по API: заказ с Kaspi Доставкой получит статус «Скомплектован» (1 место), и Kaspi сформирует накладную. Отменить это нельзя."
   },
   "returns": {
     "title": "Возвраты",
@@ -256,7 +268,24 @@
     "diagnosticsHint": "Элементы, которые не удалось найти на страницах Kaspi. Исправьте их в shared/selectors.js.",
     "selectorsVersion": "Версия селекторов: {version}",
     "noMissing": "Все селекторы найдены",
-    "saved": "Настройки сохранены"
+    "saved": "Настройки сохранены",
+    "api": {
+      "title": "Подключение по API Kaspi",
+      "hint": "Заказы, статусы, оплаты и накладные приходят напрямую от Kaspi — без открытой вкладки кабинета.",
+      "store": "Магазин",
+      "newStore": "Новый магазин",
+      "storeName": "Название магазина",
+      "tokenLabel": "Токен API",
+      "connect": "Проверить и подключить",
+      "connecting": "Проверяю…",
+      "connected": "Подключен по API · токен …{last4}",
+      "notConnected": "Не подключен по API",
+      "disconnect": "Отключить API",
+      "connectedToast": "Магазин подключен по API. Загружаю заказы за 90 дней — это займёт до минуты.",
+      "lastError": "Ошибка API: {error}",
+      "howTo": "Где взять токен: кабинет Kaspi → Настройки → Токен API → «Сформировать» (может только руководитель).",
+      "securityNote": "Токен хранится только в этом браузере и отправляется только на kaspi.kz. Не подключайте магазин на чужом компьютере."
+    }
   },
   "popup": {
     "newOrders": "Новые",
@@ -331,7 +360,18 @@
     "generic": "ошибка: {error}",
     "partial": "Не удалось для {count}: {details}",
     "packNotConfirmed": "Kaspi не подтвердил упаковку (кнопка осталась, статус не изменился)",
-    "conversationIdUnstable": "не удалось надёжно определить диалог — ответ не отправлен (настройте chat.conversationFields.id и chat.threadId)"
+    "conversationIdUnstable": "не удалось надёжно определить диалог — ответ не отправлен (настройте chat.conversationFields.id и chat.threadId)",
+    "apiUnauthorized": "Kaspi отклонил токен (неверный или перевыпущен)",
+    "apiHttp": "ошибка API Kaspi",
+    "apiNetwork": "нет связи с API Kaspi",
+    "notApiStore": "магазин не подключен по API — примите заказ в кабинете Kaspi",
+    "notAcceptable": "заказ не ожидает принятия (уже принят или отменён)",
+    "signatureRequired": "покупатель ещё не подписал документы по кредиту",
+    "acceptFirst": "сначала примите заказ",
+    "notKaspiDelivery": "заказ не с Kaspi Доставкой — упакуйте его в кабинете",
+    "waybillNotReady": "Kaspi ещё готовит накладную — нажмите «Собрать накладные» через пару минут",
+    "tokenEmpty": "введите токен",
+    "storeNameEmpty": "введите название магазина"
   },
   "format": {
     "monthsShort": [
@@ -387,5 +427,11 @@
     "thousand": "тыс.",
     "million": "млн",
     "billion": "млрд"
+  },
+  "cancelReason": {
+    "BUYER_CANCELLATION_BY_MERCHANT": "Отказ покупателя",
+    "BUYER_NOT_REACHABLE": "Не удалось связаться с покупателем",
+    "MERCHANT_OUT_OF_STOCK": "Товара нет в наличии",
+    "BUYER_CANCELLATION": "Покупатель отменил заказ"
   }
 }

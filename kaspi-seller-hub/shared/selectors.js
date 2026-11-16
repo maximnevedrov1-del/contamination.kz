@@ -245,6 +245,23 @@
       chat: { url: '', list: 'conversations', fields: { id: 'id', customer: 'customer.name', preview: 'lastMessage.text', time: 'lastMessage.date', unread: 'unreadCount' } }, // TODO
     },
 
+    /**
+     * Official Kaspi Shop API (token per store: cabinet › Настройки › Токен API).
+     * Docs: guide.kaspi.kz/partner/ru/shop/api/orders/*. Not a DOM selector, but kept
+     * here so endpoints can be patched in the same place.
+     */
+    api: {
+      base: 'https://kaspi.kz/shop/api/v2',
+      // Order states — the list endpoint returns nothing without a state filter.
+      states: ['NEW', 'SIGN_REQUIRED', 'PICKUP', 'DELIVERY', 'KASPI_DELIVERY', 'ARCHIVE'],
+      windowDays: 14, // creationDate range per request
+      firstSyncDays: 90, // history loaded the first time a store is connected
+      syncDays: 28, // re-read on every later sync (older orders stay cached)
+      pageSize: 100, // documented maximum
+      concurrency: 3, // parallel requests per store
+      cabinetOrderUrl: 'https://kaspi.kz/mc/#/orders/{code}', // TODO: link to the order in the cabinet
+    },
+
     /** Human-like pacing for user-triggered bulk actions. */
     timing: {
       actionDelayMs: 1200, // pause between two actions in the same store

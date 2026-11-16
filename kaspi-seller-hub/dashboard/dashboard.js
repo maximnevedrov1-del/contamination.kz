@@ -118,6 +118,8 @@ function reportResults(results, okKey) {
   const ok = results.filter((r) => r.ok).length;
   const failed = results.filter((r) => !r.ok);
   toast(t(okKey, { ok, total: results.length }), failed.length ? (ok ? 'info' : 'error') : 'ok');
+  const notes = results.filter((r) => r.ok && r.info);
+  if (notes.length) toast(`${errorText(notes[0].info)} (${notes.map((r) => r.orderId).slice(0, 5).join(', ')})`, 'info', 9000);
   if (failed.length) {
     const byErr = groupBy(failed, (r) => r.error || 'noResponse');
     const details = Object.entries(byErr)
@@ -146,8 +148,11 @@ function emptyState(title, text, action) {
 const storeChip = (id) => h('span', { class: 'store-chip', style: { '--store-color': storeColor(id) } }, h('span', { class: 'dot', 'aria-hidden': 'true' }), storeName(id));
 const storeBadge = (id) => h('span', { class: 'store-badge', style: { '--store-color': storeColor(id) } }, h('span', { class: 'dot', 'aria-hidden': 'true' }), storeName(id));
 
+/** Kaspi API cancellation codes (MERCHANT_OUT_OF_STOCK…) → readable text; free text passes through. */
+const reasonText = (r) => (r && /^[A-Z_]+$/.test(r) ? (hasKey(`cancelReason.${r}`) ? t(`cancelReason.${r}`) : r) : r || '');
+
 const STATUS_VARIANT = { new: 'info', accepted: 'info', packed: 'ok', delivering: '', delivered: 'ok', cancelled: 'danger', returned: 'warn', refused: 'danger', unknown: '' };
-const PAYMENT_VARIANT = { paid: 'ok', pending: 'warn', failed: 'danger', unknown: '' };
+const PAYMENT_VARIANT = { paid: 'ok', pending: 'warn', failed: 'danger', refunded: '', unknown: '' };
 const statusBadge = (r) => h('span', { class: ['badge', STATUS_VARIANT[r.status] && `badge--${STATUS_VARIANT[r.status]}`], title: r.statusRaw || null }, t(`status.${r.status}`));
 const paymentBadge = (r) => h('span', { class: ['badge', PAYMENT_VARIANT[r.paymentStatus] && `badge--${PAYMENT_VARIANT[r.paymentStatus]}`], title: r.paymentRaw || null }, t(`payment.${r.paymentStatus}`));
 
@@ -189,7 +194,7 @@ const COLUMNS = {
   date: { label: 'table.date', value: (r) => r.date, render: (r) => formatDate(r.date, 'datetime') },
   customer: { label: 'table.customer', value: (r) => r.customer, render: (r) => r.customer || h('span', { class: 'muted' }, '—') },
   status: { label: 'table.status', value: (r) => t(`status.${r.status}`), render: statusBadge },
-  reason: { label: 'table.reason', value: (r) => r.reason, render: (r) => r.reason || h('span', { class: 'muted' }, '—'), wrap: true },
+  reason: { label: 'table.reason', value: (r) => reasonText(r.reason), render: (r) => reasonText(r.reason) || h('span', { class: 'muted' }, '—'), wrap: true },
   amount: { label: 'table.amount', value: (r) => r.amount, render: (r) => formatMoney(r.amount), num: true },
   payment: { label: 'table.payment', value: (r) => t(`payment.${r.paymentStatus}`), render: paymentBadge },
 };
@@ -226,6 +231,7 @@ function bulkActions(route, selectedRows) {
   const btn = (label, onclick, primary) => h('button', { type: 'button', class: ['btn', 'btn--sm', primary && 'btn--primary'], disabled: busy, onclick }, t(label));
   if (route === 'orders')
     return [
+      btn('orders.accept', () => doAccept(items)),
       btn('orders.pack', () => doPack(items), true),
       btn('orders.generateInvoices', () => doInvoices(items)),
       btn('orders.printInvoices', () => send('ui:print', { items })),
@@ -274,7 +280,7 @@ function renderTable(route, allRows) {
       h(
         'select',
         { class: 'select', 'aria-label': t('table.payment'), dataset: { fkey: `${route}-payment` }, onchange: (e) => ((ts.payment = e.target.value), renderView()) },
-        ['all', 'paid', 'pending', 'failed', 'unknown'].map((p) => h('option', { value: p, selected: ts.payment === p }, t(`payment.${p}`))),
+        ['all', 'paid', 'pending', 'failed', 'refunded', 'unknown'].map((p) => h('option', { value: p, selected: ts.payment === p }, t(`payment.${p}`))),
       ),
     h('div', { class: 'toolbar__spacer' }),
     h('span', { class: 'toolbar__count' }, t('table.rows', { count: rows.length })),
@@ -489,9 +495,17 @@ async function runJob(kind, type, payload, okKey) {
   }
 }
 
+const hasApi = (items) => items.some((i) => stores()[i.shopId]?.api?.connected);
+
+async function doAccept(items) {
+  if (!(await confirmDialog(t('orders.confirmAcceptTitle'), t('orders.confirmAccept', { count: items.length })))) return;
+  await runJob('accept', 'ui:accept', { items }, 'orders.acceptDone');
+}
+
 async function doPack(items) {
   const shops = [...new Set(items.map((i) => storeName(i.shopId)))].join(', ');
-  if (!(await confirmDialog(t('orders.confirmPackTitle'), t('orders.confirmPack', { count: items.length, stores: shops })))) return;
+  const text = t('orders.confirmPack', { count: items.length, stores: shops }) + (hasApi(items) ? `\n\n${t('orders.packApiNote')}` : '');
+  if (!(await confirmDialog(t('orders.confirmPackTitle'), text))) return;
   await runJob('pack', 'ui:pack', { items }, 'orders.packDone');
   sync();
 }
@@ -516,7 +530,8 @@ function renderProgress() {
   el.hidden = false;
   const { done, total, kind } = state.job;
   el.querySelector('.progress__bar').style.setProperty('--p', `${total ? (done / total) * 100 : 0}%`);
-  el.querySelector('.progress__label').textContent = t(kind === 'pack' ? 'orders.packing' : 'orders.collecting', { done, total });
+  const label = { pack: 'orders.packing', accept: 'orders.accepting' }[kind] || 'orders.collecting';
+  el.querySelector('.progress__label').textContent = t(label, { done, total });
 }
 
 async function refreshInvoiceCount() {
@@ -537,7 +552,7 @@ function viewPayments() {
   const cards = h(
     'div',
     { class: 'groups', role: 'group', 'aria-label': t('payments.title') },
-    ['pending', 'paid', 'failed', 'unknown'].map((g) => {
+    ['pending', 'paid', 'failed', 'refunded', 'unknown'].map((g) => {
       const list = groups[g] || [];
       return h(
         'button',
@@ -1084,6 +1099,7 @@ function viewSettings() {
     'div',
     { class: 'settings' },
     card(t('settings.stores'), t('settings.storesHint'), storesTable),
+    apiCard(),
     card(
       t('settings.appearance'),
       null,
@@ -1127,6 +1143,89 @@ function viewSettings() {
       missing.length
         ? missing.map((s) => h('div', { class: 'field', style: { alignItems: 'flex-start' } }, storeChip(s.shopId), h('div', { class: 'chips' }, s.missingSelectors.map((k) => h('code', { class: 'chip-code' }, k)))))
         : h('div', null, h('span', { class: 'badge badge--ok' }, t('settings.noMissing'))),
+    ),
+  );
+}
+
+/** Settings › "Connect by Kaspi API": per-store token status + connect form. */
+function apiCard() {
+  const all = Object.values(state.data.settings.stores);
+  const ui = (state.apiForm ??= { shopId: '', name: '', busy: false, error: null });
+  const rows = all.map((s) => {
+    const api = s.api;
+    const statusEl = api?.connected
+      ? h(
+          'span',
+          { class: ['badge', api.error ? 'badge--danger' : 'badge--ok'] },
+          api.error ? t('settings.api.lastError', { error: errorText(api.error) }) : t('settings.api.connected', { last4: api.last4 || '' }),
+        )
+      : h('span', { class: 'badge' }, t('settings.api.notConnected'));
+    return h(
+      'div',
+      { class: 'field' },
+      h('div', null, storeChip(s.id), ' ', statusEl, api?.lastOkAt ? h('div', { class: 'field__hint' }, t('common.updated', { time: formatRelative(api.lastOkAt) })) : null),
+      api?.connected &&
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn--sm btn--ghost btn--danger',
+            onclick: async () => {
+              await send('ui:disconnectApi', { shopId: s.id });
+              await loadState();
+            },
+          },
+          t('settings.api.disconnect'),
+        ),
+    );
+  });
+
+  const select = h(
+    'select',
+    { class: 'select', 'aria-label': t('settings.api.store'), onchange: (e) => ((ui.shopId = e.target.value), renderView()) },
+    h('option', { value: '', selected: !ui.shopId }, t('settings.api.newStore')),
+    all.map((s) => h('option', { value: s.id, selected: ui.shopId === s.id }, s.alias || s.name)),
+  );
+  const nameInput = !ui.shopId && h('input', { class: 'input', placeholder: t('settings.api.storeName'), 'aria-label': t('settings.api.storeName'), value: ui.name, dataset: { fkey: 'api-name' }, oninput: (e) => (ui.name = e.target.value) });
+  // The token field is never pre-filled and its value is not kept in page state.
+  const tokenInput = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: t('settings.api.tokenLabel'), 'aria-label': t('settings.api.tokenLabel'), style: { flex: '1' } });
+  const connect = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn--primary',
+      disabled: ui.busy,
+      onclick: async () => {
+        ui.busy = true;
+        ui.error = null;
+        renderView();
+        const res = await send('ui:connectApi', { shopId: ui.shopId || null, name: ui.name, token: tokenInput.value });
+        ui.busy = false;
+        if (res?.ok) {
+          Object.assign(ui, { shopId: '', name: '' });
+          toast(t('settings.api.connectedToast'), 'ok', 8000);
+          await loadState();
+        } else {
+          ui.error = res?.error || 'noResponse';
+          renderView();
+        }
+      },
+    },
+    t(ui.busy ? 'settings.api.connecting' : 'settings.api.connect'),
+  );
+
+  return h(
+    'section',
+    { class: 'card' },
+    h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('settings.api.title')), h('div', { class: 'card__sub' }, t('settings.api.hint')))),
+    h(
+      'div',
+      { class: 'card__body' },
+      rows,
+      h('div', { class: 'field', style: { justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' } }, select, nameInput, tokenInput, connect),
+      ui.error && h('div', { class: 'banner', role: 'alert' }, icon('warn'), h('span', { class: 'banner__text' }, errorText(ui.error))),
+      h('div', { class: 'field__hint' }, t('settings.api.howTo')),
+      h('div', { class: 'field__hint' }, t('settings.api.securityNote')),
     ),
   );
 }
@@ -1214,7 +1313,7 @@ function renderBanners() {
         'div',
         { class: 'banner', role: 'status' },
         h('span', { class: 'banner__icon' }, icon('warn')),
-        h('span', { class: 'banner__text' }, t('store.unavailable', { store: storeName(s.id), reason: t(`store.${status}`) }), snap?.ts ? h('span', { class: 'banner__meta' }, ` · ${t('store.lastData', { time: formatRelative(snap.ts) })}`) : null),
+        h('span', { class: 'banner__text' }, t('store.unavailable', { store: storeName(s.id), reason: status === 'error' && snap?.error ? errorText(snap.error) : t(`store.${status}`) }), snap?.ts ? h('span', { class: 'banner__meta' }, ` · ${t('store.lastData', { time: formatRelative(snap.ts) })}`) : null),
         h('button', { type: 'button', class: 'btn btn--sm', onclick: () => send('ui:openStore', { shopId: s.id }) }, t('common.openStoreTab')),
       ),
     );

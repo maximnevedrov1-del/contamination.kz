@@ -26,8 +26,13 @@ import {
   setRegistry,
   setPrintQueue,
   clearCache,
+  getApiTokens,
+  setApiTokens,
+  getApiEntries,
+  setApiEntries,
   KEYS,
 } from '../shared/storage.js';
+import * as K from './kaspi-api.js';
 import { initI18n, t } from '../shared/i18n.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts } from '../shared/utils.js';
 
@@ -81,6 +86,7 @@ async function upsertStore({ shopId, shopName, origin }) {
   if (existing && existing.origin === origin && (!shopName || existing.name === shopName) && Date.now() - (existing.lastSeen || 0) < 60000) return;
   const used = Object.values(settings.stores).map((s) => s.color);
   settings.stores[shopId] = {
+    ...existing,
     id: shopId,
     name: shopName || existing?.name || shopId,
     alias: existing?.alias || '',
@@ -227,7 +233,9 @@ function mergeStoreSnapshot(prev, fresh) {
       if (LIST_SECTIONS.includes(key)) {
         const map = new Map();
         ok.forEach((s) => s.items?.forEach((it) => map.set(String(it.id), it)));
-        sections[key] = { status: 'ok', source: ok[0].source, ts: Date.now(), items: [...map.values()] };
+        // Sources are merged in order (DOM first, API last), so API data wins for the same order.
+        const source = ok.some((s) => s.source === 'api') ? 'api' : ok[0].source;
+        sections[key] = { status: 'ok', source, ts: Date.now(), items: [...map.values()] };
       } else {
         sections[key] = { ...ok[0], ts: Date.now() };
       }
@@ -265,12 +273,32 @@ async function sync() {
     if (r?.ok && r.authenticated && r.shopId) (byShop[r.shopId] ??= []).push(r);
   });
 
+  // Stores connected by API token: fetched directly, no tab needed.
+  const apiErrors = {};
+  const [tokens, settingsNow, prevNow] = await Promise.all([getApiTokens(), getSettings(), getSnapshots()]);
+  await Promise.all(
+    Object.entries(tokens).map(async ([shopId, token]) => {
+      const store = settingsNow.stores[shopId];
+      if (!store || !store.enabled) return;
+      try {
+        const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
+        (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
+      } catch (e) {
+        apiErrors[shopId] = e.code || e.message;
+        console.warn(LOG, 'api sync failed', shopId, e.code, e.status, e.detail);
+      }
+    }),
+  );
+  await recordApiHealth(Object.keys(tokens), apiErrors);
+
   await lock(async () => {
     const [settings, prev] = await Promise.all([getSettings(), getSnapshots()]);
     const next = {};
     const shopIds = new Set([...Object.keys(settings.stores), ...Object.keys(byShop)]);
     for (const shopId of shopIds) {
       if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(prev[shopId], byShop[shopId]);
+      else if (apiErrors[shopId])
+        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
       else
         next[shopId] = {
           ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
@@ -363,6 +391,166 @@ async function updateBadge() {
 }
 
 /* ===================================================================== */
+/* Official API (stores connected with a token)                            */
+/* ===================================================================== */
+
+const DAY = 86400000;
+
+/** Save per-store API health (last success / last error) in settings. */
+async function recordApiHealth(shopIds, errors) {
+  if (!shopIds.length) return;
+  await lock(async () => {
+    const settings = await getSettings();
+    let changed = false;
+    for (const id of shopIds) {
+      const st = settings.stores[id];
+      if (!st?.api) continue;
+      st.api = errors[id] ? { ...st.api, error: errors[id], errorAt: Date.now() } : { ...st.api, error: null, lastOkAt: Date.now() };
+      changed = true;
+    }
+    if (changed) await saveSettings({ stores: settings.stores });
+  });
+}
+
+/**
+ * Build a store snapshot from the API: orders of the last 28 days (90 on first
+ * sync) + older API orders kept from the cache, split into orders / returns /
+ * refusals, plus top products from order contents.
+ */
+async function apiSnapshot(shopId, token, prevSnap, store) {
+  const prevItems = prevSnap?.sections?.orders?.items || [];
+  const hadApi = prevItems.some((i) => i.api);
+  const days = hadApi ? S.api.syncDays : S.api.firstSyncDays;
+  const raw = await K.listOrders(token, days);
+  const fresh = raw.map(K.toOrderItem);
+  const freshIds = new Set(fresh.map((i) => i.id));
+  const windowStart = Date.now() - days * DAY;
+  const keepFrom = Date.now() - S.api.firstSyncDays * DAY;
+  const kept = prevItems.filter((i) => i.api && !freshIds.has(i.id) && i.date && new Date(i.date).getTime() < windowStart && new Date(i.date).getTime() >= keepFrom);
+  const all = [...fresh, ...kept];
+  const topProducts = await apiTopProducts(shopId, token, all);
+  const section = (items) => ({ status: 'ok', source: 'api', items });
+  return {
+    ok: true,
+    authenticated: true,
+    shopId,
+    shopName: store.name,
+    sections: {
+      orders: section(all),
+      returns: section(all.filter((i) => i.kind === 'return')),
+      refusals: section(all.filter((i) => i.kind === 'refusal')),
+      analytics: { status: 'ok', source: 'api', data: { kpi: {}, series: [], topProducts } },
+    },
+    missingSelectors: [],
+  };
+}
+
+/**
+ * Order contents are one request per order, so they are cached forever (they do
+ * not change) and fetched at most 60 per sync, newest and active orders first.
+ */
+async function apiTopProducts(shopId, token, items) {
+  const cache = await getApiEntries();
+  const key = (code) => `${shopId}::${code}`;
+  const todo = items
+    .filter((i) => i.api?.entriesUrl && !cache[key(i.id)])
+    .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 60);
+  for (const it of todo) {
+    try {
+      cache[key(it.id)] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
+    } catch (e) {
+      if (e.code === 'apiUnauthorized') throw e;
+      break; // try the rest on the next sync
+    }
+  }
+  if (todo.length) await lock(() => setApiEntries(cache));
+  const agg = new Map();
+  for (const it of items) {
+    for (const e of cache[key(it.id)] || []) {
+      const k = e.sku || e.name;
+      if (!k) continue;
+      const p = agg.get(k) || { sku: e.sku, name: e.name || e.category, revenue: 0, units: 0, returns: 0 };
+      if (it.kind === 'return') p.returns += e.quantity || 0;
+      if (it.kind !== 'refusal') {
+        p.units += e.quantity || 0;
+        if (it.kind === 'order') p.revenue += e.total ?? (e.price || 0) * (e.quantity || 1);
+      }
+      agg.set(k, p);
+    }
+  }
+  return [...agg.values()].map((p) => ({ ...p, returnRate: p.units ? p.returns / p.units : null }));
+}
+
+/** Current API state of one order (fresh from Kaspi), written back into the cache. */
+async function refreshApiOrder(shopId, token, code) {
+  const raw = await K.getOrderByCode(token, code);
+  if (!raw) return null;
+  const item = K.toOrderItem(raw);
+  await lock(async () => {
+    const all = await getSnapshots();
+    const sec = all[shopId]?.sections;
+    if (!sec) return;
+    const put = (name, belongs) => {
+      if (!sec[name]?.items) return;
+      sec[name].items = sec[name].items.filter((i) => i.id !== item.id);
+      if (belongs) sec[name].items.push(item);
+    };
+    put('orders', true);
+    put('returns', item.kind === 'return');
+    put('refusals', item.kind === 'refusal');
+    await setSnapshots(all);
+  });
+  return item;
+}
+
+/** Fetch the waybill of an order (if Kaspi has generated it) and store it as an invoice. */
+async function apiCollectWaybill(shopId, token, item, attempts = 1) {
+  let it = item;
+  for (let i = 0; i < attempts && !it?.api?.waybill; i++) {
+    if (i) await sleep(2500);
+    it = await refreshApiOrder(shopId, token, item.id);
+  }
+  if (!it?.api?.waybill) return { ok: false, error: 'waybillNotReady' };
+  const file = await K.downloadWaybill(token, it.api.waybill);
+  await lock(() => addInvoices([{ orderId: it.id, shopId, ...file, ts: Date.now() }]));
+  return { ok: true };
+}
+
+/** Wrap API calls so ApiError codes reach the UI. */
+const apiCall = (fn) => fn().catch((e) => ({ ok: false, error: e.code || e.message }));
+
+const apiActions = {
+  accept: (shopId, token, code) =>
+    apiCall(async () => {
+      const it = await refreshApiOrder(shopId, token, code);
+      if (!it) return { ok: false, error: 'orderNotVisible' };
+      if (it.api.state === 'SIGN_REQUIRED') return { ok: false, error: 'signatureRequired' };
+      if (it.api.status !== 'APPROVED_BY_BANK') return { ok: false, error: 'notAcceptable' };
+      await K.acceptOrder(token, it.api);
+      const after = await refreshApiOrder(shopId, token, code);
+      return after?.api.status === 'ACCEPTED_BY_MERCHANT' ? { ok: true } : { ok: false, error: 'notAcceptable' };
+    }),
+  pack: (shopId, token, code) =>
+    apiCall(async () => {
+      const it = await refreshApiOrder(shopId, token, code);
+      if (!it) return { ok: false, error: 'orderNotVisible' };
+      if (it.api.status === 'APPROVED_BY_BANK') return { ok: false, error: 'acceptFirst' };
+      if (it.api.status !== 'ACCEPTED_BY_MERCHANT') return { ok: false, error: 'packDisabled' };
+      if (!it.api.isKaspiDelivery) return { ok: false, error: 'notKaspiDelivery' };
+      if (!it.api.assembled) await K.assembleOrder(token, it.api, 1);
+      const inv = await apiCollectWaybill(shopId, token, it, 6);
+      return { ok: true, invoiceError: inv.ok ? undefined : inv.error };
+    }),
+  invoice: (shopId, token, code) =>
+    apiCall(async () => {
+      const it = await refreshApiOrder(shopId, token, code);
+      if (!it) return { ok: false, error: 'orderNotVisible' };
+      return apiCollectWaybill(shopId, token, it, 1);
+    }),
+};
+
+/* ===================================================================== */
 /* Bulk actions                                                           */
 /* ===================================================================== */
 
@@ -393,6 +581,8 @@ async function runJob(kind, items, perItem) {
       }
     }),
   );
+  await updateBadge();
+  broadcast('bg:stateChanged', await getState()); // statuses changed by the action show up at once
   return { jobId, results };
 }
 
@@ -415,20 +605,32 @@ async function storeInvoice(shopId, res) {
 
 const actions = {
   /** "Pack selected": click Упаковать in the store tab and capture the invoice. */
-  pack: ({ items }) =>
-    runJob('pack', items, async (shopId, { orderId }) => {
+  /** "Accept selected" — API stores only (Kaspi: irreversible). */
+  accept: async ({ items }) => {
+    const tokens = await getApiTokens();
+    return runJob('accept', items, (shopId, { orderId }) => (tokens[shopId] ? apiActions.accept(shopId, tokens[shopId], orderId) : { ok: false, error: 'notApiStore' }));
+  },
+
+  pack: async ({ items }) => {
+    const tokens = await getApiTokens();
+    return runJob('pack', items, async (shopId, { orderId }) => {
+      if (tokens[shopId]) return apiActions.pack(shopId, tokens[shopId], orderId);
       const res = await runInStore(shopId, 'ksh:pack', { orderId }, { navigateTo: fillTemplate(S.urls.orderDetails, { orderId }), timeout: 45000 });
       await storeInvoice(shopId, res);
       return res;
-    }),
+    });
+  },
 
   /** "Generate invoices": collect Kaspi's invoices for already packed orders. */
-  fetchInvoices: ({ items }) =>
-    runJob('invoices', items, async (shopId, { orderId }) => {
+  fetchInvoices: async ({ items }) => {
+    const tokens = await getApiTokens();
+    return runJob('invoices', items, async (shopId, { orderId }) => {
+      if (tokens[shopId]) return apiActions.invoice(shopId, tokens[shopId], orderId);
       const res = await runInStore(shopId, 'ksh:invoice', { orderId }, { navigateTo: fillTemplate(S.urls.orderDetails, { orderId }), timeout: 30000 });
       await storeInvoice(shopId, res);
       return res;
-    }),
+    });
+  },
 
   /** "Print invoices": hand the selection to print.html. */
   print: async ({ items }) => {
@@ -469,7 +671,15 @@ const actions = {
   /** "Refresh payment status": re-read statuses from the store tabs. */
   refreshPayments: async ({ items }) => {
     const results = [];
+    const tokens = await getApiTokens();
     for (const [shopId, list] of Object.entries(groupBy(items, (i) => i.shopId))) {
+      if (tokens[shopId]) {
+        for (const { orderId } of list) {
+          const r = await apiCall(async () => ((await refreshApiOrder(shopId, tokens[shopId], orderId)) ? { ok: true } : { ok: false, error: 'orderNotVisible' }));
+          results.push({ shopId, orderId, ok: r.ok, error: r.error });
+        }
+        continue;
+      }
       const res = await runInStore(shopId, 'ksh:payments', { orderIds: list.map((i) => i.orderId) }, { navigateTo: S.urls.ordersList });
       if (!res?.ok) {
         list.forEach((i) => results.push({ ...i, ok: false, error: res?.error }));
@@ -629,6 +839,55 @@ const uiHandlers = {
   'ui:getState': () => getState(),
   'ui:sync': () => sync(),
   'ui:pack': (p) => actions.pack(p),
+  'ui:accept': (p) => actions.accept(p),
+  /** Connect a store by API token (verified against Kaspi first). */
+  'ui:connectApi': async ({ shopId, name, token }) => {
+    token = String(token || '').trim();
+    if (!token) return { ok: false, error: 'tokenEmpty' };
+    if (!shopId && !String(name || '').trim()) return { ok: false, error: 'storeNameEmpty' };
+    try {
+      await K.verifyToken(token);
+    } catch (e) {
+      return { ok: false, error: e.code || e.message };
+    }
+    const id = await lock(async () => {
+      const settings = await getSettings();
+      const sid = shopId && settings.stores[shopId] ? shopId : `api-${uid('s').slice(-8)}`;
+      const existing = settings.stores[sid];
+      const used = Object.values(settings.stores).map((s) => s.color);
+      settings.stores[sid] = {
+        ...existing,
+        id: sid,
+        name: existing?.name || String(name).trim(),
+        alias: existing?.alias || '',
+        color: existing?.color || nextStoreColor(used),
+        enabled: existing?.enabled ?? true,
+        origin: existing?.origin || 'https://kaspi.kz',
+        lastSeen: existing?.lastSeen || Date.now(),
+        api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null },
+      };
+      await saveSettings({ stores: settings.stores });
+      const tokens = await getApiTokens();
+      tokens[sid] = token;
+      await setApiTokens(tokens);
+      return sid;
+    });
+    sync().catch((e) => console.warn(LOG, 'sync after connect', e)); // first load runs in the background
+    return { ok: true, shopId: id };
+  },
+  'ui:disconnectApi': async ({ shopId }) => {
+    await lock(async () => {
+      const tokens = await getApiTokens();
+      delete tokens[shopId];
+      await setApiTokens(tokens);
+      const settings = await getSettings();
+      if (settings.stores[shopId]) {
+        delete settings.stores[shopId].api;
+        await saveSettings({ stores: settings.stores });
+      }
+    });
+    return { ok: true };
+  },
   'ui:fetchInvoices': (p) => actions.fetchInvoices(p),
   'ui:print': (p) => actions.print(p),
   'ui:process': (p) => actions.process(p),
@@ -668,10 +927,11 @@ const uiHandlers = {
     const next = await lock(async () => {
       const settings = await getSettings();
       delete settings.stores[shopId];
-      const [snaps, chat] = await Promise.all([getSnapshots(), getChat()]);
+      const [snaps, chat, tokens] = await Promise.all([getSnapshots(), getChat(), getApiTokens()]);
       delete snaps[shopId];
       delete chat[shopId];
-      await Promise.all([setSnapshots(snaps), setChat(chat)]);
+      delete tokens[shopId];
+      await Promise.all([setSnapshots(snaps), setChat(chat), setApiTokens(tokens)]);
       return saveSettings({ stores: settings.stores });
     });
     await updateBadge();

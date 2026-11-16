@@ -30,7 +30,9 @@ kaspi-seller-hub/
   content/network-tap.js           read-only observer of the page's own JSON responses (main world)
   dashboard/dashboard.html|js|css  Screen 2: Orders, Returns, Refusals, Payments, Analytics, Chat, Settings
   dashboard/charts.js              dependency-free SVG line & bar charts
-  dashboard/print.html|js          A4 invoice print page
+  dashboard/print.html|js          A4 invoice print page (PDF waybills via vendor/pdfjs)
+  background/kaspi-api.js          official Kaspi Shop API client + mapping to the data model
+  vendor/pdfjs/                    pdf.js 4.10.38 (Apache-2.0), bundled locally
   popup/popup.html|js|css          Screen 1: quick status
   shared/selectors.js              ALL selectors, URL templates, status maps (edit this when Kaspi changes)
   shared/i18n.js                   t(), plurals, Intl formatting, ICU fallback
@@ -55,6 +57,32 @@ Compared with the requested tree, four things were added:
 4. Click the toolbar icon to open the popup, then **Open dashboard**.
 
 Minimum Chrome version is 116 (MV3 module service worker, `world: "MAIN"` content scripts).
+
+## API mode (recommended)
+
+Kaspi has an official Shop API with a **token per store** (cabinet → Настройки → Токен API → «Сформировать»; only the company head can create it). Connect a store in **Settings → Подключение по API Kaspi**: pick an existing store or type a name, paste the token, click **Проверить и подключить**. The token is verified against Kaspi before it is saved.
+
+With a token the store needs **no open cabinet tab**:
+
+| Feature | Via API |
+|---|---|
+| Orders, returns, refusals | all states, last 90 days on the first sync, then the last 28 days on every sync (older orders stay cached); Kaspi allows ≤ 14 days per request and needs a state filter, so one sync is several requests |
+| Payment status | credit awaiting the buyer's signature → pending; bank-approved → paid; cancelled/returned → payment voided |
+| Cancellation reasons | Kaspi codes translated (RU/KK) |
+| **Принять выбранные** | `ACCEPTED_BY_MERCHANT`, only orders waiting for acceptance; confirmation dialog (irreversible on Kaspi's side) |
+| **Упаковать выбранные** | Kaspi Delivery orders that are accepted: `ASSEMBLE` with 1 place, then the waybill PDF is downloaded. Own-delivery orders are refused with a message |
+| **Собрать накладные / Печать** | official waybill PDFs, printed via the bundled pdf.js |
+| Top products | from order contents (cached; ≤ 60 new orders per sync) |
+| Chat, Kaspi's own analytics page | not in the API → still read from an open cabinet tab |
+
+Endpoints follow guide.kaspi.kz (`/shop/api/v2/orders`, list q3201, by code q3202, accept q3211, assemble q3210). They live in `selectors.js › api`.
+
+Security:
+- the token is stored only in this browser (`chrome.storage.local`, key `ksh.apiTokens`), is never sent to the dashboard/popup, and is sent only to the API host (a waybill on another host is downloaded without it);
+- buyer name, phone and address from the API are not stored;
+- **Отключить API** deletes the token; removing a store deletes it too. If a token leaks, re-create it in the cabinet — the old one stops working.
+
+What was verified: against a mock of the API (pagination, 14-day windows, wrong token, accept, assemble → waybill → print, refusals for unsigned credit and own delivery, incremental sync) and read-only against a real store. Accept and assemble were **not** run on a real order.
 
 ## Demo mode (try it without Kaspi)
 
@@ -134,17 +162,7 @@ A missing selector never crashes anything: it's logged to the console with a `[K
 - **Print invoices** opens `dashboard/print.html`, which puts every invoice on its own A4 page and calls `window.print()`.
 - HTML invoices are sanitized (no scripts, event handlers or remote resources) and isolated in a Shadow DOM.
 
-**PDF invoices need pdf.js** if you want them in a single print job. A browser can't print several embedded PDFs at once. Without pdf.js, the print page shows each PDF separately with an "Open PDF" link. To bundle it:
-
-```bash
-npm pack pdfjs-dist@4.10.38
-```
-
-```bash
-mkdir -p vendor/pdfjs && tar -xzf pdfjs-dist-4.10.38.tgz -C /tmp && cp /tmp/package/build/pdf.min.mjs /tmp/package/build/pdf.worker.min.mjs vendor/pdfjs/
-```
-
-`print.js` picks up `vendor/pdfjs/pdf.min.mjs` automatically and renders each PDF page as an image.
+**PDF invoices** (Kaspi waybills are PDFs) are rendered page by page with pdf.js, which is bundled in `vendor/pdfjs/` (pdfjs-dist 4.10.38, Apache-2.0), so many waybills print as one job.
 
 ## Charts (and bundling Chart.js instead)
 

@@ -14,6 +14,8 @@ export const KEYS = Object.freeze({
   lastSync: 'ksh.lastSync',
   registry: 'ksh.registry', // session
   printQueue: 'ksh.printQueue', // session
+  apiTokens: 'ksh.apiTokens', // { [shopId]: token } — never sent to extension pages
+  apiEntries: 'ksh.apiEntries', // { [shopId::code]: entries[] } — order contents cache
 });
 
 /**
@@ -30,7 +32,7 @@ export const KEYS = Object.freeze({
  * @typedef {{
  *   id:string, shopId:string, kind:'order'|'return'|'refusal',
  *   date:string|null, status:string, statusRaw:string,
- *   amount:number|null, paymentStatus:'paid'|'pending'|'failed'|'unknown', paymentRaw:string,
+ *   amount:number|null, paymentStatus:'paid'|'pending'|'failed'|'refunded'|'unknown', paymentRaw:string,
  *   customer?:string, reason?:string, url?:string
  * }} OrderItem
  *
@@ -115,8 +117,14 @@ export const setRegistry = (v) => write(session, KEYS.registry, v);
 export const getPrintQueue = () => read(session, KEYS.printQueue, []);
 export const setPrintQueue = (v) => write(session, KEYS.printQueue, v);
 
+/** API tokens. Read only by the service worker. */
+export const getApiTokens = () => read(local, KEYS.apiTokens, {});
+export const setApiTokens = (v) => write(local, KEYS.apiTokens, v);
+export const getApiEntries = () => read(local, KEYS.apiEntries, {});
+export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
+
 /** Wipe cached Kaspi data (keeps settings). */
-export const clearCache = () => local().remove([KEYS.snapshots, KEYS.chat, KEYS.lastSync]);
+export const clearCache = () => local().remove([KEYS.snapshots, KEYS.chat, KEYS.lastSync, KEYS.apiEntries]);
 
 /**
  * Subscribe to changes of one key.
