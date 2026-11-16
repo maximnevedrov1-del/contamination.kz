@@ -1,0 +1,355 @@
+{
+  "app": {
+    "name": "Kaspi Seller Hub",
+    "tagline": "Барлық дүкен бір терезеде"
+  },
+  "common": {
+    "allStores": "Барлық дүкендер",
+    "refresh": "Жаңарту",
+    "refreshing": "Жаңартылуда…",
+    "cancel": "Болдырмау",
+    "confirm": "Растау",
+    "close": "Жабу",
+    "save": "Сақтау",
+    "remove": "Жою",
+    "open": "Ашу",
+    "openInStore": "Дүкенде ашу",
+    "openStoreTab": "Дүкен қойындысын ашу",
+    "clearSelection": "Белгілеуді алып тастау",
+    "selectAll": "Барлығын таңдау",
+    "selectRow": "{id} тапсырысын таңдау",
+    "selected": {
+      "one": "{count} таңдалды",
+      "other": "{count} таңдалды"
+    },
+    "updated": "Жаңартылды: {time}",
+    "neverUpdated": "Әлі жаңартылмаған",
+    "search": "Іздеу",
+    "searchPlaceholder": "Тапсырыс нөмірі, клиент…",
+    "language": "Тіл",
+    "theme": "Тақырып",
+    "notAvailable": "д/ж",
+    "loading": "Жүктелуде…",
+    "showTable": "Кесте",
+    "showChart": "График",
+    "stale": "кэштен",
+    "derived": "жүктелген тапсырыстар бойынша есептелді"
+  },
+  "nav": {
+    "orders": "Тапсырыстар",
+    "returns": "Қайтарулар",
+    "refusals": "Бас тартулар",
+    "payments": "Төлемдер",
+    "analytics": "Аналитика",
+    "chat": "Чат",
+    "settings": "Баптаулар",
+    "stores": "Дүкендер"
+  },
+  "topbar": {
+    "storeFilter": "Дүкен",
+    "dateRange": "Кезең",
+    "last7": "7 күн",
+    "last30": "30 күн",
+    "last90": "90 күн",
+    "custom": "Өз кезеңі",
+    "from": "Бастап",
+    "to": "Дейін",
+    "themeToggle": "Тақырыпты ауыстыру"
+  },
+  "status": {
+    "new": "Жаңа",
+    "accepted": "Қабылданды",
+    "packed": "Қапталды",
+    "delivering": "Жеткізілуде",
+    "delivered": "Берілді",
+    "cancelled": "Тоқтатылды",
+    "returned": "Қайтару",
+    "refused": "Бас тарту",
+    "unknown": "Белгісіз",
+    "all": "Барлық мәртебелер"
+  },
+  "payment": {
+    "paid": "Төленді",
+    "pending": "Растауды күтуде",
+    "failed": "Төлем қатесі",
+    "unknown": "Дерек жоқ",
+    "all": "Барлық төлемдер"
+  },
+  "table": {
+    "orderId": "Тапсырыс",
+    "store": "Дүкен",
+    "date": "Күні",
+    "status": "Мәртебе",
+    "amount": "Сома",
+    "payment": "Төлем",
+    "customer": "Клиент",
+    "reason": "Себебі",
+    "sortBy": "Сұрыптау: {column}",
+    "rows": {
+      "one": "{count} жол",
+      "other": "{count} жол"
+    },
+    "keyboardHint": "↑↓ — жылжу, Бос орын — таңдау, Enter — дүкенде ашу",
+    "emptyTitle": "Ештеңе табылмады",
+    "emptyFiltered": "Сүзгілерді немесе кезеңді өзгертіп көріңіз.",
+    "emptyNoData": "Kaspi кабинетінің қажетті бөлімін ашып, «Жаңарту» батырмасын басыңыз."
+  },
+  "store": {
+    "online": "Қосулы",
+    "noTab": "Қойынды жабық",
+    "notAuth": "Кабинетке кірмеген",
+    "error": "Қате",
+    "unavailable": "«{store}» дүкені қолжетімсіз: {reason}",
+    "unauthTabs": {
+      "one": "Кабинетке кірмеген {count} Kaspi қойындысы",
+      "other": "Кабинетке кірмеген {count} Kaspi қойындысы"
+    },
+    "lastData": "соңғы деректер: {time}",
+    "noStoresTitle": "Дүкендер қосылмаған",
+    "noStoresText": "Әр дүкен үшін Kaspi сатушы кабинетін жеке қойындыда ашып, аккаунтқа кіріңіз — кеңейтім оларды өзі табады.",
+    "sectionNotVisible": "«{section}» бөлімі «{store}» дүкенінің ешбір қойындысында ашылмаған."
+  },
+  "orders": {
+    "title": "Тапсырыстар",
+    "subtitle": "Барлық дүкендердің тапсырыстары",
+    "pack": "Таңдалғандарды қаптау",
+    "generateInvoices": "Жүкқұжаттарды жинау",
+    "printInvoices": "Жүкқұжаттарды басып шығару",
+    "confirmPackTitle": "Тапсырыстарды қаптау керек пе?",
+    "confirmPack": {
+      "one": "Kaspi кабинетінде {stores} дүкендеріндегі {count} тапсырыс үшін «Қаптау» батырмасы басылады.",
+      "other": "Kaspi кабинетінде {stores} дүкендеріндегі {count} тапсырыс үшін «Қаптау» батырмасы басылады."
+    },
+    "packing": "Қаптау: {total} ішінен {done}…",
+    "collecting": "Жүкқұжаттар жиналуда: {total} ішінен {done}…",
+    "packDone": "Қапталды: {total} ішінен {ok}",
+    "invoicesDone": "Жиналған жүкқұжаттар: {total} ішінен {ok}"
+  },
+  "returns": {
+    "title": "Қайтарулар",
+    "subtitle": "Барлық дүкендердің қайтарулары",
+    "process": "Таңдалғандарды өңдеу",
+    "confirmProcessTitle": "Қайтаруларды кабинетте ашу керек пе?",
+    "confirmProcess": {
+      "one": "Kaspi кабинетінің {count} қойындысы ашылады.",
+      "other": "Kaspi кабинетінің {count} қойындысы ашылады."
+    }
+  },
+  "refusals": {
+    "title": "Бас тартулар",
+    "subtitle": "Барлық дүкендердің бас тартулары мен болдырмаулары",
+    "process": "Таңдалғандарды өңдеу"
+  },
+  "payments": {
+    "title": "Төлемдер",
+    "subtitle": "Тапсырыстар төлем мәртебесі бойынша",
+    "refresh": "Төлем мәртебесін жаңарту",
+    "refreshDone": "Мәртебе жаңартылды: {total} ішінен {ok}",
+    "groupTotal": "сомасы {amount}"
+  },
+  "analytics": {
+    "title": "Аналитика",
+    "subtitle": "Барлық дүкендер бойынша сатылым мен қайтарулар",
+    "revenue": "Түсім",
+    "orders": "Тапсырыстар",
+    "aov": "Орташа чек",
+    "returnRate": "Қайтару үлесі",
+    "refusalRate": "Бас тарту үлесі",
+    "conversion": "Конверсия",
+    "conversionHint": "тапсырыстар / қаралымдар",
+    "conversionNA": "қаралым деректері жоқ",
+    "revenueOverTime": "Күндер бойынша түсім",
+    "ordersOverTime": "Күндер бойынша тапсырыстар",
+    "revenueByStore": "Дүкендер бойынша түсім",
+    "returnRateByStore": "Дүкендер бойынша қайтару үлесі",
+    "topByRevenue": "Түсім бойынша үздік тауарлар",
+    "topByReturns": "Қайтару үлесі бойынша үздік тауарлар",
+    "product": "Тауар",
+    "sku": "Артикул",
+    "units": "Сатылды",
+    "returnsCount": "Қайтарулар",
+    "noProducts": "Kaspi ашық аналитика бетінде тауарлар тізімін көрсетпейді.",
+    "noData": "Таңдалған кезеңде деректер жоқ",
+    "sourceKaspi": "Kaspi аналитикасынан",
+    "sourceOrders": "тапсырыстар тізімі бойынша есептелді",
+    "chartLabel": "{title}: график"
+  },
+  "chat": {
+    "title": "Чат",
+    "subtitle": "Барлық дүкендердің ортақ inbox-ы",
+    "conversations": "Диалогтар",
+    "unreadOnly": "Тек оқылмағандар",
+    "unread": {
+      "one": "{count} оқылмаған",
+      "other": "{count} оқылмаған"
+    },
+    "noConversations": "Диалогтар жоқ",
+    "noConversationsText": "Әр дүкен кабинетінде чат бөлімін ашыңыз — немесе чаттың фондық қойындыларын бір батырмамен ашыңыз.",
+    "openChatTabs": "Чат қойындыларын ашу",
+    "chatTabsOpened": {
+      "one": "{count} чат қойындысы ашылды",
+      "other": "{count} чат қойындысы ашылды"
+    },
+    "selectConversation": "Сол жақтан диалогты таңдаңыз",
+    "loadingThread": "Хат алмасу жүктелуде…",
+    "threadError": "Хат алмасуды жүктеу мүмкін болмады: {error}",
+    "placeholder": "Клиентке жауап…",
+    "send": "Жіберу",
+    "sending": "Жіберілуде…",
+    "sendHint": "Ctrl + Enter — жіберу",
+    "sent": "Жіберілді",
+    "sentUnverified": "Жіберілді, бірақ хабарлама кабинетте әлі көрінбеді",
+    "sendFailed": "Жіберілмеді: {error}",
+    "you": "Сіз",
+    "customer": "Клиент",
+    "order": "{id} тапсырысы",
+    "pollEvery": "Әр {sec} с сайын жаңарады"
+  },
+  "settings": {
+    "title": "Баптаулар",
+    "subtitle": "Дүкендер, тіл және хабарландырулар",
+    "stores": "Дүкендер",
+    "storesHint": "Дүкендер олардың Kaspi кабинетін ашқан кезде автоматты түрде қосылады.",
+    "storeName": "Kaspi-дегі атауы",
+    "alias": "Өз атауы",
+    "color": "Түсі",
+    "enabled": "Қосулы",
+    "status": "Мәртебе",
+    "lastSeen": "Соңғы рет",
+    "removeStoreConfirm": "«{store}» дүкенін және оның кэшін жою керек пе? Кабинетін ашсаңыз, ол қайта пайда болады.",
+    "appearance": "Сыртқы түрі",
+    "themeSystem": "Жүйелік",
+    "themeLight": "Ашық",
+    "themeDark": "Қараңғы",
+    "chat": "Чат",
+    "pollInterval": "Чатты сұрау аралығы, секунд",
+    "pollIntervalHint": "Кемінде 30 секунд (Chrome шектеуі).",
+    "notifications": "Хабарландырулар",
+    "notifyNewOrders": "Жаңа тапсырыстар",
+    "notifyNewMessages": "Чаттағы жаңа хабарламалар",
+    "notifyReturns": "Жаңа қайтарулар",
+    "data": "Деректер",
+    "clearCache": "Деректер кэшін тазалау",
+    "clearInvoices": "Сақталған жүкқұжаттарды жою",
+    "invoicesStored": {
+      "one": "{count} жүкқұжат сақталған",
+      "other": "{count} жүкқұжат сақталған"
+    },
+    "cleared": "Дайын",
+    "diagnostics": "Селекторлар диагностикасы",
+    "diagnosticsHint": "Kaspi беттерінен табылмаған элементтер. Оларды shared/selectors.js файлында түзетіңіз.",
+    "selectorsVersion": "Селекторлар нұсқасы: {version}",
+    "noMissing": "Барлық селекторлар табылды",
+    "saved": "Баптаулар сақталды"
+  },
+  "popup": {
+    "newOrders": "Жаңа",
+    "returns": "Қайтарулар",
+    "refusals": "Бас тартулар",
+    "unpaid": "Төленбеген",
+    "openDashboard": "Панельді ашу",
+    "storesTitle": "Дүкендер",
+    "noStores": "Kaspi кабинетін ашып, кіріңіз — дүкен осында пайда болады."
+  },
+  "print": {
+    "title": "Жүкқұжаттарды басып шығару",
+    "count": {
+      "one": "{count} жүкқұжат",
+      "other": "{count} жүкқұжат"
+    },
+    "print": "Басып шығару",
+    "missing": {
+      "one": "{count} тапсырыс үшін жүкқұжат әлі жиналмаған — «Жүкқұжаттарды жинау» батырмасын басыңыз.",
+      "other": "{count} тапсырыс үшін жүкқұжат әлі жиналмаған — «Жүкқұжаттарды жинау» батырмасын басыңыз."
+    },
+    "empty": "Басып шығаратын жүкқұжаттар жоқ",
+    "rendering": "Беттер дайындалуда…",
+    "pdfFallback": "PDF жүкқұжаттарын pdf.js-сіз бір басып шығаруға біріктіру мүмкін емес. Оларды жеке ашыңыз немесе pdf.js қосыңыз (README қараңыз).",
+    "openPdf": "PDF ашу",
+    "orderLabel": "{id} тапсырысы · {store}"
+  },
+  "notifications": {
+    "newOrdersTitle": "Жаңа тапсырыстар",
+    "newOrders": {
+      "one": "«{store}» дүкенінде {count} жаңа тапсырыс",
+      "other": "«{store}» дүкенінде {count} жаңа тапсырыс"
+    },
+    "returnsTitle": "Жаңа қайтарулар",
+    "returns": {
+      "one": "«{store}» дүкенінде {count} жаңа қайтару",
+      "other": "«{store}» дүкенінде {count} жаңа қайтару"
+    },
+    "newMessagesTitle": "Жаңа хабарламалар",
+    "newMessages": {
+      "one": "{count} жаңа хабарлама: {store}",
+      "other": "{count} жаңа хабарлама: {store}"
+    }
+  },
+  "errors": {
+    "storeUnavailable": "дүкен қолжетімсіз (қойынды жабық немесе кабинетке кірмеген)",
+    "tabTimeout": "дүкен қойындысы жауап бермеді",
+    "tabClosed": "дүкен қойындысы жабық",
+    "navigationTimeout": "Kaspi беті жүктелмеді",
+    "packButtonNotFound": "«Қаптау» батырмасы табылмады",
+    "packDisabled": "тапсырысты қазір қаптау мүмкін емес",
+    "invoiceNotFound": "жүкқұжат табылмады",
+    "invoiceOriginNotAllowed": "жүкқұжат сенімсіз мекенжайдан",
+    "orderNotVisible": "тапсырыс бетте табылмады",
+    "ordersNotVisible": "тапсырыстар тізімі ашылмаған",
+    "conversationNotVisible": "диалог табылмады",
+    "threadNotFound": "хат алмасу табылмады",
+    "chatInputNotFound": "енгізу өрісі табылмады",
+    "chatSendNotFound": "жіберу батырмасы табылмады",
+    "emptyMessage": "бос хабарлама",
+    "noResponse": "жауап жоқ",
+    "generic": "қате: {error}",
+    "partial": "{count} үшін мүмкін болмады: {details}"
+  },
+  "format": {
+    "monthsShort": [
+      "қаң.",
+      "ақп.",
+      "нау.",
+      "сәу.",
+      "мам.",
+      "мау.",
+      "шіл.",
+      "там.",
+      "қыр.",
+      "қаз.",
+      "қар.",
+      "жел."
+    ],
+    "weekdaysShort": [
+      "жс",
+      "дс",
+      "сс",
+      "ср",
+      "бс",
+      "жм",
+      "сб"
+    ],
+    "now": "жаңа ғана",
+    "relative": {
+      "second": {
+        "one": "{count} секунд бұрын",
+        "other": "{count} секунд бұрын"
+      },
+      "minute": {
+        "one": "{count} минут бұрын",
+        "other": "{count} минут бұрын"
+      },
+      "hour": {
+        "one": "{count} сағат бұрын",
+        "other": "{count} сағат бұрын"
+      },
+      "day": {
+        "one": "{count} күн бұрын",
+        "other": "{count} күн бұрын"
+      }
+    },
+    "thousand": "мың",
+    "million": "млн",
+    "billion": "млрд"
+  }
+}

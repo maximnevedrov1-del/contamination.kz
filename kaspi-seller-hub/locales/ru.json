@@ -1,0 +1,389 @@
+{
+  "app": {
+    "name": "Kaspi Seller Hub",
+    "tagline": "Все магазины в одном окне"
+  },
+  "common": {
+    "allStores": "Все магазины",
+    "refresh": "Обновить",
+    "refreshing": "Обновление…",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить",
+    "close": "Закрыть",
+    "save": "Сохранить",
+    "remove": "Удалить",
+    "open": "Открыть",
+    "openInStore": "Открыть в магазине",
+    "openStoreTab": "Открыть вкладку магазина",
+    "clearSelection": "Снять выделение",
+    "selectAll": "Выбрать все",
+    "selectRow": "Выбрать заказ {id}",
+    "selected": {
+      "one": "Выбран {count}",
+      "few": "Выбрано {count}",
+      "many": "Выбрано {count}",
+      "other": "Выбрано {count}"
+    },
+    "updated": "Обновлено {time}",
+    "neverUpdated": "Ещё не обновлялось",
+    "search": "Поиск",
+    "searchPlaceholder": "Номер заказа, клиент…",
+    "language": "Язык",
+    "theme": "Тема",
+    "notAvailable": "н/д",
+    "loading": "Загрузка…",
+    "showTable": "Таблица",
+    "showChart": "График",
+    "stale": "из кэша",
+    "derived": "рассчитано по загруженным заказам"
+  },
+  "nav": {
+    "orders": "Заказы",
+    "returns": "Возвраты",
+    "refusals": "Отказы",
+    "payments": "Оплаты",
+    "analytics": "Аналитика",
+    "chat": "Чат",
+    "settings": "Настройки",
+    "stores": "Магазины"
+  },
+  "topbar": {
+    "storeFilter": "Магазин",
+    "dateRange": "Период",
+    "last7": "7 дней",
+    "last30": "30 дней",
+    "last90": "90 дней",
+    "custom": "Свой период",
+    "from": "С",
+    "to": "По",
+    "themeToggle": "Сменить тему"
+  },
+  "status": {
+    "new": "Новый",
+    "accepted": "Принят",
+    "packed": "Упакован",
+    "delivering": "Доставка",
+    "delivered": "Выдан",
+    "cancelled": "Отменён",
+    "returned": "Возврат",
+    "refused": "Отказ",
+    "unknown": "Неизвестно",
+    "all": "Все статусы"
+  },
+  "payment": {
+    "paid": "Оплачен",
+    "pending": "Ожидает подтверждения",
+    "failed": "Ошибка оплаты",
+    "unknown": "Нет данных",
+    "all": "Все оплаты"
+  },
+  "table": {
+    "orderId": "Заказ",
+    "store": "Магазин",
+    "date": "Дата",
+    "status": "Статус",
+    "amount": "Сумма",
+    "payment": "Оплата",
+    "customer": "Клиент",
+    "reason": "Причина",
+    "sortBy": "Сортировать по: {column}",
+    "rows": {
+      "one": "{count} строка",
+      "few": "{count} строки",
+      "many": "{count} строк",
+      "other": "{count} строки"
+    },
+    "keyboardHint": "↑↓ — перемещение, Пробел — выбрать, Enter — открыть в магазине",
+    "emptyTitle": "Ничего не найдено",
+    "emptyFiltered": "Попробуйте изменить фильтры или период.",
+    "emptyNoData": "Откройте вкладку кабинета Kaspi нужного раздела и нажмите «Обновить»."
+  },
+  "store": {
+    "online": "Подключен",
+    "noTab": "Вкладка закрыта",
+    "notAuth": "Не выполнен вход",
+    "error": "Ошибка",
+    "unavailable": "Магазин «{store}» недоступен: {reason}",
+    "unauthTabs": {
+      "one": "{count} вкладка Kaspi без входа в кабинет",
+      "few": "{count} вкладки Kaspi без входа в кабинет",
+      "many": "{count} вкладок Kaspi без входа в кабинет",
+      "other": "{count} вкладки Kaspi без входа в кабинет"
+    },
+    "lastData": "последние данные: {time}",
+    "noStoresTitle": "Магазины не подключены",
+    "noStoresText": "Откройте кабинет продавца Kaspi в отдельной вкладке для каждого магазина и войдите в аккаунт — расширение найдёт их автоматически.",
+    "sectionNotVisible": "Раздел «{section}» не открыт ни в одной вкладке магазина «{store}»."
+  },
+  "orders": {
+    "title": "Заказы",
+    "subtitle": "Все заказы из всех магазинов",
+    "pack": "Упаковать выбранные",
+    "generateInvoices": "Собрать накладные",
+    "printInvoices": "Печать накладных",
+    "confirmPackTitle": "Упаковать заказы?",
+    "confirmPack": {
+      "one": "В кабинете Kaspi будет нажата кнопка «Упаковать» для {count} заказа в {stores}.",
+      "few": "В кабинете Kaspi будет нажата кнопка «Упаковать» для {count} заказов в {stores}.",
+      "many": "В кабинете Kaspi будет нажата кнопка «Упаковать» для {count} заказов в {stores}.",
+      "other": "В кабинете Kaspi будет нажата кнопка «Упаковать» для {count} заказа в {stores}."
+    },
+    "packing": "Упаковка {done} из {total}…",
+    "collecting": "Сбор накладных {done} из {total}…",
+    "packDone": "Упаковано: {ok} из {total}",
+    "invoicesDone": "Накладных собрано: {ok} из {total}"
+  },
+  "returns": {
+    "title": "Возвраты",
+    "subtitle": "Возвраты из всех магазинов",
+    "process": "Обработать выбранные",
+    "confirmProcessTitle": "Открыть возвраты в кабинете?",
+    "confirmProcess": {
+      "one": "Будет открыта {count} вкладка кабинета Kaspi.",
+      "few": "Будут открыты {count} вкладки кабинета Kaspi.",
+      "many": "Будут открыты {count} вкладок кабинета Kaspi.",
+      "other": "Будут открыты {count} вкладки кабинета Kaspi."
+    }
+  },
+  "refusals": {
+    "title": "Отказы",
+    "subtitle": "Отказы и отмены из всех магазинов",
+    "process": "Обработать выбранные"
+  },
+  "payments": {
+    "title": "Оплаты",
+    "subtitle": "Заказы по статусу оплаты",
+    "refresh": "Обновить статус оплаты",
+    "refreshDone": "Статус обновлён: {ok} из {total}",
+    "groupTotal": "на сумму {amount}"
+  },
+  "analytics": {
+    "title": "Аналитика",
+    "subtitle": "Продажи и возвраты по всем магазинам",
+    "revenue": "Выручка",
+    "orders": "Заказы",
+    "aov": "Средний чек",
+    "returnRate": "Доля возвратов",
+    "refusalRate": "Доля отказов",
+    "conversion": "Конверсия",
+    "conversionHint": "заказы / просмотры",
+    "conversionNA": "нет данных о просмотрах",
+    "revenueOverTime": "Выручка по дням",
+    "ordersOverTime": "Заказы по дням",
+    "revenueByStore": "Выручка по магазинам",
+    "returnRateByStore": "Доля возвратов по магазинам",
+    "topByRevenue": "Топ товаров по выручке",
+    "topByReturns": "Топ товаров по доле возвратов",
+    "product": "Товар",
+    "sku": "Артикул",
+    "units": "Продано",
+    "returnsCount": "Возвраты",
+    "noProducts": "Kaspi не показывает список товаров на открытой странице аналитики.",
+    "noData": "Нет данных за выбранный период",
+    "sourceKaspi": "из аналитики Kaspi",
+    "sourceOrders": "рассчитано по списку заказов",
+    "chartLabel": "{title}: график"
+  },
+  "chat": {
+    "title": "Чат",
+    "subtitle": "Единый inbox по всем магазинам",
+    "conversations": "Диалоги",
+    "unreadOnly": "Только непрочитанные",
+    "unread": {
+      "one": "{count} непрочитанное",
+      "few": "{count} непрочитанных",
+      "many": "{count} непрочитанных",
+      "other": "{count} непрочитанного"
+    },
+    "noConversations": "Диалогов нет",
+    "noConversationsText": "Откройте раздел чата в кабинете каждого магазина — или откройте фоновые вкладки чата одной кнопкой.",
+    "openChatTabs": "Открыть вкладки чата",
+    "chatTabsOpened": {
+      "one": "Открыта {count} вкладка чата",
+      "few": "Открыты {count} вкладки чата",
+      "many": "Открыто {count} вкладок чата",
+      "other": "Открыто {count} вкладки чата"
+    },
+    "selectConversation": "Выберите диалог слева",
+    "loadingThread": "Загрузка переписки…",
+    "threadError": "Не удалось загрузить переписку: {error}",
+    "placeholder": "Ответ клиенту…",
+    "send": "Отправить",
+    "sending": "Отправка…",
+    "sendHint": "Ctrl + Enter — отправить",
+    "sent": "Отправлено",
+    "sentUnverified": "Отправлено, но сообщение пока не появилось в кабинете",
+    "sendFailed": "Не отправлено: {error}",
+    "you": "Вы",
+    "customer": "Клиент",
+    "order": "Заказ {id}",
+    "pollEvery": "Обновление каждые {sec} с"
+  },
+  "settings": {
+    "title": "Настройки",
+    "subtitle": "Магазины, язык и уведомления",
+    "stores": "Магазины",
+    "storesHint": "Магазины добавляются автоматически, когда вы открываете их кабинет Kaspi.",
+    "storeName": "Название в Kaspi",
+    "alias": "Своё название",
+    "color": "Цвет",
+    "enabled": "Включён",
+    "status": "Статус",
+    "lastSeen": "Последний раз",
+    "removeStoreConfirm": "Удалить магазин «{store}» и его кэш? Он появится снова, если открыть его кабинет.",
+    "appearance": "Внешний вид",
+    "themeSystem": "Системная",
+    "themeLight": "Светлая",
+    "themeDark": "Тёмная",
+    "chat": "Чат",
+    "pollInterval": "Интервал опроса чата, секунд",
+    "pollIntervalHint": "Минимум 30 секунд (ограничение Chrome).",
+    "notifications": "Уведомления",
+    "notifyNewOrders": "Новые заказы",
+    "notifyNewMessages": "Новые сообщения в чате",
+    "notifyReturns": "Новые возвраты",
+    "data": "Данные",
+    "clearCache": "Очистить кэш данных",
+    "clearInvoices": "Удалить сохранённые накладные",
+    "invoicesStored": {
+      "one": "Сохранена {count} накладная",
+      "few": "Сохранено {count} накладные",
+      "many": "Сохранено {count} накладных",
+      "other": "Сохранено {count} накладной"
+    },
+    "cleared": "Готово",
+    "diagnostics": "Диагностика селекторов",
+    "diagnosticsHint": "Элементы, которые не удалось найти на страницах Kaspi. Исправьте их в shared/selectors.js.",
+    "selectorsVersion": "Версия селекторов: {version}",
+    "noMissing": "Все селекторы найдены",
+    "saved": "Настройки сохранены"
+  },
+  "popup": {
+    "newOrders": "Новые",
+    "returns": "Возвраты",
+    "refusals": "Отказы",
+    "unpaid": "Без оплаты",
+    "openDashboard": "Открыть панель",
+    "storesTitle": "Магазины",
+    "noStores": "Откройте кабинет Kaspi и войдите — магазин появится здесь."
+  },
+  "print": {
+    "title": "Печать накладных",
+    "count": {
+      "one": "{count} накладная",
+      "few": "{count} накладные",
+      "many": "{count} накладных",
+      "other": "{count} накладной"
+    },
+    "print": "Печать",
+    "missing": {
+      "one": "Для {count} заказа накладная ещё не собрана — нажмите «Собрать накладные».",
+      "few": "Для {count} заказов накладная ещё не собрана — нажмите «Собрать накладные».",
+      "many": "Для {count} заказов накладная ещё не собрана — нажмите «Собрать накладные».",
+      "other": "Для {count} заказа накладная ещё не собрана — нажмите «Собрать накладные»."
+    },
+    "empty": "Нет накладных для печати",
+    "rendering": "Подготовка страниц…",
+    "pdfFallback": "PDF-накладные нельзя склеить в одну печать без pdf.js. Откройте их по отдельности или подключите pdf.js (см. README).",
+    "openPdf": "Открыть PDF",
+    "orderLabel": "Заказ {id} · {store}"
+  },
+  "notifications": {
+    "newOrdersTitle": "Новые заказы",
+    "newOrders": {
+      "one": "{count} новый заказ в «{store}»",
+      "few": "{count} новых заказа в «{store}»",
+      "many": "{count} новых заказов в «{store}»",
+      "other": "{count} нового заказа в «{store}»"
+    },
+    "returnsTitle": "Новые возвраты",
+    "returns": {
+      "one": "{count} новый возврат в «{store}»",
+      "few": "{count} новых возврата в «{store}»",
+      "many": "{count} новых возвратов в «{store}»",
+      "other": "{count} нового возврата в «{store}»"
+    },
+    "newMessagesTitle": "Новые сообщения",
+    "newMessages": {
+      "one": "{count} новое сообщение: {store}",
+      "few": "{count} новых сообщения: {store}",
+      "many": "{count} новых сообщений: {store}",
+      "other": "{count} нового сообщения: {store}"
+    }
+  },
+  "errors": {
+    "storeUnavailable": "магазин недоступен (вкладка закрыта или не выполнен вход)",
+    "tabTimeout": "вкладка магазина не ответила",
+    "tabClosed": "вкладка магазина закрыта",
+    "navigationTimeout": "страница Kaspi не загрузилась",
+    "packButtonNotFound": "кнопка «Упаковать» не найдена",
+    "packDisabled": "заказ нельзя упаковать сейчас",
+    "invoiceNotFound": "накладная не найдена",
+    "invoiceOriginNotAllowed": "накладная с недоверенного адреса",
+    "orderNotVisible": "заказ не найден на странице",
+    "ordersNotVisible": "список заказов не открыт",
+    "conversationNotVisible": "диалог не найден",
+    "threadNotFound": "переписка не найдена",
+    "chatInputNotFound": "поле ввода не найдено",
+    "chatSendNotFound": "кнопка отправки не найдена",
+    "emptyMessage": "пустое сообщение",
+    "noResponse": "нет ответа",
+    "generic": "ошибка: {error}",
+    "partial": "Не удалось для {count}: {details}"
+  },
+  "format": {
+    "monthsShort": [
+      "янв.",
+      "февр.",
+      "мар.",
+      "апр.",
+      "мая",
+      "июн.",
+      "июл.",
+      "авг.",
+      "сент.",
+      "окт.",
+      "нояб.",
+      "дек."
+    ],
+    "weekdaysShort": [
+      "вс",
+      "пн",
+      "вт",
+      "ср",
+      "чт",
+      "пт",
+      "сб"
+    ],
+    "now": "сейчас",
+    "relative": {
+      "second": {
+        "one": "{count} секунду назад",
+        "few": "{count} секунды назад",
+        "many": "{count} секунд назад",
+        "other": "{count} секунды назад"
+      },
+      "minute": {
+        "one": "{count} минуту назад",
+        "few": "{count} минуты назад",
+        "many": "{count} минут назад",
+        "other": "{count} минуты назад"
+      },
+      "hour": {
+        "one": "{count} час назад",
+        "few": "{count} часа назад",
+        "many": "{count} часов назад",
+        "other": "{count} часа назад"
+      },
+      "day": {
+        "one": "{count} день назад",
+        "few": "{count} дня назад",
+        "many": "{count} дней назад",
+        "other": "{count} дня назад"
+      }
+    },
+    "thousand": "тыс.",
+    "million": "млн",
+    "billion": "млрд"
+  }
+}

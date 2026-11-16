@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kaspi Seller Hub</title>
+    <link rel="icon" href="../icons/icon-32.png" />
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <style>
+      @page { size: A4; margin: 10mm; }
+      body { background: var(--surface-2); }
+      .bar {
+        position: sticky; top: 0; z-index: 2;
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      }
+      .bar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+      .bar .muted { color: var(--text-3); font-size: 13px; }
+      .bar .spacer { flex: 1; }
+      .notice { margin: 16px auto 0; width: 210mm; padding: 10px 14px; border-radius: var(--radius); background: var(--warn-bg); font-size: 13px; }
+      .pages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; }
+      .page {
+        width: 210mm; min-height: 297mm; padding: 10mm; background: #fff; color: #000;
+        box-shadow: var(--shadow-lg); border-radius: 4px; position: relative; overflow: hidden;
+      }
+      .page__label { position: absolute; top: 3mm; right: 5mm; font: 9px var(--font-sans); color: #888; }
+      .page img.pdf-page { display: block; width: 100%; height: auto; }
+      .page iframe { width: 100%; height: 270mm; border: 0; }
+      .empty { padding: 80px; text-align: center; color: var(--text-3); }
+      @media print {
+        body { background: #fff; }
+        .bar, .notice, .page__label, .no-print { display: none !important; }
+        .pages { padding: 0; gap: 0; display: block; }
+        .page { width: auto; min-height: 0; padding: 0; box-shadow: none; border-radius: 0; break-after: page; page-break-after: always; }
+        .page:last-child { break-after: auto; page-break-after: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <h1 data-i18n="print.title"></h1>
+      <span class="muted" id="count"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn--primary" id="printBtn" data-i18n="print.print"></button>
+    </div>
+    <div id="notices"></div>
+    <div class="pages" id="pages"></div>
+    <script type="module" src="print.js"></script>
+  </body>
+</html>
