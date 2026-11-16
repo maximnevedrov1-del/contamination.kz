@@ -125,6 +125,23 @@ after the seller imported the current assortment (Kaspi Excel/XML price list) an
 Code: `shared/catalog.js` (XML builder, .xlsx/.xml reader), `background/catalog-service.js`,
 `dashboard/catalog-view.js`.
 
+## Browsers and devices
+
+| Where | Status | How |
+|---|---|---|
+| Google Chrome — Windows, macOS, Linux | ✅ main target | Chrome Web Store, `node tools/build-release.mjs` |
+| Yandex Browser, Microsoft Edge, Opera, Brave, Vivaldi (desktop) | ✅ same build (Chromium) | install from Chrome Web Store (Opera: "Install Chrome Extensions"; Edge: allow other stores or publish to Edge Add-ons) |
+| Firefox desktop / Firefox for Android | 🟡 separate build | `node tools/build-release.mjs --target=firefox` → addons.mozilla.org; passes Mozilla `addons-linter` with 0 errors; not run in a real Firefox yet |
+| Yandex Browser for Android | 🟡 possible | installs Chrome Web Store extensions; not tested |
+| Safari — macOS, iPhone, iPad | 🔴 needs an app wrapper | `xcrun safari-web-extension-converter` + Apple Developer account + App Store; Safari extensions have no reliable notifications |
+| Chrome / Edge on Android, Chrome on iPhone | 🔴 no extensions at all | only a web version (would need a server for orders) |
+
+Cross-browser safeguards in the code: notifications fall back to a plain one where images are not
+supported (Firefox) and are skipped where the API is missing (Safari); clipboard fallback; Excel
+import tells the user to use XML if `DecompressionStream` is missing; a banner asks for kaspi.kz
+access if the browser did not grant it at install time. The dashboard layout is checked on
+iPhone SE … Full HD (`320`–`1920` px): no horizontal scroll, menu becomes a slide-in drawer.
+
 ## Release build and anti-tampering
 
 `node tools/build-release.mjs` builds `dist/kaspi-seller-hub-<version>.zip` for the Chrome

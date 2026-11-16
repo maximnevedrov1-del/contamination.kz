@@ -150,7 +150,8 @@ const ICONS = {
 /** Static, trusted SVG markup only (never data from Kaspi). */
 const icon = (name) => {
   const span = h('span', { class: 'icon', 'aria-hidden': 'true' });
-  span.innerHTML = ICONS[name];
+  const svg = new DOMParser().parseFromString(ICONS[name].replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '), 'image/svg+xml').documentElement;
+  span.append(document.importNode(svg, true));
   return span;
 };
 
@@ -1618,8 +1619,30 @@ function renderSidebar() {
 }
 
 /** Per-store "unavailable" banners — never block the other stores. */
+const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
+
 function renderBanners() {
   const box = clear($('banners'));
+  // Firefox (and Chrome with "on click" site access) may not grant kaspi.kz at install time.
+  if (state.kaspiAccess === false)
+    box.append(
+      h(
+        'div',
+        { class: 'banner', role: 'alert' },
+        icon('warn'),
+        h('span', { class: 'banner__text' }, t('access.text')),
+        h('button', {
+          type: 'button',
+          class: 'btn btn--sm btn--primary',
+          onclick: async () => {
+            const ok = await chrome.permissions.request({ origins: KASPI_ORIGINS }).catch(() => false);
+            state.kaspiAccess = ok;
+            renderBanners();
+            if (ok) sync();
+          },
+        }, t('access.button')),
+      ),
+    );
   if (state.route === 'settings') return;
   filteredStores().forEach((s) => {
     const snap = state.data.snapshots[s.id];
@@ -2483,6 +2506,7 @@ function bindShell() {
 async function main() {
   await initI18n();
   state.route = routeFromHash();
+  state.kaspiAccess = chrome.permissions?.contains ? await chrome.permissions.contains({ origins: KASPI_ORIGINS }).catch(() => true) : true;
   bindShell();
   await refreshInvoiceCount();
   await loadState();

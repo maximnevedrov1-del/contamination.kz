@@ -2,7 +2,8 @@
 /**
  * Kaspi Seller Hub — release build for the Chrome Web Store.
  *
- *   node tools/build-release.mjs            → dist/kaspi-seller-hub-<version>.zip
+ *   node tools/build-release.mjs                    → dist/kaspi-seller-hub-<version>.zip   (Chrome, Yandex, Edge, Opera, Brave)
+ *   node tools/build-release.mjs --target=firefox   → dist/kaspi-seller-hub-<version>-firefox.zip (Firefox desktop & Android, addons.mozilla.org)
  *
  * Refuses to build a version that could be used for free or leak secrets:
  *   - subscription server not configured (= developer mode, no limits);
@@ -22,9 +23,14 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+const TARGET = (process.argv.find((a) => a.startsWith('--target=')) || '--target=chrome').split('=')[1];
+if (!['chrome', 'firefox'].includes(TARGET)) {
+  console.error('Unknown --target (chrome | firefox)');
+  process.exit(1);
+}
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'dist');
-const PKG = path.join(OUT_DIR, 'kaspi-seller-hub');
+const PKG = path.join(OUT_DIR, TARGET === 'chrome' ? 'kaspi-seller-hub' : `kaspi-seller-hub-${TARGET}`);
 const SHIP = ['manifest.json', 'background', 'content', 'dashboard', 'popup', 'shared', 'locales', 'icons', 'vendor', 'legal'];
 
 const errors = [];
@@ -84,6 +90,19 @@ const prodOnly = (list) => list.filter((p) => !/localhost|^file:|127\.0\.0\.1/.t
 manifest.host_permissions = prodOnly(manifest.host_permissions || []);
 for (const cs of manifest.content_scripts || []) cs.matches = prodOnly(cs.matches);
 delete manifest.key;
+if (TARGET === 'firefox') {
+  // Firefox runs MV3 backgrounds as event pages (no service_worker key) and needs an add-on id.
+  // 128 = first version with content scripts in the page's MAIN world (network tap).
+  manifest.background = { scripts: [manifest.background.service_worker], type: 'module' };
+  delete manifest.minimum_chrome_version;
+  manifest.browser_specific_settings = {
+    gecko: {
+      id: 'kaspi-seller-hub@sellerhub.kz',
+      strict_min_version: '128.0',
+    },
+    gecko_android: { strict_min_version: '128.0' },
+  };
+}
 const supa = new URL(supabaseUrl).origin;
 manifest.content_security_policy = {
   extension_pages: [
@@ -119,7 +138,7 @@ if (leaks.length) {
 }
 
 // ---------- zip ----------
-const zip = path.join(OUT_DIR, `kaspi-seller-hub-${manifest.version}.zip`);
+const zip = path.join(OUT_DIR, `kaspi-seller-hub-${manifest.version}${TARGET === 'chrome' ? '' : '-' + TARGET}.zip`);
 fs.rmSync(zip, { force: true });
 execFileSync('zip', ['-qr', zip, '.'], { cwd: PKG });
 console.log(`✓ ${path.relative(ROOT, zip)}\n  hosts: ${manifest.host_permissions.join(', ')}\n  server: ${supa}`);

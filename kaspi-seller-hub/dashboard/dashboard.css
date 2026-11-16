@@ -408,3 +408,10 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
   .settings .field > * { max-width: 100%; }
   .settings .btn { white-space: normal; }
 }
+.tile { min-width: 0; }
+@media (max-width: 380px) {
+  .tiles { gap: var(--space-2); }
+  .tile { padding: var(--space-3); }
+  .tile__value { font-size: 18px; }
+  .home-store__nums { gap: var(--space-3); }
+}

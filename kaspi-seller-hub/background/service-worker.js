@@ -196,7 +196,23 @@ async function notifyPayment(lic) {
       /* QR not reachable → plain notification */
     }
   }
-  chrome.notifications.create(`ksh:pay:${inv.id}`, opts); // click → dashboard "#pay" (QR window)
+  await showNotification(`ksh:pay:${inv.id}`, opts); // click → dashboard "#pay" (QR window)
+}
+
+/**
+ * Notification that works in every browser: Chrome/Yandex/Edge/Opera show the QR image;
+ * Firefox only knows "basic" (retried without the image); Safari has no notifications
+ * API at all (skipped — the dashboard banner / payment window still show everything).
+ */
+async function showNotification(id, opts) {
+  if (!chrome.notifications?.create) return;
+  try {
+    await chrome.notifications.create(id, opts);
+  } catch (e) {
+    if (opts.type === 'basic') return console.warn(LOG, 'notification', e?.message);
+    const { imageUrl, requireInteraction, ...basic } = opts;
+    await chrome.notifications.create(id, { ...basic, type: 'basic' }).catch((e2) => console.warn(LOG, 'notification', e2?.message));
+  }
 }
 
 function unregisterTab(tabId) {
@@ -504,7 +520,7 @@ async function getState() {
 
 async function notify(id, title, message, route) {
   await initI18n();
-  chrome.notifications.create(`ksh:${route}:${id}`, {
+  await showNotification(`ksh:${route}:${id}`, {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
     title,
@@ -1241,7 +1257,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => console.warn(LOG, 'card imports', e));
 });
 
-chrome.notifications.onClicked.addListener((id) => {
+chrome.notifications?.onClicked.addListener((id) => {
   const route = id.split(':')[1] || 'orders';
   openDashboard(route);
   chrome.notifications.clear(id);

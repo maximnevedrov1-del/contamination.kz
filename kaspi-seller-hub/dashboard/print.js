@@ -35,8 +35,11 @@ function sanitize(html) {
     }
   });
   doc.querySelectorAll('style').forEach((st) => (st.textContent = stripCssUrls(st.textContent)));
-  const styles = [...doc.querySelectorAll('style')].map((st) => st.outerHTML).join('');
-  return styles + doc.body.innerHTML;
+  // Nodes, not an HTML string: the cleaned document is moved in without re-parsing.
+  const frag = document.createDocumentFragment();
+  doc.querySelectorAll('style').forEach((st) => frag.append(document.importNode(st, true)));
+  [...doc.body.childNodes].forEach((n) => frag.append(document.importNode(n, true)));
+  return frag;
 }
 
 function dataUrlToBytes(dataUrl) {
@@ -153,7 +156,7 @@ async function main() {
     if (inv.kind === 'html') {
       const page = pageEl(label);
       const host = h('div');
-      host.attachShadow({ mode: 'open' }).innerHTML = sanitize(inv.data);
+      host.attachShadow({ mode: 'open' }).append(sanitize(inv.data));
       page.append(host);
       fragment.append(page);
     } else if (pdfjs) {

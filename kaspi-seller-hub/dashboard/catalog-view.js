@@ -15,6 +15,19 @@ import { validateProduct, readPriceListFile, SKU_RE } from '../shared/catalog.js
 
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
 
+/** Copy that also works where the async clipboard API is missing or blocked (older Safari/Firefox). */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = h('textarea', { value: text, style: { position: 'fixed', opacity: '0' } });
+    document.body.append(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+}
+
 /**
  * @param {{ toast:Function, errorText:Function, emptyState:Function, storeChip:Function, storeName:Function,
  *           dataStores:Function, renderView:Function, confirmDialog:Function }} ui
@@ -264,6 +277,7 @@ export function createCatalogView(ui) {
         e.target.value = '';
         if (!file) return;
         try {
+          if (/\.xlsx$/i.test(file.name) && typeof DecompressionStream === 'undefined') return ui.toast(ui.errorText('xlsxUnsupported'), 'error', 9000);
           const parsed = await readPriceListFile(await file.arrayBuffer());
           if (!parsed.offers.length) return ui.toast(t('catalog.importEmpty'), 'error');
           const ok = await ui.confirmDialog(t('catalog.importTitle'), t('catalog.importConfirm', { count: parsed.offers.length, store: ui.storeName(s.id) }));
@@ -286,7 +300,7 @@ export function createCatalogView(ui) {
           h('label', { class: 'catalog-field' }, h('span', null, t('catalog.feed.warehouses')), txt('warehouses', { placeholder: 'PP1, PP2' })),
         ),
         h('label', { class: 'check feed__confirm' }, confirmBox, h('span', null, t('catalog.feed.confirm'))),
-        f.url && h('div', { class: 'feed__url' }, h('code', null, f.url), h('button', { type: 'button', class: 'btn btn--sm', onclick: () => navigator.clipboard.writeText(f.url).then(() => ui.toast(t('catalog.feed.copied'), 'ok')) }, t('catalog.feed.copy'))),
+        f.url && h('div', { class: 'feed__url' }, h('code', null, f.url), h('button', { type: 'button', class: 'btn btn--sm', onclick: () => copyText(f.url).then(() => ui.toast(t('catalog.feed.copied'), 'ok')) }, t('catalog.feed.copy'))),
         f.url && h('p', { class: 'muted small' }, t('catalog.feed.howTo')),
         h('div', { class: 'feed__actions' },
           h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: async () => {
