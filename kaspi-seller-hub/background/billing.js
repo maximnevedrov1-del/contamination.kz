@@ -168,11 +168,18 @@ export async function licenseView({ force = false, storeCount } = {}) {
   const paid = lic.paid_until && new Date(lic.paid_until).getTime() > now;
   const trial = !paid && lic.trial_ends_at && new Date(lic.trial_ends_at).getTime() > now;
   const status = paid ? 'active' : trial ? 'trial' : 'expired';
-  const storeLimit = status === 'expired' ? 0 : status === 'active' ? lic.paid_store_limit || lic.store_limit : lic.store_limit || lic.pricing?.base_stores || 3;
+  const storeLimit = status === 'expired' ? 0 : lic.store_limit || lic.paid_store_limit || lic.pricing?.base_stores || 3;
+  const coverageEnd = lic.coverage_end || (paid ? lic.paid_until : lic.trial_ends_at);
+  const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
+  const remindDays = lic.remind_days ?? 5;
   return {
     status,
     canUse: status !== 'expired',
     storeLimit,
+    coverageEnd,
+    daysLeft: Math.max(0, Math.ceil(msLeft / DAY)),
+    remindDays,
+    renewalDue: status === 'expired' || msLeft <= remindDays * DAY,
     email: lic.email || session.email,
     phone: lic.phone,
     trialEndsAt: lic.trial_ends_at,
@@ -187,6 +194,31 @@ export async function licenseView({ force = false, storeCount } = {}) {
 
 export async function createInvoice({ stores, months, phone }) {
   await rpc('create_invoice', { p_stores: Number(stores), p_months: Number(months), p_phone: String(phone || '') });
+  return licenseView({ force: true });
+}
+
+/**
+ * Keep the bill in line with reality (idempotent, server decides the amount):
+ *  - within remind_days of the end, or expired → one renewal invoice for ALL stores;
+ *  - more stores connected than covered → add-on invoice (prorated to the period end).
+ * @param {number} storeCount enabled stores in the extension
+ * @returns {Promise<boolean>} true when the server was asked (licence then re-read)
+ */
+export async function reconcileInvoice(storeCount, view) {
+  if (!isConfigured() || !view || ['loggedOut', 'offline', 'unconfigured'].includes(view.status)) return false;
+  if (view.renewalDue) await rpc('ensure_renewal_invoice', { p_stores: storeCount });
+  else if (storeCount > view.storeLimit) await rpc('request_store_addon', { p_total_stores: storeCount });
+  else return false;
+  return true;
+}
+
+export async function requestAddon({ total }) {
+  await rpc('request_store_addon', { p_total_stores: Number(total) });
+  return licenseView({ force: true });
+}
+
+export async function setPhone({ phone }) {
+  await rpc('set_my_phone', { p_phone: String(phone || '') });
   return licenseView({ force: true });
 }
 

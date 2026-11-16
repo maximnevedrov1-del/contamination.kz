@@ -1620,7 +1620,7 @@ function renderBanners() {
             { class: 'banner', role: 'status' },
             h('span', { class: 'banner__icon' }, icon('warn')),
             h('span', { class: 'banner__text' }, t('account.overLimitBanner', { store: storeName(s.id), limit: state.data.license.storeLimit })),
-            h('a', { class: 'btn btn--sm', href: '#account' }, t('account.addStores')),
+            h('button', { type: 'button', class: 'btn btn--sm btn--primary', onclick: payForStores }, t('account.addStores')),
           ),
         ),
       );
@@ -1636,6 +1636,213 @@ const fmtPhone = (p) => (p && /^7\d{10}$/.test(p) ? `+7 ${p.slice(1, 4)} ${p.sli
 
 /** Same formula as public.billing_price() on the server (display only — the server computes the invoice). */
 const priceOf = (pr, stores, months) => (pr.base_price + Math.max(0, stores - pr.base_stores) * pr.extra_store_price) * months;
+
+/* ---------- Kaspi payment window ---------- */
+
+const pay = { open: false, blocking: false, timer: null };
+const memo = {
+  get: (k) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set: (k, v) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      /* storage blocked: the window may simply show again */
+    }
+  },
+};
+
+/**
+ * When the payment window opens by itself:
+ *  - subscription expired → always, and it cannot be closed (cabinet blocked);
+ *  - add-on stores waiting for payment → once per invoice amount;
+ *  - renewal due (≤ remind_days left) → once a day.
+ * @returns {'blocking'|'show'|null}
+ */
+function payMode(lic) {
+  if (!lic || lic.status === 'unconfigured' || lic.status === 'loggedOut' || lic.status === 'offline') return null;
+  if (lic.status === 'expired') return 'blocking';
+  const inv = lic.pendingInvoice;
+  if (!inv) return null;
+  if (inv.kind === 'addon' && memo.get('ksh.payShown.addon') !== `${inv.id}:${inv.amount}`) return 'show';
+  if (lic.renewalDue && memo.get('ksh.payShown.renewal') !== `${inv.id}:${new Date().toDateString()}`) return 'show';
+  return null;
+}
+
+function maybePay() {
+  if (pay.open || !state.data) return;
+  if (state.forcePay && state.data.license?.pendingInvoice) {
+    state.forcePay = false;
+    return openPay(false);
+  }
+  const mode = payMode(state.data.license);
+  if (mode) openPay(mode === 'blocking');
+}
+
+function rememberShown(lic) {
+  const inv = lic?.pendingInvoice;
+  if (!inv) return;
+  if (inv.kind === 'addon') memo.set('ksh.payShown.addon', `${inv.id}:${inv.amount}`);
+  else memo.set('ksh.payShown.renewal', `${inv.id}:${new Date().toDateString()}`);
+}
+
+function openPay(blocking = false) {
+  const dlg = $('payDialog');
+  pay.open = true;
+  pay.blocking = blocking || state.data?.license?.status === 'expired';
+  renderPay();
+  if (!dlg.open) dlg.showModal();
+  rememberShown(state.data.license);
+  clearInterval(pay.timer);
+  pay.timer = setInterval(checkPayment, 15000); // activation shows up within seconds of confirmation
+}
+
+function closePay() {
+  clearInterval(pay.timer);
+  pay.open = false;
+  const dlg = $('payDialog');
+  if (dlg.open) dlg.close();
+}
+
+/** Re-check the licence; when the invoice is paid, unlock everything at once. */
+async function checkPayment() {
+  const lic = await send('ui:billingState', { force: true });
+  if (!lic) return;
+  state.data.license = lic;
+  if (lic.canUse && !lic.pendingInvoice) {
+    closePay();
+    toast(t('pay.paidToast'), 'ok', 8000);
+    await loadState();
+    sync();
+  } else if (pay.open) renderPay();
+}
+
+function renderPay() {
+  const dlg = $('payDialog');
+  const lic = state.data.license || {};
+  const inv = lic.pendingInvoice;
+  const expired = lic.status === 'expired';
+  const kind = expired ? 'expired' : inv?.kind === 'addon' ? 'addon' : 'renewal';
+  const extra = inv ? Math.max(0, inv.stores - (lic.storeLimit || 0)) : 0;
+  const until = lic.coverageEnd ? formatDate(lic.coverageEnd) : '';
+  const title = {
+    expired: t('pay.expiredTitle'),
+    addon: t('pay.addonTitle', { count: extra || 1 }),
+    renewal: t('pay.renewTitle', { count: lic.daysLeft ?? 0, date: until }),
+  }[kind];
+  const sub = {
+    expired: t('pay.expiredText'),
+    addon: t('pay.addonText', { date: until }),
+    renewal: t('pay.renewText', { stores: inv?.stores ?? '' }),
+  }[kind];
+  const phoneInput = h('input', { class: 'input', type: 'tel', placeholder: t('account.phonePlaceholder'), value: fmtPhone(lic.phone), style: { width: '190px' }, 'aria-label': t('pay.phoneLabel') });
+  const body = h(
+    'div',
+    { class: 'pay' },
+    h('h2', { class: 'pay__title', id: 'payTitle' }, title),
+    h('p', { class: 'pay__sub' }, sub),
+    inv
+      ? [
+          h('div', { class: 'pay__amount' }, formatMoney(inv.amount)),
+          h('div', { class: 'pay__details' }, t('pay.details', { id: inv.id, stores: inv.stores })),
+          lic.payment?.qr_url
+            ? h('img', { class: 'pay__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })
+            : h('div', { class: 'pay__noqr' }, t('pay.noQr')),
+          h('p', { class: 'pay__instr' }, lic.payment?.instructions || t('pay.defaultInstr', { amount: formatMoney(inv.amount) })),
+          h(
+            'form',
+            {
+              class: 'pay__phone',
+              onsubmit: async (e) => {
+                e.preventDefault();
+                const res = await send('ui:billingSetPhone', { phone: phoneInput.value });
+                if (res?.ok) {
+                  state.data.license = res.license;
+                  toast(t('pay.phoneSaved'), 'ok');
+                  renderPay();
+                } else toast(errorText(res?.error), 'error');
+              },
+            },
+            h('span', { class: 'muted', style: { alignSelf: 'center' } }, t('pay.phoneLabel')),
+            phoneInput,
+            h('button', { type: 'submit', class: 'btn btn--sm' }, t('common.save')),
+          ),
+        ]
+      : h('p', { class: 'muted' }, t('pay.preparing')),
+    h(
+      'div',
+      { class: 'pay__actions' },
+      h('button', { type: 'button', class: 'btn btn--primary', autofocus: true, onclick: () => checkPayment() }, t('pay.check')),
+      !pay.blocking && h('button', { type: 'button', class: 'btn', onclick: closePay }, t('pay.later')),
+      // blocked cabinet: the only other way out is another account
+      pay.blocking &&
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn--ghost',
+            onclick: async () => {
+              await send('ui:billingLogout');
+              closePay();
+              await loadState();
+            },
+          },
+          t('pay.logout'),
+        ),
+    ),
+    h('p', { class: 'pay__wait' }, t('pay.waiting')),
+  );
+  clear(dlg).append(body);
+}
+
+/** Over-limit stores or the account page: create/refresh the invoice and show the QR. */
+async function payForStores() {
+  const res = await send('ui:billingAddon');
+  if (res?.ok === false) return toast(errorText(res.error), 'error');
+  if (res?.license) state.data.license = res.license;
+  openPay(false);
+}
+
+/** Simple "connect a store": name + API token → then the payment window right away. */
+function bindConnectDialog() {
+  const dlg = $('connectDialog');
+  $('connectStoreBtn').addEventListener('click', () => {
+    const pr = state.data?.license?.pricing;
+    $('connectPrice').textContent = pr && state.data.license.status !== 'unconfigured' ? t('connect.price', { extra: formatMoney(pr.extra_store_price), base: pr.base_stores }) : '';
+    $('connectError').hidden = true;
+    $('connectName').value = '';
+    $('connectToken').value = '';
+    applyI18n(dlg);
+    dlg.showModal();
+    $('connectName').focus();
+  });
+  $('connectCancel').addEventListener('click', () => dlg.close());
+  $('connectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('connectSubmit');
+    btn.disabled = true;
+    btn.textContent = t('connect.checking');
+    const res = await send('ui:connectApi', { shopId: null, name: $('connectName').value, token: $('connectToken').value });
+    btn.disabled = false;
+    btn.textContent = t('connect.submit');
+    if (!res?.ok) {
+      $('connectError').textContent = errorText(res?.error);
+      $('connectError').hidden = false;
+      return;
+    }
+    $('connectToken').value = '';
+    dlg.close();
+    toast(t('connect.done'), 'ok');
+    await loadState();
+    const lic = state.data.license;
+    if (lic && lic.status !== 'unconfigured' && dataStores().length < enabledStores().length) await payForStores();
+  });
+}
 
 /** Full-page notice shown instead of a section when there is no usable subscription. */
 function paywall() {
@@ -1791,7 +1998,8 @@ function viewAccount() {
           h(
             'div',
             { style: { display: 'flex', gap: '8px' } },
-            h('button', { type: 'button', class: 'btn btn--primary', disabled: ui.busy, onclick: () => run(async () => ((state.data.license = await send('ui:billingState', { force: true })), await loadState())) }, t('account.checkStatus')),
+            h('button', { type: 'button', class: 'btn btn--primary', onclick: () => openPay(false) }, t('pay.openQr')),
+            h('button', { type: 'button', class: 'btn', disabled: ui.busy, onclick: () => run(async () => ((state.data.license = await send('ui:billingState', { force: true })), await loadState())) }, t('account.checkStatus')),
             h('button', { type: 'button', class: 'btn btn--ghost btn--danger', disabled: ui.busy, onclick: () => run(async () => { const r = await send('ui:billingCancelInvoice', { id: inv.id }); await loadState(); return r; }) }, t('account.cancelInvoice')),
           ),
         ),
@@ -1823,7 +2031,8 @@ function viewAccount() {
       : h('p', { class: 'muted' }, t('account.noInvoices')),
   );
 
-  return h('div', { class: 'settings' }, statusCard, pendingCard || planCard, historyCard);
+  // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
+  return h('div', { class: 'settings' }, statusCard, pendingCard, planCard, historyCard);
 }
 
 const VIEWS = {
@@ -1888,6 +2097,7 @@ async function loadState() {
   state.chat = await getChat();
   state.costs = await getCosts();
   renderAll();
+  maybePay();
 }
 
 /** Ask every store tab for a fresh snapshot. */
@@ -1904,6 +2114,7 @@ async function sync() {
   } finally {
     state.syncing = false;
     renderAll();
+    maybePay();
   }
 }
 
@@ -1916,6 +2127,11 @@ async function changeLang(lang) {
 
 function routeFromHash() {
   const r = location.hash.replace('#', '');
+  // "#pay" (from the popup / notification) = subscription page with the QR window open
+  if (r === 'pay') {
+    state.forcePay = true;
+    return 'account';
+  }
   return ROUTES.includes(r) ? r : 'orders';
 }
 
@@ -1924,6 +2140,12 @@ function routeFromHash() {
 /* ===================================================================== */
 
 function bindShell() {
+  bindConnectDialog();
+  // Esc closes the payment window only when the cabinet is not blocked.
+  $('payDialog').addEventListener('cancel', (e) => {
+    e.preventDefault();
+    if (!pay.blocking) closePay();
+  });
   window.addEventListener('hashchange', () => {
     state.route = routeFromHash();
     renderAll();
@@ -1973,6 +2195,7 @@ function bindShell() {
       renderTopbar();
       renderBanners();
       renderView();
+      maybePay();
     }
     if (msg?.type === 'bg:progress' && state.job) {
       state.job.done = msg.payload.done;
@@ -1999,6 +2222,18 @@ function bindShell() {
     if (state.route !== 'products') renderView();
   });
   setInterval(() => !state.syncing && renderTopbar(), 30000); // keep "updated N min ago" fresh
+  // Every minute: re-evaluate the subscription (cached in the worker; dates checked
+  // locally), so an expiry or a new invoice shows the QR window without waiting for a sync.
+  setInterval(async () => {
+    if (!state.data || state.syncing || pay.open) return;
+    const lic = await send('ui:billingState', { force: false }).catch(() => null);
+    if (!lic) return;
+    const before = state.data.license || {};
+    const changed = lic.status !== before.status || lic.canUse !== before.canUse || lic.pendingInvoice?.id !== before.pendingInvoice?.id || lic.pendingInvoice?.amount !== before.pendingInvoice?.amount;
+    state.data.license = lic;
+    if (changed) await loadState();
+    else maybePay();
+  }, 60000);
 }
 
 async function main() {

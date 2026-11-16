@@ -150,10 +150,10 @@
       el(
         'tr',
         null,
-        el('td', { class: 'mono' }, '№ ' + i.id),
+        el('td', { class: 'mono' }, '№ ' + i.id, el('div', { class: 'muted' }, { renewal: 'продление', addon: 'доп. магазины', manual: 'выбран клиентом' }[i.kind] || '')),
         el('td', null, date(i.created_at, true)),
         el('td', null, i.email || '—', el('div', { class: 'muted mono' }, phone(i.phone))),
-        el('td', null, `${i.stores} маг. × ${i.months} мес.`, el('div', { class: 'muted' }, `подключено магазинов: ${i.last_store_count ?? '—'}`)),
+        el('td', null, i.kind === 'addon' ? `до ${i.stores} маг., доплата до конца периода` : `${i.stores} маг. × ${i.months} мес.`, el('div', { class: 'muted' }, `подключено магазинов: ${i.last_store_count ?? '—'}`)),
         el('td', { class: 'num big' }, money(i.amount)),
         el(
           'td',
@@ -270,6 +270,7 @@
         'Пробный период, дней', num('trial_days'),
         'Магазинов в пробном периоде', num('trial_store_limit'),
         'Максимум месяцев в счёте', num('max_months'),
+        'Напоминать об оплате за, дней', num('remind_days'),
       ),
       el('h2', { style: 'margin-top:20px' }, 'Оплата через Kaspi'),
       el('div', { class: 'grid2' }, 'Ссылка на картинку QR Kaspi Pay', f.kaspi_qr_url, '', preview, 'Инструкция для клиента', f.payment_instructions),
@@ -283,7 +284,7 @@
             class: 'btn btn--primary',
             onclick: async () => {
               const p = {};
-              ['base_price', 'base_stores', 'extra_store_price', 'trial_days', 'trial_store_limit', 'max_months'].forEach((k) => (p[k] = Number(f[k].value)));
+              ['base_price', 'base_stores', 'extra_store_price', 'trial_days', 'trial_store_limit', 'max_months', 'remind_days'].forEach((k) => (p[k] = Number(f[k].value)));
               p.kaspi_qr_url = f.kaspi_qr_url.value.trim();
               p.payment_instructions = f.payment_instructions.value.trim();
               try {
@@ -336,5 +337,36 @@
     }),
   );
   $('reload').addEventListener('click', () => render().catch((e) => toast(e.message, true)));
+
+  // Every 30 s: new invoices → counter in the tab title + a desktop notification,
+  // so a payment can be confirmed (and the client unlocked) quickly.
+  let known = null;
+  setInterval(async () => {
+    if ($('app').hidden || document.querySelector('.input:focus, textarea:focus')) return;
+    try {
+      const pending = await rpc('admin_invoices', { p_status: 'pending' });
+      $('pendingCount').textContent = pending.length || '';
+      document.title = (pending.length ? `(${pending.length}) ` : '') + 'Seller Hub — оплаты';
+      const ids = new Set(pending.map((i) => i.id));
+      const fresh = known ? pending.filter((i) => !known.has(i.id)) : [];
+      known = ids;
+      if (fresh.length) {
+        toast(`Новый счёт: ${money(fresh[0].amount)} — ${fresh[0].email || phone(fresh[0].phone)}`);
+        try {
+          if (window.Notification && Notification.permission === 'granted') new Notification('Новый счёт Seller Hub', { body: `${money(fresh[0].amount)} — ${fresh[0].email || ''}` });
+        } catch {
+          /* notifications unavailable */
+        }
+        if (tab === 'pending') await render();
+      }
+    } catch {
+      /* offline: try again later */
+    }
+  }, 30000);
+  try {
+    if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
+  } catch {
+    /* notifications unavailable */
+  }
   show();
 })();

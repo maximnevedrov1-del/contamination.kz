@@ -36,7 +36,7 @@ import {
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { initI18n, t } from '../shared/i18n.js';
+import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
 const S = globalThis.KSH_SELECTORS;
@@ -122,6 +122,56 @@ function allowedStoreIds(settings, lic) {
 async function currentLicense(force = false) {
   const settings = await getSettings();
   return B.licenseView({ force, storeCount: enabledStoreList(settings).length });
+}
+
+let lastReconcileAt = 0;
+/**
+ * Licence + automatic billing: renewal invoice for all stores from remind_days
+ * before the end (or once expired), add-on invoice when more stores are connected
+ * than covered; then the payment reminder with the Kaspi QR.
+ */
+async function billingMaintenance(force = false) {
+  let lic = await currentLicense(force);
+  if (!B.isConfigured()) return lic;
+  if (force || Date.now() - lastReconcileAt > 60000) {
+    lastReconcileAt = Date.now();
+    try {
+      const count = enabledStoreList(await getSettings()).length;
+      if (await B.reconcileInvoice(count, lic)) lic = await currentLicense(true);
+    } catch (e) {
+      console.warn(LOG, 'billing reconcile', e.code || e.message);
+    }
+  }
+  await notifyPayment(lic).catch((e) => console.warn(LOG, 'pay notify', e));
+  return lic;
+}
+
+/** Image notification with the Kaspi QR: once a day per invoice amount. */
+async function notifyPayment(lic) {
+  const inv = lic?.pendingInvoice;
+  if (!inv || !(lic.renewalDue || !lic.canUse || inv.kind === 'addon')) return;
+  const key = `${inv.id}:${inv.amount}:${new Date().toDateString()}`;
+  const { 'ksh.payNotified': last } = await chrome.storage.local.get('ksh.payNotified');
+  if (last === key) return;
+  await chrome.storage.local.set({ 'ksh.payNotified': key });
+  await initI18n();
+  const amount = formatMoney(inv.amount);
+  const msgKey = !lic.canUse ? 'notifications.payExpired' : inv.kind === 'addon' ? 'notifications.payAddon' : 'notifications.payRenewal';
+  const message = t(msgKey, { amount, stores: inv.stores, date: lic.coverageEnd ? formatDate(lic.coverageEnd) : '', days: lic.daysLeft });
+  const opts = { type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon-128.png'), title: t('notifications.payTitle', { amount }), message, priority: 2, requireInteraction: true };
+  const qr = lic.payment?.qr_url;
+  if (qr) {
+    try {
+      const res = await fetch(qr);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      Object.assign(opts, { type: 'image', imageUrl: `data:${res.headers.get('content-type') || 'image/png'};base64,${btoa(bin)}` });
+    } catch {
+      /* QR not reachable → plain notification */
+    }
+  }
+  chrome.notifications.create(`ksh:pay:${inv.id}`, opts); // click → dashboard "#pay" (QR window)
 }
 
 function unregisterTab(tabId) {
@@ -290,7 +340,7 @@ function mergeStoreSnapshot(prev, fresh) {
  */
 async function sync() {
   // No active subscription → no data is pulled; the UI shows the paywall.
-  const lic = await currentLicense();
+  const lic = await billingMaintenance();
   if (!lic.canUse) {
     const state = await getState();
     broadcast('bg:stateChanged', state);
@@ -353,6 +403,11 @@ async function sync() {
   });
   await updateBadge();
   await notifyDeadlines().catch((e) => console.warn(LOG, 'deadline notify', e));
+  // A store found during this sync (e.g. a new cabinet tab) may exceed the plan:
+  // bill it now so the payment window can show right away.
+  if (B.isConfigured() && lic.storeLimit != null && !lic.pendingInvoice && enabledStoreList(await getSettings()).length > lic.storeLimit) {
+    await billingMaintenance(true).catch((e) => console.warn(LOG, 'billing after sync', e));
+  }
   const state = await getState();
   broadcast('bg:stateChanged', state);
   return state;
@@ -1044,7 +1099,16 @@ const uiHandlers = {
   },
 
   /* ---------- subscription ---------- */
-  'ui:billingState': ({ force }) => currentLicense(!!force),
+  'ui:billingState': ({ force }) => billingMaintenance(!!force),
+  /** "Оплатить подключение": add-on (or renewal) invoice for all enabled stores. */
+  'ui:billingAddon': () =>
+    billingCall(async () => {
+      lastReconcileAt = Date.now();
+      const lic = await B.requestAddon({ total: enabledStoreList(await getSettings()).length });
+      await notifyPayment(lic).catch(() => {});
+      return { ok: true, license: lic };
+    }),
+  'ui:billingSetPhone': (p) => billingCall(async () => ({ ok: true, license: await B.setPhone(p) })),
   'ui:billingRequestCode': ({ email }) => billingCall(() => B.requestCode(email)),
   'ui:billingVerify': ({ email, code }) =>
     billingCall(async () => {

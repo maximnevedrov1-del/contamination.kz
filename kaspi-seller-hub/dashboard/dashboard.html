@@ -62,6 +62,7 @@
           <a class="plan-chip" id="planChip" href="#account" hidden></a>
           <div class="sidebar__label" data-i18n="nav.stores"></div>
           <ul id="sidebarStores" class="sidebar__store-list"></ul>
+          <button type="button" class="btn btn--sm sidebar__connect" id="connectStoreBtn" data-i18n="connect.button"></button>
         </div>
       </aside>
 
@@ -110,6 +111,26 @@
     </div>
 
     <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+    <!-- Kaspi payment: filled by dashboard.js (renewal, add-on stores, blocked cabinet) -->
+    <dialog id="payDialog" class="dialog dialog--pay" aria-labelledby="payTitle"></dialog>
+
+    <!-- Simple "connect a store" form -->
+    <dialog id="connectDialog" class="dialog" aria-labelledby="connectTitle">
+      <form method="dialog" id="connectForm">
+        <h2 class="dialog__title" id="connectTitle" data-i18n="connect.title"></h2>
+        <p class="dialog__text" data-i18n="connect.text"></p>
+        <label class="connect__field"><span data-i18n="connect.name"></span><input class="input" id="connectName" autocomplete="off" required /></label>
+        <label class="connect__field"><span data-i18n="connect.token"></span><input class="input" id="connectToken" type="password" autocomplete="off" required /></label>
+        <p class="field__hint" data-i18n="connect.howTo"></p>
+        <p class="field__hint" id="connectPrice"></p>
+        <div class="banner" id="connectError" role="alert" hidden></div>
+        <div class="dialog__actions">
+          <button type="button" value="cancel" class="btn" id="connectCancel" data-i18n="common.cancel"></button>
+          <button type="submit" value="ok" class="btn btn--primary" id="connectSubmit" data-i18n="connect.submit"></button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="confirmDialog" class="dialog">
       <form method="dialog">

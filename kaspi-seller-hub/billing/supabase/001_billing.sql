@@ -27,12 +27,15 @@ create table if not exists public.billing_config (
   trial_days           int  not null default 30    check (trial_days >= 0),
   trial_store_limit    int  not null default 3     check (trial_store_limit >= 1),
   max_months           int  not null default 12    check (max_months between 1 and 24),
-  max_stores           int  not null default 50    check (max_stores >= 1),
+  max_stores           int  not null default 200   check (max_stores >= 1),
+  remind_days          int  not null default 5     check (remind_days between 1 and 30),
   kaspi_qr_url         text,          -- public URL of your Kaspi Pay QR image
   payment_instructions text,          -- shown to the client next to the amount
   updated_at           timestamptz not null default now()
 );
 insert into public.billing_config (id) values (1) on conflict (id) do nothing;
+-- upgrades of an existing database
+alter table public.billing_config add column if not exists remind_days int not null default 5;
 
 -- ---------- accounts ----------
 create table if not exists public.accounts (
@@ -41,7 +44,7 @@ create table if not exists public.accounts (
   phone            text,                       -- normalized 7XXXXXXXXXX, used for Kaspi invoices
   trial_ends_at    timestamptz not null,
   paid_until       timestamptz,
-  store_limit      int not null default 3,     -- stores covered by the last paid invoice
+  store_limit      int not null default 3,     -- stores covered now (trial or paid), raised by add-on invoices
   last_store_count int,                        -- reported by the extension (for the admin)
   last_seen_at     timestamptz,
   created_at       timestamptz not null default now()
@@ -51,10 +54,14 @@ create table if not exists public.accounts (
 create table if not exists public.invoices (
   id           bigint generated always as identity primary key,
   user_id      uuid not null references public.accounts (user_id) on delete cascade,
-  stores       int  not null check (stores between 1 and 1000),
-  months       int  not null check (months between 1 and 24),
+  -- manual  = created by the client on the "Подписка" page
+  -- renewal = created automatically remind_days before the end, for ALL connected stores
+  -- addon   = extra stores connected mid-period, prorated to the end of the current period
+  kind         text not null default 'manual' check (kind in ('manual', 'renewal', 'addon')),
+  stores       int  not null check (stores between 1 and 1000),   -- total stores covered after payment
+  months       int  not null check (months between 0 and 24),     -- 0 for add-on invoices
   amount       int  not null check (amount > 0),
-  phone        text not null,
+  phone        text,                                              -- optional: for a Kaspi remote invoice
   status       text not null default 'pending' check (status in ('pending', 'paid', 'cancelled')),
   created_at   timestamptz not null default now(),
   paid_at      timestamptz,
@@ -63,7 +70,15 @@ create table if not exists public.invoices (
   confirmed_by uuid,
   admin_note   text
 );
--- at most one open invoice per user
+-- upgrades of an existing database
+alter table public.invoices add column if not exists kind text not null default 'manual';
+alter table public.invoices alter column phone drop not null;
+alter table public.invoices drop constraint if exists invoices_months_check;
+alter table public.invoices add constraint invoices_months_check check (months between 0 and 24);
+alter table public.invoices drop constraint if exists invoices_kind_check;
+alter table public.invoices add constraint invoices_kind_check check (kind in ('manual', 'renewal', 'addon'));
+
+-- at most one open invoice per user (one amount, one QR)
 create unique index if not exists invoices_one_pending on public.invoices (user_id) where status = 'pending';
 create index if not exists invoices_status_created on public.invoices (status, created_at desc);
 
@@ -139,6 +154,12 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- ---------- client functions ----------
 
+-- End of what the account has right now: the paid period, else the trial.
+create or replace function public.coverage_end(acc public.accounts)
+returns timestamptz language sql stable as $$
+  select case when acc.paid_until > now() then acc.paid_until else acc.trial_ends_at end;
+$$;
+
 -- Licence for the extension: status, limits, pricing, payment details, open invoice.
 create or replace function public.get_license(p_store_count int default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -149,13 +170,17 @@ begin
     where user_id = acc.user_id;
   select * into c from public.billing_config where id = 1;
   st := case when acc.paid_until > now() then 'active' when acc.trial_ends_at > now() then 'trial' else 'expired' end;
-  lim := case when st = 'active' then acc.store_limit when st = 'trial' then c.trial_store_limit else 0 end;
+  lim := case when st = 'active' then acc.store_limit
+              when st = 'trial' then greatest(c.trial_store_limit, acc.store_limit)
+              else 0 end;
   return jsonb_build_object(
     'status', st,
     'email', acc.email,
     'phone', acc.phone,
     'trial_ends_at', acc.trial_ends_at,
     'paid_until', acc.paid_until,
+    'coverage_end', public.coverage_end(acc),
+    'remind_days', c.remind_days,
     'store_limit', lim,
     'paid_store_limit', acc.store_limit,
     'server_time', now(),
@@ -169,8 +194,19 @@ begin
   );
 end $$;
 
--- New invoice (replaces an open one). Amount is computed server-side.
-create or replace function public.create_invoice(p_stores int, p_months int, p_phone text)
+-- Optional phone: empty → keep the account's phone; given but invalid → error.
+create or replace function public.phone_or_account(p_phone text, acc public.accounts)
+returns text language plpgsql stable as $$
+declare ph text;
+begin
+  if p_phone is null or btrim(p_phone) = '' then return acc.phone; end if;
+  ph := public.normalize_phone(p_phone);
+  if ph is null then raise exception 'invalid_phone' using errcode = '22023'; end if;
+  return ph;
+end $$;
+
+-- New invoice chosen by the client (replaces an open one). Amount is computed server-side.
+create or replace function public.create_invoice(p_stores int, p_months int, p_phone text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare acc public.accounts; c public.billing_config; ph text; n_stores int; inv public.invoices;
 begin
@@ -178,16 +214,92 @@ begin
   select * into c from public.billing_config where id = 1;
   if p_months is null or p_months < 1 or p_months > c.max_months then raise exception 'invalid_months' using errcode = '22023'; end if;
   if p_stores is null or p_stores < 1 or p_stores > c.max_stores then raise exception 'invalid_stores' using errcode = '22023'; end if;
-  ph := public.normalize_phone(p_phone);
-  if ph is null then raise exception 'invalid_phone' using errcode = '22023'; end if;
+  ph := public.phone_or_account(p_phone, acc);
   n_stores := greatest(p_stores, c.base_stores);   -- the base price already covers base_stores
   update public.invoices set status = 'cancelled', admin_note = coalesce(admin_note, 'replaced by client')
     where user_id = acc.user_id and status = 'pending';
-  insert into public.invoices (user_id, stores, months, amount, phone)
-    values (acc.user_id, n_stores, p_months, public.billing_price(n_stores, p_months), ph)
+  insert into public.invoices (user_id, kind, stores, months, amount, phone)
+    values (acc.user_id, 'manual', n_stores, p_months, public.billing_price(n_stores, p_months), ph)
     returning * into inv;
-  update public.accounts set phone = ph where user_id = acc.user_id;
+  if ph is not null then update public.accounts set phone = ph where user_id = acc.user_id; end if;
   return to_jsonb(inv) - 'confirmed_by' - 'admin_note';
+end $$;
+
+-- Renewal: from remind_days before the end (or once expired) there is exactly ONE open
+-- invoice covering ALL connected stores for 1 month — one amount, one QR.
+-- Idempotent: called on every licence check; returns the open invoice or null.
+create or replace function public.ensure_renewal_invoice(p_stores int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare acc public.accounts; c public.billing_config; pend public.invoices; n int; amt int;
+begin
+  acc := public.ensure_account();
+  select * into c from public.billing_config where id = 1;
+  if public.coverage_end(acc) > now() + make_interval(days => c.remind_days) then return null; end if;
+  n := least(c.max_stores, greatest(c.base_stores, coalesce(p_stores, 0), acc.store_limit));
+  amt := public.billing_price(n, 1);
+  select * into pend from public.invoices where user_id = acc.user_id and status = 'pending' for update;
+  if found and pend.kind in ('manual') then
+    return to_jsonb(pend) - 'confirmed_by' - 'admin_note';            -- the client already chose a plan
+  end if;
+  if found and pend.kind = 'renewal' then
+    if pend.stores <> n then                                           -- stores added/removed → same invoice, new total
+      update public.invoices set stores = n, amount = amt where id = pend.id returning * into pend;
+    end if;
+    return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
+  end if;
+  if found then                                                        -- an add-on is folded into the renewal
+    update public.invoices set status = 'cancelled', admin_note = 'merged into renewal' where id = pend.id;
+  end if;
+  insert into public.invoices (user_id, kind, stores, months, amount, phone)
+    values (acc.user_id, 'renewal', n, 1, amt, acc.phone) returning * into pend;
+  return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
+end $$;
+
+-- Extra stores connected mid-period: pay only for the days left in the current
+-- period (extra_store_price per 30 days, rounded up to 100 ₸), so every store renews
+-- on the same date. Near the end (renewal window) or after expiry the stores go into
+-- the renewal invoice instead. Returns the open invoice, or null if nothing to pay.
+create or replace function public.request_store_addon(p_total_stores int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare acc public.accounts; c public.billing_config; pend public.invoices; covered int; extra int; days int; amt int; n int;
+begin
+  acc := public.ensure_account();
+  select * into c from public.billing_config where id = 1;
+  n := least(c.max_stores, coalesce(p_total_stores, 0));
+  if public.coverage_end(acc) <= now() + make_interval(days => c.remind_days) then
+    return public.ensure_renewal_invoice(n);
+  end if;
+  covered := case when acc.paid_until > now() then acc.store_limit else greatest(c.trial_store_limit, acc.store_limit) end;
+  extra := n - covered;
+  select * into pend from public.invoices where user_id = acc.user_id and status = 'pending' for update;
+  if extra <= 0 then
+    return case when found then to_jsonb(pend) - 'confirmed_by' - 'admin_note' end;
+  end if;
+  days := greatest(1, ceil(extract(epoch from (public.coverage_end(acc) - now())) / 86400.0)::int);
+  amt := greatest(100, (ceil(extra * c.extra_store_price * days / 30.0 / 100.0) * 100)::int);
+  if found and pend.kind = 'addon' then
+    update public.invoices set stores = n, amount = amt where id = pend.id returning * into pend;
+    return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
+  end if;
+  if found then                                                        -- replace an unpaid manual plan
+    update public.invoices set status = 'cancelled', admin_note = 'replaced by add-on' where id = pend.id;
+  end if;
+  insert into public.invoices (user_id, kind, stores, months, amount, phone)
+    values (acc.user_id, 'addon', n, 0, amt, acc.phone) returning * into pend;
+  return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
+end $$;
+
+-- Phone for a Kaspi remote invoice (optional; QR works without it).
+create or replace function public.set_my_phone(p_phone text)
+returns text language plpgsql security definer set search_path = public as $$
+declare acc public.accounts; ph text;
+begin
+  acc := public.ensure_account();
+  ph := public.normalize_phone(p_phone);
+  if ph is null then raise exception 'invalid_phone' using errcode = '22023'; end if;
+  update public.accounts set phone = ph where user_id = acc.user_id;
+  update public.invoices set phone = ph where user_id = acc.user_id and status = 'pending';
+  return ph;
 end $$;
 
 create or replace function public.cancel_my_invoice(p_id bigint)
@@ -222,9 +334,16 @@ begin
   if not found then raise exception 'not_found' using errcode = 'P0002'; end if;
   if inv.status <> 'pending' then raise exception 'not_pending' using errcode = '22023'; end if;
   select * into acc from public.accounts where user_id = inv.user_id for update;
-  start_at := greatest(now(), coalesce(acc.paid_until, now()), acc.trial_ends_at);
-  end_at := start_at + make_interval(months => inv.months);
-  update public.accounts set paid_until = end_at, store_limit = inv.stores where user_id = inv.user_id;
+  if inv.kind = 'addon' then
+    -- extra stores for the rest of the current period; the end date does not move
+    start_at := now();
+    end_at := public.coverage_end(acc);
+    update public.accounts set store_limit = greatest(store_limit, inv.stores) where user_id = inv.user_id;
+  else
+    start_at := greatest(now(), coalesce(acc.paid_until, now()), acc.trial_ends_at);
+    end_at := start_at + make_interval(months => inv.months);
+    update public.accounts set paid_until = end_at, store_limit = inv.stores where user_id = inv.user_id;
+  end if;
   update public.invoices set status = 'paid', paid_at = now(), period_from = start_at, period_to = end_at,
          confirmed_by = auth.uid(), admin_note = p_note
     where id = p_id returning * into inv;
@@ -285,6 +404,7 @@ begin
     trial_days           = coalesce((p->>'trial_days')::int, trial_days),
     trial_store_limit    = coalesce((p->>'trial_store_limit')::int, trial_store_limit),
     max_months           = coalesce((p->>'max_months')::int, max_months),
+    remind_days          = coalesce((p->>'remind_days')::int, remind_days),
     kaspi_qr_url         = case when p ? 'kaspi_qr_url' then nullif(p->>'kaspi_qr_url', '') else kaspi_qr_url end,
     payment_instructions = case when p ? 'payment_instructions' then nullif(p->>'payment_instructions', '') else payment_instructions end,
     updated_at           = now()
@@ -296,6 +416,7 @@ end $$;
 revoke execute on all functions in schema public from public, anon;
 grant execute on function
   public.get_license(int), public.create_invoice(int, int, text), public.cancel_my_invoice(bigint),
+  public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text),
   public.billing_price(int, int), public.is_admin(),
   public.admin_invoices(text), public.admin_confirm_invoice(bigint, text), public.admin_cancel_invoice(bigint, text),
   public.admin_accounts(), public.admin_grant_days(uuid, int, int), public.admin_get_config(), public.admin_update_config(jsonb)

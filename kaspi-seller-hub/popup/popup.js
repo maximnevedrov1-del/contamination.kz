@@ -2,7 +2,7 @@
  * Kaspi Seller Hub — popup (Screen 1): quick status across stores.
  * Shows cached data instantly, then asks the worker for a fresh sync.
  */
-import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative } from '../shared/i18n.js';
+import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative, formatMoney } from '../shared/i18n.js';
 import { h, clear, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -33,8 +33,11 @@ function render() {
   // No usable subscription → one clear call to action instead of stale numbers.
   const lic = state.license;
   const blocked = lic && !lic.canUse;
-  $('licenseNotice').hidden = !blocked;
-  if (blocked) $('licenseNotice').textContent = `${t(`account.status.${lic.status}`, { date: '' })} — ${t('account.paywallButton')}`;
+  const inv = lic?.pendingInvoice;
+  const needPay = !!inv && (lic.renewalDue || blocked || inv.kind === 'addon');
+  $('licenseNotice').hidden = !(blocked || needPay);
+  if (needPay) $('licenseNotice').textContent = `${t('notifications.payTitle', { amount: formatMoney(inv.amount) })} — ${t('pay.openQr')}`;
+  else if (blocked) $('licenseNotice').textContent = `${t(`account.status.${lic.status}`, { date: '' })} — ${t('account.paywallButton')}`;
   const allowed = state.allowedStoreIds;
   const stores = storeList().filter((s) => !allowed || allowed.includes(s.id));
   const counts = stores.map((s) => storeCounts(state.snapshots[s.id]));
@@ -122,7 +125,7 @@ async function main() {
   });
   $('refreshBtn').addEventListener('click', refresh);
   $('licenseNotice').addEventListener('click', async () => {
-    await send('ui:openDashboard', { route: 'account' });
+    await send('ui:openDashboard', { route: 'pay' });
     window.close();
   });
   $('urgent').addEventListener('click', async () => {
