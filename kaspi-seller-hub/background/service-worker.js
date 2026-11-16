@@ -149,14 +149,14 @@ let lastReconcileKey = null;
  * before the end (or once expired), add-on invoice when more stores are connected
  * than covered; then the payment reminder with the Kaspi QR.
  */
-async function billingMaintenance(force = false) {
+async function billingMaintenance(force = false, reconcile = force) {
   let lic = await currentLicense(force);
   if (!B.isConfigured() || lic?.needsConsent) return lic; // no invoices before the offer is accepted
   const count = enabledStoreList(await getSettings()).length;
   // The server call is idempotent: repeat it only when something changed (store count,
   // renewal window, open invoice) or every 30 min — not every minute for every client.
   const key = JSON.stringify([count, lic?.status, lic?.renewalDue, lic?.storeLimit, lic?.pendingInvoice?.id, lic?.pendingInvoice?.stores]);
-  if (force || key !== lastReconcileKey || Date.now() - lastReconcileAt > 30 * 60000) {
+  if (reconcile || key !== lastReconcileKey || Date.now() - lastReconcileAt > 30 * 60000) {
     lastReconcileAt = Date.now();
     lastReconcileKey = key;
     try {
@@ -1122,7 +1122,8 @@ const uiHandlers = {
   },
 
   /* ---------- subscription ---------- */
-  'ui:billingState': ({ force }) => billingMaintenance(!!force),
+  // force = re-read the licence now; reconcile = also re-issue invoices (default: only if something changed)
+  'ui:billingState': ({ force, reconcile }) => billingMaintenance(!!force, reconcile ?? !!force),
   /** "Оплатить подключение": add-on (or renewal) invoice for all enabled stores. */
   'ui:billingAddon': () =>
     billingCall(async () => {

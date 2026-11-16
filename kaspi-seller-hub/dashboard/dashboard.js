@@ -1795,7 +1795,7 @@ function closePay() {
 /** Re-check the licence; when the invoice is paid, unlock everything at once. */
 async function checkPayment(manual = false) {
   if (!manual && document.hidden) return; // tab in the background: no polling, re-checked when shown
-  const lic = await send('ui:billingState', { force: true });
+  const lic = await send('ui:billingState', { force: true, reconcile: false }); // only «is it paid yet?»
   if (!lic) return;
   state.data.license = lic;
   if (lic.canUse && !lic.pendingInvoice) {
