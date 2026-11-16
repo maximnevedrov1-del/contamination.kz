@@ -53,7 +53,7 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'chat', 'settings'];
+const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'chat', 'settings', 'account'];
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
 const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, selected: new Set(), focus: 0 });
@@ -88,8 +88,11 @@ const enabledStores = () =>
   Object.values(stores())
     .filter((s) => s.enabled)
     .sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
+/** Enabled stores covered by the subscription (all of them in developer mode). */
+const allowedIds = () => state.data?.allowedStoreIds || null;
+const dataStores = () => enabledStores().filter((s) => !allowedIds() || allowedIds().includes(s.id));
 /** Stores matching the top-bar store filter. */
-const filteredStores = () => enabledStores().filter((s) => state.filters.shopId === 'all' || s.id === state.filters.shopId);
+const filteredStores = () => dataStores().filter((s) => state.filters.shopId === 'all' || s.id === state.filters.shopId);
 const storeName = (id) => stores()[id]?.alias || stores()[id]?.name || state.data?.snapshots?.[id]?.shopName || id;
 const storeColor = (id) => stores()[id]?.color || 'var(--text-3)';
 
@@ -1539,7 +1542,19 @@ function renderTopbar() {
 
 function renderSidebar() {
   document.querySelectorAll('.nav__item').forEach((a) => (a.dataset.route === state.route ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
-  const counts = enabledStores().map((s) => storeCounts(state.data.snapshots[s.id]));
+  // Plan chip: "Пробный период до …" / "Оплачено до …" / "Подписка закончилась".
+  const lic = state.data.license;
+  const chip = $('planChip');
+  if (chip) {
+    const show = lic && lic.status !== 'unconfigured';
+    chip.hidden = !show;
+    if (show) {
+      const until = lic.status === 'active' ? lic.paidUntil : lic.trialEndsAt;
+      chip.textContent = t(`account.status.${lic.status}`, { date: until ? formatDate(until) : '' });
+      chip.className = ['plan-chip', `plan-chip--${lic.status}`].join(' ');
+    }
+  }
+  const counts = dataStores().map((s) => storeCounts(state.data.snapshots[s.id]));
   const sum = (k) => counts.reduce((n, c) => n + (c[k] || 0), 0);
   const unread = enabledStores().reduce((n, s) => n + sumBy(state.chat[s.id]?.conversations || [], (c) => c.unread), 0);
   const setCount = (k, v) => (document.querySelector(`[data-count="${k}"]`).textContent = v ? formatNumber(v) : '');
@@ -1594,6 +1609,221 @@ function renderBanners() {
   if (state.data.unauthTabs > 0) {
     box.append(h('div', { class: 'banner banner--info', role: 'status' }, h('span', { class: 'banner__icon' }, icon('info')), h('span', { class: 'banner__text' }, t('store.unauthTabs', { count: state.data.unauthTabs }))));
   }
+  // Stores above the plan's limit: not synced until the subscription covers them.
+  if (allowedIds() && state.data.license?.canUse) {
+    enabledStores()
+      .filter((s) => !allowedIds().includes(s.id))
+      .forEach((s) =>
+        box.append(
+          h(
+            'div',
+            { class: 'banner', role: 'status' },
+            h('span', { class: 'banner__icon' }, icon('warn')),
+            h('span', { class: 'banner__text' }, t('account.overLimitBanner', { store: storeName(s.id), limit: state.data.license.storeLimit })),
+            h('a', { class: 'btn btn--sm', href: '#account' }, t('account.addStores')),
+          ),
+        ),
+      );
+  }
+}
+
+/* ===================================================================== */
+/* View: subscription                                                     */
+/* ===================================================================== */
+
+/** "77011234567" → "+7 701 123 45 67" */
+const fmtPhone = (p) => (p && /^7\d{10}$/.test(p) ? `+7 ${p.slice(1, 4)} ${p.slice(4, 7)} ${p.slice(7, 9)} ${p.slice(9)}` : p || '');
+
+/** Same formula as public.billing_price() on the server (display only — the server computes the invoice). */
+const priceOf = (pr, stores, months) => (pr.base_price + Math.max(0, stores - pr.base_stores) * pr.extra_store_price) * months;
+
+/** Full-page notice shown instead of a section when there is no usable subscription. */
+function paywall() {
+  const lic = state.data.license || {};
+  const text = lic.status === 'loggedOut' ? 'account.paywallLoggedOut' : lic.status === 'offline' ? 'account.paywallOffline' : 'account.paywallExpired';
+  return h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton'))));
+}
+
+function viewAccount() {
+  const lic = state.data.license || { status: 'unconfigured' };
+  const ui = (state.acct ??= { email: '', step: 'email', busy: false, error: null, stores: null, months: 1, phone: null });
+  const card = (title, sub, ...body) => h('section', { class: 'card' }, h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, title), sub && h('div', { class: 'card__sub' }, sub))), h('div', { class: 'card__body' }, ...body));
+  const errBox = () => ui.error && h('div', { class: 'banner', role: 'alert' }, icon('warn'), h('span', { class: 'banner__text' }, errorText(ui.error)));
+  const run = async (fn) => {
+    ui.busy = true;
+    ui.error = null;
+    renderView();
+    try {
+      const res = await fn();
+      if (res?.ok === false) ui.error = res.error || 'noResponse';
+      return res;
+    } finally {
+      ui.busy = false;
+      renderView();
+    }
+  };
+
+  if (lic.status === 'unconfigured') return h('div', { class: 'settings' }, card(t('account.status.unconfigured'), null, h('p', { class: 'muted' }, t('account.unconfiguredText'))));
+
+  // ---- login (email → code) ----
+  if (lic.status === 'loggedOut') {
+    const emailInput = h('input', { class: 'input', type: 'email', autocomplete: 'email', placeholder: 'name@example.kz', 'aria-label': t('account.email'), value: ui.email, dataset: { fkey: 'acct-email' }, oninput: (e) => (ui.email = e.target.value), disabled: ui.step === 'code' });
+    const codeInput = h('input', { class: 'input', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456', 'aria-label': t('account.code'), dataset: { fkey: 'acct-code' }, style: { width: '140px' } });
+    const body =
+      ui.step === 'email'
+        ? h(
+            'form',
+            {
+              class: 'field',
+              style: { justifyContent: 'flex-start', gap: '8px' },
+              onsubmit: async (e) => {
+                e.preventDefault();
+                const res = await run(() => send('ui:billingRequestCode', { email: ui.email }));
+                if (res?.ok) ui.step = 'code';
+                renderView();
+              },
+            },
+            emailInput,
+            h('button', { type: 'submit', class: 'btn btn--primary', disabled: ui.busy }, t(ui.busy ? 'account.sending' : 'account.sendCode')),
+          )
+        : h(
+            'form',
+            {
+              onsubmit: async (e) => {
+                e.preventDefault();
+                const res = await run(() => send('ui:billingVerify', { email: ui.email, code: codeInput.value }));
+                if (res?.ok) {
+                  state.acct = null;
+                  await loadState();
+                }
+              },
+            },
+            h('p', { class: 'muted' }, t('account.codeSent', { email: ui.email })),
+            h(
+              'div',
+              { class: 'field', style: { justifyContent: 'flex-start', gap: '8px' } },
+              codeInput,
+              h('button', { type: 'submit', class: 'btn btn--primary', disabled: ui.busy }, t(ui.busy ? 'account.verifying' : 'account.verify')),
+              h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((ui.step = 'email'), (ui.error = null), renderView()) }, t('account.changeEmail')),
+            ),
+          );
+    return h('div', { class: 'settings' }, card(t('account.loginTitle'), t('account.loginText'), body, errBox()));
+  }
+
+  // ---- logged in ----
+  const until = lic.status === 'active' ? lic.paidUntil : lic.trialEndsAt;
+  const days = until ? Math.max(0, Math.ceil((new Date(until).getTime() - Date.now()) / 86400000)) : 0;
+  const statusBadge = h(
+    'span',
+    { class: ['badge', lic.status === 'active' ? 'badge--ok' : lic.status === 'trial' ? 'badge--info' : 'badge--danger'] },
+    t(`account.status.${lic.status}`, { date: until ? formatDate(until) : '' }),
+  );
+  const used = enabledStores().length;
+  const statusCard = card(
+    t('account.title'),
+    lic.email ? t('account.loggedInAs', { email: lic.email }) : null,
+    h('div', { class: 'field' }, h('div', null, statusBadge, ' ', (lic.status === 'trial' || lic.status === 'active') && h('span', { class: 'muted' }, t('account.daysLeft', { count: days }))), h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => run(async () => (await send('ui:billingLogout'), await loadState())) }, t('account.logout'))),
+    lic.storeLimit != null && h('div', { class: ['muted', used > lic.storeLimit && 'neg'] }, t('account.storeUsage', { used, limit: lic.storeLimit })),
+  );
+
+  const pr = lic.pricing || { base_price: 20000, base_stores: 3, extra_store_price: 5000, max_months: 12, max_stores: 50 };
+  ui.stores ??= Math.max(pr.base_stores, used, lic.status === 'active' ? lic.storeLimit || 0 : 0);
+  ui.phone ??= fmtPhone(lic.phone);
+  const stores = Math.max(pr.base_stores, Math.min(pr.max_stores || 50, Number(ui.stores) || pr.base_stores));
+  const months = Math.max(1, Math.min(pr.max_months || 12, Number(ui.months) || 1));
+  const extraCount = Math.max(0, stores - pr.base_stores);
+  const monthly = priceOf(pr, stores, 1);
+
+  const planCard = card(
+    t('account.planTitle'),
+    t('account.planText', { base: formatMoney(pr.base_price), baseStores: pr.base_stores, extra: formatMoney(pr.extra_store_price) }),
+    h(
+      'div',
+      { class: 'field', style: { justifyContent: 'flex-start', gap: '16px', flexWrap: 'wrap' } },
+      h('label', { class: 'check' }, t('account.storesLabel'), h('input', { class: 'input', type: 'number', min: pr.base_stores, max: pr.max_stores || 50, value: stores, style: { width: '80px' }, dataset: { fkey: 'acct-stores' }, onchange: (e) => ((ui.stores = e.target.value), renderView()) })),
+      h(
+        'label',
+        { class: 'check' },
+        t('account.monthsLabel'),
+        h('select', { class: 'select', dataset: { fkey: 'acct-months' }, onchange: (e) => ((ui.months = e.target.value), renderView()) }, Array.from({ length: pr.max_months || 12 }, (_, i) => h('option', { value: i + 1, selected: i + 1 === months }, String(i + 1)))),
+      ),
+      h('label', { class: 'check' }, t('account.phoneLabel'), h('input', { class: 'input', type: 'tel', autocomplete: 'tel', placeholder: t('account.phonePlaceholder'), value: ui.phone, style: { width: '190px' }, dataset: { fkey: 'acct-phone' }, oninput: (e) => (ui.phone = e.target.value) })),
+    ),
+    h('div', { class: 'muted' }, extraCount ? t('account.priceLine', { base: formatMoney(pr.base_price), baseStores: pr.base_stores, extraCount, extra: formatMoney(pr.extra_store_price) }) : t('account.priceLineBase', { base: formatMoney(pr.base_price), baseStores: pr.base_stores }), ` = ${t('account.perMonth', { amount: formatMoney(monthly) })}`),
+    h(
+      'div',
+      { class: 'field' },
+      h('strong', { style: { fontSize: '18px' } }, t('account.total', { amount: formatMoney(monthly * months) })),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'btn btn--primary',
+          disabled: ui.busy,
+          onclick: () => run(async () => {
+            const res = await send('ui:billingCreateInvoice', { stores, months, phone: ui.phone });
+            if (res?.ok) await loadState();
+            return res;
+          }),
+        },
+        t(ui.busy ? 'account.creating' : 'account.createInvoice'),
+      ),
+    ),
+    errBox(),
+  );
+
+  const inv = lic.pendingInvoice;
+  const pendingCard =
+    inv &&
+    h(
+      'section',
+      { class: 'card pending-invoice' },
+      h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('account.pendingTitle', { id: inv.id, amount: formatMoney(inv.amount) }))),
+      h(
+        'div',
+        { class: 'card__body pending-invoice__body' },
+        h(
+          'div',
+          null,
+          h('p', null, t('account.pendingText', { phone: fmtPhone(inv.phone) })),
+          lic.payment?.instructions && h('p', { class: 'pending-invoice__instr' }, lic.payment.instructions),
+          h('p', { class: 'muted' }, t('account.pendingDetails', { stores: inv.stores, months: inv.months, date: formatDate(inv.created_at, 'datetime') })),
+          h(
+            'div',
+            { style: { display: 'flex', gap: '8px' } },
+            h('button', { type: 'button', class: 'btn btn--primary', disabled: ui.busy, onclick: () => run(async () => ((state.data.license = await send('ui:billingState', { force: true })), await loadState())) }, t('account.checkStatus')),
+            h('button', { type: 'button', class: 'btn btn--ghost btn--danger', disabled: ui.busy, onclick: () => run(async () => { const r = await send('ui:billingCancelInvoice', { id: inv.id }); await loadState(); return r; }) }, t('account.cancelInvoice')),
+          ),
+        ),
+        lic.payment?.qr_url && h('img', { class: 'pending-invoice__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' }),
+      ),
+    );
+
+  const history = (lic.invoices || []).filter((i) => i.status !== 'pending');
+  const historyCard = card(
+    t('account.historyTitle'),
+    null,
+    history.length
+      ? h(
+          'table',
+          { class: 'data' },
+          h('tbody', null, history.map((i) =>
+            h(
+              'tr',
+              null,
+              h('td', { class: 'mono' }, `№ ${i.id}`),
+              h('td', null, formatDate(i.created_at)),
+              h('td', null, `${i.stores} · ${i.months}`),
+              h('td', { class: 'num' }, formatMoney(i.amount)),
+              h('td', null, h('span', { class: ['badge', i.status === 'paid' ? 'badge--ok' : ''] }, t(`account.invoiceStatus.${i.status}`))),
+              h('td', { class: 'muted' }, i.status === 'paid' && i.period_to ? t('account.paidPeriod', { from: formatDate(i.period_from), to: formatDate(i.period_to) }) : ''),
+            ),
+          )),
+        )
+      : h('p', { class: 'muted' }, t('account.noInvoices')),
+  );
+
+  return h('div', { class: 'settings' }, statusCard, pendingCard || planCard, historyCard);
 }
 
 const VIEWS = {
@@ -1605,6 +1835,7 @@ const VIEWS = {
   products: viewProducts,
   chat: viewChat,
   settings: viewSettings,
+  account: viewAccount,
 };
 
 /** Re-render the content area, preserving focus on the same logical control. */
@@ -1617,8 +1848,12 @@ function renderView() {
 
   const view = clear($('view'));
   if (!state.data) return;
-  const needsStores = state.route !== 'settings' && !enabledStores().length;
-  view.append(needsStores ? noStores() : VIEWS[state.route]());
+  const lic = state.data.license;
+  if (lic && !lic.canUse && state.route !== 'account') view.append(paywall());
+  else {
+    const needsStores = !['settings', 'account'].includes(state.route) && !dataStores().length;
+    view.append(needsStores ? noStores() : VIEWS[state.route]());
+  }
   renderSidebar();
 
   if (fkey) {

@@ -30,7 +30,13 @@ function storeList() {
 function render() {
   applyI18n();
   renderLang();
-  const stores = storeList();
+  // No usable subscription → one clear call to action instead of stale numbers.
+  const lic = state.license;
+  const blocked = lic && !lic.canUse;
+  $('licenseNotice').hidden = !blocked;
+  if (blocked) $('licenseNotice').textContent = `${t(`account.status.${lic.status}`, { date: '' })} — ${t('account.paywallButton')}`;
+  const allowed = state.allowedStoreIds;
+  const stores = storeList().filter((s) => !allowed || allowed.includes(s.id));
   const counts = stores.map((s) => storeCounts(state.snapshots[s.id]));
   const totals = sumCounts(counts);
 
@@ -115,6 +121,10 @@ async function main() {
     render();
   });
   $('refreshBtn').addEventListener('click', refresh);
+  $('licenseNotice').addEventListener('click', async () => {
+    await send('ui:openDashboard', { route: 'account' });
+    window.close();
+  });
   $('urgent').addEventListener('click', async () => {
     await send('ui:openDashboard', { route: 'orders' });
     window.close();

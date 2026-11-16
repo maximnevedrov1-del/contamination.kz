@@ -35,6 +35,7 @@ import {
   KEYS,
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
+import * as B from './billing.js';
 import { initI18n, t } from '../shared/i18n.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
@@ -95,9 +96,32 @@ async function upsertStore({ shopId, shopName, origin }) {
     color: existing?.color || nextStoreColor(used),
     enabled: existing?.enabled ?? true,
     origin,
+    addedAt: existing?.addedAt || Date.now(),
     lastSeen: Date.now(),
   };
   await saveSettings({ stores: settings.stores });
+}
+
+/* ===================================================================== */
+/* Subscription                                                           */
+/* ===================================================================== */
+
+const enabledStoreList = (settings) => Object.values(settings.stores).filter((s) => s.enabled);
+
+/**
+ * Stores covered by the subscription: enabled stores in the order they were
+ * added, up to the plan's store limit. null limit = developer mode (all).
+ */
+function allowedStoreIds(settings, lic) {
+  const list = enabledStoreList(settings).sort((a, b) => (a.addedAt || a.lastSeen || 0) - (b.addedAt || b.lastSeen || 0));
+  const limit = lic?.storeLimit;
+  return (limit == null ? list : list.slice(0, Math.max(0, limit))).map((s) => s.id);
+}
+
+/** Licence view for the current state (cached; re-checked online every few minutes). */
+async function currentLicense(force = false) {
+  const settings = await getSettings();
+  return B.licenseView({ force, storeCount: enabledStoreList(settings).length });
 }
 
 function unregisterTab(tabId) {
@@ -265,14 +289,25 @@ function mergeStoreSnapshot(prev, fresh) {
  * @returns {Promise<object>} state for the UI
  */
 async function sync() {
+  // No active subscription → no data is pulled; the UI shows the paywall.
+  const lic = await currentLicense();
+  if (!lic.canUse) {
+    const state = await getState();
+    broadcast('bg:stateChanged', state);
+    return state;
+  }
+
   const entries = await discoverTabs();
   const results = await Promise.all(
     entries.map((e) => sendToTab(e.tabId, 'ksh:snapshot', {}, 20000).catch((err) => ({ ok: false, error: err.message, tabId: e.tabId }))),
   );
 
+  // Stores above the plan's limit are not synced.
+  const allowed = new Set(allowedStoreIds(await getSettings(), lic));
   const byShop = {};
   results.forEach((r) => {
-    if (r?.ok && r.authenticated && r.shopId) (byShop[r.shopId] ??= []).push(r);
+    // discoverTabs() has already registered new stores, so `allowed` covers them too.
+    if (r?.ok && r.authenticated && r.shopId && allowed.has(r.shopId)) (byShop[r.shopId] ??= []).push(r);
   });
 
   // Stores connected by API token: fetched directly, no tab needed.
@@ -281,7 +316,7 @@ async function sync() {
   await Promise.all(
     Object.entries(tokens).map(async ([shopId, token]) => {
       const store = settingsNow.stores[shopId];
-      if (!store || !store.enabled) return;
+      if (!store || !store.enabled || !allowed.has(shopId)) return;
       try {
         const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
@@ -299,6 +334,8 @@ async function sync() {
     const shopIds = new Set([...Object.keys(settings.stores), ...Object.keys(byShop)]);
     for (const shopId of shopIds) {
       if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(prev[shopId], byShop[shopId]);
+      else if (settings.stores[shopId]?.enabled && !allowed.has(shopId))
+        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'overLimit', checkedAt: Date.now() };
       else if (apiErrors[shopId])
         next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
       else
@@ -366,7 +403,16 @@ async function onContentUpdate(snap) {
 async function getState() {
   const [settings, snapshots, lastSync, registry] = await Promise.all([getSettings(), getSnapshots(), getLastSync(), getRegistry()]);
   const tabs = Object.values(registry);
-  return { settings, snapshots, lastSync, tabs, unauthTabs: tabs.filter((e) => !e.authenticated && e.isCabinet).length };
+  const license = await currentLicense().catch(() => ({ status: 'offline', canUse: false, storeLimit: 0 }));
+  return {
+    settings,
+    snapshots,
+    lastSync,
+    tabs,
+    unauthTabs: tabs.filter((e) => !e.authenticated && e.isCabinet).length,
+    license,
+    allowedStoreIds: allowedStoreIds(settings, license),
+  };
 }
 
 /* ===================================================================== */
@@ -910,6 +956,7 @@ const uiHandlers = {
         color: existing?.color || nextStoreColor(used),
         enabled: existing?.enabled ?? true,
         origin: existing?.origin || 'https://kaspi.kz',
+        addedAt: existing?.addedAt || Date.now(),
         lastSeen: existing?.lastSeen || Date.now(),
         api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null },
       };
@@ -995,7 +1042,52 @@ const uiHandlers = {
     await updateBadge();
     return { ok: true };
   },
+
+  /* ---------- subscription ---------- */
+  'ui:billingState': ({ force }) => currentLicense(!!force),
+  'ui:billingRequestCode': ({ email }) => billingCall(() => B.requestCode(email)),
+  'ui:billingVerify': ({ email, code }) =>
+    billingCall(async () => {
+      await B.verifyCode(email, code);
+      const lic = await currentLicense(true);
+      sync().catch((e) => console.warn(LOG, 'sync after login', e));
+      return { ok: true, license: lic };
+    }),
+  'ui:billingCreateInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.createInvoice(p) })),
+  'ui:billingCancelInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.cancelInvoice(p) })),
+  'ui:billingLogout': async () => {
+    await B.logout();
+    const state = await getState();
+    broadcast('bg:stateChanged', state);
+    return { ok: true };
+  },
 };
+
+/** Run a billing call and turn its error into { ok:false, error:<code> }. */
+const billingCall = (fn) => fn().catch((e) => ({ ok: false, error: e.code || e.message }));
+
+/** Actions that need an active subscription (trial or paid). */
+const NEEDS_LICENSE = new Set([
+  'ui:pack', 'ui:accept', 'ui:fetchInvoices', 'ui:print', 'ui:process', 'ui:refreshPayments',
+  'ui:chatList', 'ui:chatThread', 'ui:chatSend', 'ui:openChatTabs', 'ui:connectApi',
+]);
+
+/**
+ * Subscription gate for UI actions: no licence → refused; items from stores
+ * above the plan's store limit → refused.
+ * @returns {Promise<object|null>} an error response, or null when allowed
+ */
+async function licenseGate(type, payload) {
+  if (!NEEDS_LICENSE.has(type)) return null;
+  const lic = await currentLicense();
+  if (!lic.canUse) return { ok: false, error: 'subscriptionRequired' };
+  const shops = [...(payload?.items || []).map((i) => i.shopId), payload?.shopId].filter(Boolean);
+  if (shops.length && type !== 'ui:connectApi') {
+    const allowed = new Set(allowedStoreIds(await getSettings(), lic));
+    if (shops.some((id) => !allowed.has(id))) return { ok: false, error: 'storeOverLimit' };
+  }
+  return null;
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !msg?.type) return false;
@@ -1011,7 +1103,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const fn = fromExtensionPage && uiHandlers[msg.type];
   if (!fn) return false;
   Promise.resolve()
-    .then(() => fn(msg.payload || {}))
+    .then(async () => (await licenseGate(msg.type, msg.payload)) || fn(msg.payload || {}))
     .then(sendResponse)
     .catch((e) => {
       console.error(LOG, msg.type, e);
@@ -1034,8 +1126,8 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
   if (change.url && !TAB_PATTERNS.some((re) => re.test(change.url))) unregisterTab(tabId);
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM_CHAT) pollChat().catch((e) => console.warn(LOG, 'chat poll', e));
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => console.warn(LOG, 'chat poll', e));
   if (alarm.name === ALARM_SYNC) sync().catch((e) => console.warn(LOG, 'sync', e));
 });
 

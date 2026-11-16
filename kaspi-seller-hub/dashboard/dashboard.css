@@ -33,6 +33,20 @@ body { min-width: 1280px; }
 .nav__urgent:not(:empty) { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--danger); background: var(--danger-bg); border-radius: 999px; padding: 0 6px; line-height: 18px; }
 .nav__urgent:not(:empty) + .nav__count { margin-left: 6px; }
 .neg { color: var(--danger); }
+.plan-chip {
+  display: block; margin: 0 0 var(--space-4); padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600; text-decoration: none;
+  background: var(--neutral-bg); color: var(--text-2); border: 1px solid var(--border);
+}
+.plan-chip--trial { background: var(--info-bg); color: var(--info); }
+.plan-chip--active { background: var(--ok-bg); color: var(--ok); }
+.plan-chip--expired, .plan-chip--offline, .plan-chip--loggedOut { background: var(--danger-bg); color: var(--danger); }
+.pending-invoice { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.pending-invoice__body { display: flex; gap: var(--space-6); align-items: flex-start; }
+.pending-invoice__body > div { flex: 1; }
+.pending-invoice__body p { margin: 0 0 var(--space-3); }
+.pending-invoice__instr { white-space: pre-line; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.pending-invoice__qr { width: 200px; height: 200px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--border); background: #fff; padding: 8px; }
 .nav__count--accent:not(:empty) { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 7px; line-height: 18px; font-weight: 600; }
 
 .sidebar__stores { margin-top: auto; }
@@ -115,7 +129,7 @@ body { min-width: 1280px; }
 table.data { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 table.data th {
   position: sticky; top: 0; z-index: 1;
-  padding: 0 var(--space-3); height: 36px; text-align: left;
+  padding: 0 var(--space-2); height: 36px; text-align: left;
   font-size: 12px; font-weight: 500; color: var(--text-3);
   background: var(--surface); border-bottom: 1px solid var(--border); white-space: nowrap;
 }
@@ -127,7 +141,7 @@ table.data th button {
 table.data th button:hover { color: var(--text); }
 table.data th[aria-sort] button { color: var(--text); }
 .sort-ind { width: 10px; font-size: 10px; }
-table.data td { padding: 0 var(--space-3); height: 44px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.data td { padding: 0 var(--space-2); height: 44px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 table.data td.wrap { white-space: normal; max-width: 260px; }
 table.data tbody tr { outline: none; }
 table.data tbody tr:hover td { background: var(--surface-hover); }
