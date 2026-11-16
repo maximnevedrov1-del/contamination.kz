@@ -56,6 +56,28 @@ Compared with the requested tree, four things were added:
 
 Minimum Chrome version is 116 (MV3 module service worker, `world: "MAIN"` content scripts).
 
+## Demo mode (try it without Kaspi)
+
+`demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.
+
+1. Load the extension unpacked (see above).
+2. Serve the demo folder:
+
+```bash
+cd kaspi-seller-hub/demo && python3 -m http.server 8080
+```
+
+   (no Python? `npx serve -l 8080` in the same folder works too)
+3. Open three tabs:
+   - http://localhost:8080/mc/store-a.html#/orders
+   - http://localhost:8080/mc/store-b.html#/orders
+   - http://localhost:8080/mc/store-c.html#/orders
+4. Click the extension icon → **Open dashboard** → **Refresh**.
+
+Every action is visible on the demo pages: packed orders change status and get an invoice in the "Накладные" block, chat replies appear in the store's chat.
+
+`http://localhost/*` is in `manifest.json` and `selectors.js › tabMatchPatterns` only for this mode. **Remove it before publishing.**
+
 ## Adding a store
 
 You don't need to configure anything. When a Kaspi cabinet tab is logged in, the content script reads the store's name and ID (`session.shopName` / `session.shopId` in `selectors.js`). The store appears in **Settings › Stores** with its own colour.

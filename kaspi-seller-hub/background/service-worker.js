@@ -119,7 +119,7 @@ async function discoverTabs() {
   const live = [];
   await Promise.all(
     tabs
-      .filter((tab) => !tab.discarded && tab.id != null && /^https:/.test(tab.url || tab.pendingUrl || ''))
+      .filter((tab) => !tab.discarded && tab.id != null && /^https?:/.test(tab.url || tab.pendingUrl || ''))
       .map(async (tab) => {
         let info = await sendToTab(tab.id, 'ksh:ping', {}, 2000).catch(() => null);
         if (!info) {
@@ -400,7 +400,8 @@ async function runJob(kind, items, perItem) {
 function safeStoreUrl(url, origin) {
   try {
     const u = new URL(url);
-    return u.protocol === 'https:' && u.origin === origin ? u.href : null;
+    const secure = u.protocol === 'https:' || u.hostname === 'localhost'; // localhost = demo mode
+    return secure && u.origin === origin ? u.href : null;
   } catch {
     return null;
   }
@@ -716,7 +717,7 @@ const patternToRegExp = (p) => {
   const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]+)(\/.*)$/);
   const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
   const hostRe = host.startsWith('*.') ? `([^/]+\\.)?${esc(host.slice(2))}` : esc(host);
-  return new RegExp(`^${esc(scheme)}://${hostRe}${esc(path).replace(/\*/g, '.*')}$`);
+  return new RegExp(`^${esc(scheme)}://${hostRe}(:\\d+)?${esc(path).replace(/\*/g, '.*')}$`);
 };
 const TAB_PATTERNS = S.tabMatchPatterns.map(patternToRegExp);
 

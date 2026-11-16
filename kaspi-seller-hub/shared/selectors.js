@@ -31,7 +31,9 @@
      * Tabs the extension treats as Kaspi seller tabs. Must stay in sync with
      * `host_permissions` / `content_scripts.matches` in manifest.json.
      */
-    tabMatchPatterns: ['https://kaspi.kz/mc/*', 'https://*.kaspi.kz/*'],
+    // "http://localhost/*" = DEMO mode (demo/ folder, see README). Remove it here and in
+    // manifest.json before publishing the extension.
+    tabMatchPatterns: ['https://kaspi.kz/mc/*', 'https://*.kaspi.kz/*', 'http://localhost/*'],
 
     /** Page detection — substrings matched against location.href (first hit wins). */
     pages: {

@@ -23,18 +23,43 @@
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
-  "permissions": ["tabs", "scripting", "storage", "unlimitedStorage", "activeTab", "notifications", "alarms"],
-  "host_permissions": ["https://kaspi.kz/mc/*", "https://*.kaspi.kz/*"],
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://kaspi.kz/mc/*",
+    "https://*.kaspi.kz/*",
+    "http://localhost/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://kaspi.kz/mc/*", "https://*.kaspi.kz/*"],
-      "js": ["content/network-tap.js"],
+      "matches": [
+        "https://kaspi.kz/mc/*",
+        "https://*.kaspi.kz/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "content/network-tap.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://kaspi.kz/mc/*", "https://*.kaspi.kz/*"],
-      "js": ["shared/selectors.js", "content/content.js"],
+      "matches": [
+        "https://kaspi.kz/mc/*",
+        "https://*.kaspi.kz/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "shared/selectors.js",
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
