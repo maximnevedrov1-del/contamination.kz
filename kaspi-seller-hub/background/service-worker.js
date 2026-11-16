@@ -119,7 +119,7 @@ async function discoverTabs() {
   const live = [];
   await Promise.all(
     tabs
-      .filter((tab) => !tab.discarded && tab.id != null && /^https?:/.test(tab.url || tab.pendingUrl || ''))
+      .filter((tab) => !tab.discarded && tab.id != null && /^(https?|file):/.test(tab.url || tab.pendingUrl || ''))
       .map(async (tab) => {
         let info = await sendToTab(tab.id, 'ksh:ping', {}, 2000).catch(() => null);
         if (!info) {
@@ -400,7 +400,9 @@ async function runJob(kind, items, perItem) {
 function safeStoreUrl(url, origin) {
   try {
     const u = new URL(url);
-    const secure = u.protocol === 'https:' || u.hostname === 'localhost'; // localhost = demo mode
+    // localhost and file:// are the demo mode (their URL.origin is "null" for file:)
+    if (u.protocol === 'file:') return origin === 'file://' ? u.href : null;
+    const secure = u.protocol === 'https:' || u.hostname === 'localhost';
     return secure && u.origin === origin ? u.href : null;
   } catch {
     return null;
@@ -714,7 +716,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => unregisterTab(tabId));
 /** Chrome match pattern → RegExp ("https://*.kaspi.kz/*" also matches kaspi.kz itself). */
 const patternToRegExp = (p) => {
-  const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]+)(\/.*)$/);
+  const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]*)(\/.*)$/); // host is empty for file:///
   const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
   const hostRe = host.startsWith('*.') ? `([^/]+\\.)?${esc(host.slice(2))}` : esc(host);
   return new RegExp(`^${esc(scheme)}://${hostRe}(:\\d+)?${esc(path).replace(/\*/g, '.*')}$`);

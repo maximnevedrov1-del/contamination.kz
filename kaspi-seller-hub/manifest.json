@@ -35,14 +35,16 @@
   "host_permissions": [
     "https://kaspi.kz/mc/*",
     "https://*.kaspi.kz/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "file:///*/mc/store-*"
   ],
   "content_scripts": [
     {
       "matches": [
         "https://kaspi.kz/mc/*",
         "https://*.kaspi.kz/*",
-        "http://localhost/*"
+        "http://localhost/*",
+        "file:///*/mc/store-*"
       ],
       "js": [
         "content/network-tap.js"
@@ -54,7 +56,8 @@
       "matches": [
         "https://kaspi.kz/mc/*",
         "https://*.kaspi.kz/*",
-        "http://localhost/*"
+        "http://localhost/*",
+        "file:///*/mc/store-*"
       ],
       "js": [
         "shared/selectors.js",

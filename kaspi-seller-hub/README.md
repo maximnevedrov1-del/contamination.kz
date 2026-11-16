@@ -61,7 +61,9 @@ Minimum Chrome version is 116 (MV3 module service worker, `world: "MAIN"` conten
 `demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.
 
 1. Load the extension unpacked (see above).
-2. Serve the demo folder:
+2. **Easiest:** open `demo/mc/store-a.html`, `store-b.html`, `store-c.html` by double-click (in Chrome).
+   If the dashboard finds no stores, open `chrome://extensions` → Kaspi Seller Hub → **Details** and turn on **Allow access to file URLs**. Then continue with step 4.
+   **Alternative** — serve the demo folder:
 
 ```bash
 cd kaspi-seller-hub/demo && python3 -m http.server 8080
@@ -76,7 +78,7 @@ cd kaspi-seller-hub/demo && python3 -m http.server 8080
 
 Every action is visible on the demo pages: packed orders change status and get an invoice in the "Накладные" block, chat replies appear in the store's chat.
 
-`http://localhost/*` is in `manifest.json` and `selectors.js › tabMatchPatterns` only for this mode. **Remove it before publishing.**
+`http://localhost/*` and `file:///*/mc/store-*` are in `manifest.json` and `selectors.js › tabMatchPatterns` only for this mode. **Remove it before publishing.**
 
 ## Adding a store
 

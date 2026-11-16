@@ -33,7 +33,8 @@
      */
     // "http://localhost/*" = DEMO mode (demo/ folder, see README). Remove it here and in
     // manifest.json before publishing the extension.
-    tabMatchPatterns: ['https://kaspi.kz/mc/*', 'https://*.kaspi.kz/*', 'http://localhost/*'],
+    // "file:///*/mc/store-*" = DEMO pages opened by double-click (demo/mc/store-*.html).
+    tabMatchPatterns: ['https://kaspi.kz/mc/*', 'https://*.kaspi.kz/*', 'http://localhost/*', 'file:///*/mc/store-*'],
 
     /** Page detection — substrings matched against location.href (first hit wins). */
     pages: {

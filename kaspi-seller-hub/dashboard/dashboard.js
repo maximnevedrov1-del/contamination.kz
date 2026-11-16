@@ -455,7 +455,7 @@ function openItem(row) {
   let url = null;
   try {
     const u = new URL(row.url);
-    if ((u.protocol === 'https:' || u.hostname === 'localhost') && u.origin === origin) url = u.href;
+    if (u.protocol === 'file:' ? origin === 'file://' : (u.protocol === 'https:' || u.hostname === 'localhost') && u.origin === origin) url = u.href;
   } catch {
     /* no or invalid link */
   }
