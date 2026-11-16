@@ -16,6 +16,9 @@ export const KEYS = Object.freeze({
   printQueue: 'ksh.printQueue', // session
   apiTokens: 'ksh.apiTokens', // { [shopId]: token } — never sent to extension pages
   apiEntries: 'ksh.apiEntries', // { [shopId::code]: entries[] } — order contents cache
+  costs: 'ksh.costs', // { [sku]: cost price in ₸ } — written by the worker only
+  deadlineNotified: 'ksh.deadlineNotified', // session: order keys already warned about
+  pickList: 'ksh.pickList', // session: pick list handed to print.html
 });
 
 /**
@@ -53,7 +56,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   lang: 'ru',
   theme: 'system',
   chatPollSec: 30,
-  notifications: { newOrders: true, newMessages: true, returns: false },
+  notifications: { newOrders: true, newMessages: true, returns: false, deadlines: true },
+  // acceptHours is the seller's own target: Kaspi publishes no fixed acceptance limit.
+  deadlines: { acceptHours: 2, warnHours: 2 },
+  // Kaspi commission in % — by product category, else the default. null = not set.
+  profit: { defaultCommission: null, byCategory: {} },
   stores: {},
 });
 
@@ -69,7 +76,14 @@ const write = (area, key, value) => area().set({ [key]: value });
 /** @returns {Promise<Settings>} */
 export async function getSettings() {
   const s = await read(local, KEYS.settings, DEFAULT_SETTINGS);
-  return { ...structuredClone(DEFAULT_SETTINGS), ...s, notifications: { ...DEFAULT_SETTINGS.notifications, ...s.notifications } };
+  const d = structuredClone(DEFAULT_SETTINGS);
+  return {
+    ...d,
+    ...s,
+    notifications: { ...d.notifications, ...s.notifications },
+    deadlines: { ...d.deadlines, ...s.deadlines },
+    profit: { ...d.profit, ...s.profit, byCategory: { ...(s.profit?.byCategory || {}) } },
+  };
 }
 
 /**
@@ -122,6 +136,11 @@ export const getApiTokens = () => read(local, KEYS.apiTokens, {});
 export const setApiTokens = (v) => write(local, KEYS.apiTokens, v);
 export const getApiEntries = () => read(local, KEYS.apiEntries, {});
 export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
+
+export const getCosts = () => read(local, KEYS.costs, {});
+export const setCosts = (v) => write(local, KEYS.costs, v);
+export const getPickList = () => read(session, KEYS.pickList, null);
+export const setPickList = (v) => write(session, KEYS.pickList, v);
 
 /** Wipe cached Kaspi data (keeps settings). */
 export const clearCache = () => local().remove([KEYS.snapshots, KEYS.chat, KEYS.lastSync, KEYS.apiEntries]);

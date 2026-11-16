@@ -181,6 +181,19 @@ export function formatRelative(v) {
   return rtf.format(Math.round(diff / 86400), 'day');
 }
 
+/** 95 min → "1 ч 35 мин" / "1 сағ 35 мин" (units from the locale's format block). */
+export function formatDuration(ms) {
+  const m = Math.max(1, Math.ceil(Math.abs(ms) / 60000)); // never "0 min"
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  const min = m % 60;
+  const parts = [];
+  if (d) parts.push(`${formatNumber(d)} ${t('format.d')}`);
+  if (h) parts.push(`${formatNumber(h)} ${t('format.h')}`);
+  if (!d && (min || !h)) parts.push(`${formatNumber(min)} ${t('format.min')}`);
+  return parts.join(' ');
+}
+
 /** Chat-list timestamp: time for today, short date otherwise. */
 export function formatChatTime(v) {
   if (!v) return '';

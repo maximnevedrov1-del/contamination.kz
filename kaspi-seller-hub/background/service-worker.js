@@ -30,11 +30,13 @@ import {
   setApiTokens,
   getApiEntries,
   setApiEntries,
+  getCosts,
+  setCosts,
   KEYS,
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
 import { initI18n, t } from '../shared/i18n.js';
-import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts } from '../shared/utils.js';
+import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
 const S = globalThis.KSH_SELECTORS;
 const LOG = '[KSH/sw]';
@@ -313,9 +315,39 @@ async function sync() {
     await notifyDiff(prev, next, settings);
   });
   await updateBadge();
+  await notifyDeadlines().catch((e) => console.warn(LOG, 'deadline notify', e));
   const state = await getState();
   broadcast('bg:stateChanged', state);
   return state;
+}
+
+/** Warn once per order when its deadline is near or missed. */
+async function notifyDeadlines() {
+  const settings = await getSettings();
+  if (!settings.notifications.deadlines) return;
+  const snapshots = await getSnapshots();
+  const { [KEYS.deadlineNotified]: seen = {} } = await chrome.storage.session.get(KEYS.deadlineNotified);
+  const fresh = [];
+  for (const [shopId, snap] of Object.entries(snapshots)) {
+    const store = settings.stores[shopId];
+    if (!store?.enabled) continue;
+    for (const it of snap.sections?.orders?.items || []) {
+      const dl = deadlineOf(it, settings);
+      const u = urgencyOf(dl, settings);
+      const key = `${shopId}::${it.id}::${dl?.kind}::${u}`;
+      if ((u === 'soon' || u === 'overdue') && !seen[key]) {
+        seen[key] = Date.now();
+        fresh.push({ it, dl, u, store: store.alias || store.name });
+      }
+    }
+  }
+  if (!fresh.length) return;
+  await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen });
+  await initI18n();
+  const overdue = fresh.filter((f) => f.u === 'overdue').length;
+  const first = fresh[0];
+  const msg = t('notifications.deadlines', { count: fresh.length, overdue, store: first.store, order: first.it.id });
+  notify('deadlines', t('notifications.deadlinesTitle'), msg, 'orders');
 }
 
 /** A content script pushed a fresh snapshot by itself (the seller is browsing). */
@@ -427,8 +459,9 @@ async function apiSnapshot(shopId, token, prevSnap, store) {
   const windowStart = Date.now() - days * DAY;
   const keepFrom = Date.now() - S.api.firstSyncDays * DAY;
   const kept = prevItems.filter((i) => i.api && !freshIds.has(i.id) && i.date && new Date(i.date).getTime() < windowStart && new Date(i.date).getTime() >= keepFrom);
-  const all = [...fresh, ...kept];
-  const topProducts = await apiTopProducts(shopId, token, all);
+  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept]);
+  // Order contents travel with the order: needed for profit and the pick list.
+  const all = [...fresh, ...kept].map((i) => ({ ...i, entries: entriesOf(i.id) || i.entries }));
   const section = (items) => ({ status: 'ok', source: 'api', items });
   return {
     ok: true,
@@ -479,7 +512,10 @@ async function apiTopProducts(shopId, token, items) {
       agg.set(k, p);
     }
   }
-  return [...agg.values()].map((p) => ({ ...p, returnRate: p.units ? p.returns / p.units : null }));
+  return {
+    topProducts: [...agg.values()].map((p) => ({ ...p, returnRate: p.units ? p.returns / p.units : null })),
+    entriesOf: (code) => cache[key(code)],
+  };
 }
 
 /** Current API state of one order (fresh from Kaspi), written back into the cache. */
@@ -491,6 +527,8 @@ async function refreshApiOrder(shopId, token, code) {
     const all = await getSnapshots();
     const sec = all[shopId]?.sections;
     if (!sec) return;
+    const old = sec.orders?.items?.find((i) => i.id === item.id);
+    if (old?.entries) item.entries = old.entries;
     const put = (name, belongs) => {
       if (!sec[name]?.items) return;
       sec[name].items = sec[name].items.filter((i) => i.id !== item.id);
@@ -839,6 +877,15 @@ const uiHandlers = {
   'ui:getState': () => getState(),
   'ui:sync': () => sync(),
   'ui:pack': (p) => actions.pack(p),
+  /** Cost price of a product (by SKU), shared by all stores. null removes it. */
+  'ui:saveCost': async ({ sku, cost }) =>
+    lock(async () => {
+      const costs = await getCosts();
+      if (cost == null || cost === '' || !Number.isFinite(Number(cost)) || Number(cost) < 0) delete costs[sku];
+      else costs[sku] = Number(cost);
+      await setCosts(costs);
+      return { ok: true };
+    }),
   'ui:accept': (p) => actions.accept(p),
   /** Connect a store by API token (verified against Kaspi first). */
   'ui:connectApi': async ({ shopId, name, token }) => {

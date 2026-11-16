@@ -3,7 +3,7 @@
  * Shows cached data instantly, then asks the worker for a fresh sync.
  */
 import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative } from '../shared/i18n.js';
-import { h, clear, storeCounts, sumCounts } from '../shared/utils.js';
+import { h, clear, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
@@ -45,6 +45,14 @@ function render() {
       h('div', { class: 'pp-total' }, h('div', { class: 'pp-total__value' }, totals[k] == null ? '—' : formatNumber(totals[k])), h('div', { class: 'pp-total__label', title: t(label) }, t(label))),
     ),
   );
+
+  // Orders whose deadline is near or missed, across enabled stores.
+  const urgent = stores.reduce(
+    (n, s) => n + (state.snapshots[s.id]?.sections?.orders?.items || []).filter((it) => ['soon', 'overdue'].includes(urgencyOf(deadlineOf(it, state.settings), state.settings))).length,
+    0,
+  );
+  $('urgent').hidden = !urgent;
+  $('urgent').textContent = urgent ? `🔥 ${t('deadline.popup', { count: urgent })}` : '';
 
   const list = clear($('storeList'));
   if (!stores.length) list.append(h('li', { class: 'pp-empty' }, t('popup.noStores')));
@@ -107,6 +115,10 @@ async function main() {
     render();
   });
   $('refreshBtn').addEventListener('click', refresh);
+  $('urgent').addEventListener('click', async () => {
+    await send('ui:openDashboard', { route: 'orders' });
+    window.close();
+  });
   $('openDashboard').addEventListener('click', async () => {
     await send('ui:openDashboard', { route: 'orders' });
     window.close();

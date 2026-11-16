@@ -27,6 +27,18 @@
       .page img.pdf-page { display: block; width: 100%; height: auto; }
       .page iframe { width: 100%; height: 270mm; border: 0; }
       .empty { padding: 80px; text-align: center; color: var(--text-3); }
+      .pick { font: 12px var(--font-sans); }
+      .pick h2 { margin: 0 0 4px; font-size: 18px; }
+      .pick-meta { margin: 0 0 12px; color: #555; }
+      .pick table { width: 100%; border-collapse: collapse; }
+      .pick th, .pick td { border: 1px solid #bbb; padding: 6px 8px; text-align: left; vertical-align: top; }
+      .pick th { background: #f2f2f2; font-weight: 600; }
+      .pick .num { text-align: right; } .pick .qty { font-size: 16px; font-weight: 700; }
+      .pick .box { width: 28px; text-align: center; font-size: 16px; }
+      .pick .mono { font-family: var(--font-mono); font-size: 11px; }
+      .pick-order { display: inline-flex; align-items: center; gap: 4px; margin: 0 8px 2px 0; white-space: nowrap; }
+      .pick-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pick-unknown { margin-top: 12px; padding: 8px; border: 1px dashed #999; }
       @media print {
         body { background: #fff; }
         .bar, .notice, .page__label, .no-print { display: none !important; }

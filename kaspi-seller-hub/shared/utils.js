@@ -240,3 +240,79 @@ export function sumCounts(list) {
     }),
   );
 }
+
+/* ===================================================================== */
+/* Deadlines                                                               */
+/* ===================================================================== */
+
+const HOUR = 3600000;
+
+/**
+ * The next deadline of an order, if any:
+ *  - "accept": the seller's own target (settings.deadlines.acceptHours) for orders
+ *    waiting for acceptance — Kaspi publishes no fixed limit;
+ *  - "ship": Kaspi's planned courier hand-over date (API, Kaspi Delivery).
+ * @returns {{ kind:'accept'|'ship', at:number, source:'target'|'kaspi' } | null}
+ */
+export function deadlineOf(item, settings) {
+  if (item.kind && item.kind !== 'order') return null;
+  if (item.status === 'new') {
+    const h = settings?.deadlines?.acceptHours;
+    if (!h || !item.date) return null;
+    return { kind: 'accept', at: new Date(item.date).getTime() + h * HOUR, source: 'target' };
+  }
+  // Courier hand-over exists only for Kaspi Delivery orders.
+  if ((item.status === 'accepted' || item.status === 'packed') && item.api?.isKaspiDelivery && item.api.courierPlanDate) {
+    return { kind: 'ship', at: item.api.courierPlanDate, source: 'kaspi' };
+  }
+  return null;
+}
+
+/** 'overdue' | 'soon' (within warnHours) | 'ok' */
+export function urgencyOf(deadline, settings, now = Date.now()) {
+  if (!deadline) return null;
+  if (deadline.at <= now) return 'overdue';
+  return deadline.at - now <= (settings?.deadlines?.warnHours ?? 2) * HOUR ? 'soon' : 'ok';
+}
+
+/* ===================================================================== */
+/* Profit                                                                  */
+/* ===================================================================== */
+
+/** Commission % for a product category (category setting, else the default). */
+export function commissionPct(category, profitSettings) {
+  const v = profitSettings?.byCategory?.[category];
+  return Number.isFinite(v) ? v : Number.isFinite(profitSettings?.defaultCommission) ? profitSettings.defaultCommission : null;
+}
+
+/**
+ * Profit of one order = revenue − cost of goods − Kaspi commission − seller's delivery cost.
+ * Needs the order contents (API orders). `complete` is false when a cost price or a
+ * commission % is missing — such orders are counted separately, never guessed.
+ * @param {any} item OrderItem with `entries`
+ * @param {Record<string, number>} costs cost price per SKU
+ * @param {{ defaultCommission:number|null, byCategory:Record<string,number> }} profitSettings
+ */
+export function orderProfit(item, costs, profitSettings) {
+  if (!item.entries?.length || item.kind !== 'order' || ['cancelled', 'returned', 'refused'].includes(item.status)) return null;
+  let revenue = 0;
+  let cogs = 0;
+  let commission = 0;
+  let complete = true;
+  for (const e of item.entries) {
+    const line = e.total ?? (e.price || 0) * (e.quantity || 1);
+    revenue += line;
+    const cost = costs?.[e.sku];
+    if (Number.isFinite(cost)) cogs += cost * (e.quantity || 1);
+    else complete = false;
+    const pct = commissionPct(e.category, profitSettings);
+    if (pct != null) commission += (line * pct) / 100;
+    else complete = false;
+  }
+  const delivery = item.api?.deliveryCostForSeller || 0;
+  const profit = revenue - cogs - commission - delivery;
+  return { revenue, cogs, commission, delivery, profit, margin: revenue ? profit / revenue : null, complete };
+}
+
+/** Human-friendly product key (same SKU in several stores = one product). */
+export const productKey = (e) => e.sku || e.name;

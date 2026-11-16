@@ -12,7 +12,8 @@
  *    embedded PDFs as one job.
  */
 import { initI18n, t, applyI18n } from '../shared/i18n.js';
-import { getInvoices, getPrintQueue, getSettings } from '../shared/storage.js';
+import { getInvoices, getPrintQueue, getSettings, getPickList } from '../shared/storage.js';
+import { formatNumber, formatDate } from '../shared/i18n.js';
 import { h, clear } from '../shared/utils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -76,12 +77,52 @@ function pageEl(label) {
   return h('section', { class: 'page' }, h('span', { class: 'page__label' }, label));
 }
 
+/**
+ * Pick list: one A4 table — product, SKU, total quantity, which orders (and
+ * stores) need it, and an empty box to tick while collecting.
+ */
+async function renderPickList() {
+  const pick = await getPickList();
+  $('printBtn').addEventListener('click', () => window.print());
+  document.querySelector('.bar h1').textContent = t('pick.title');
+  document.title = t('pick.title');
+  const pages = clear($('pages'));
+  if (!pick || (!pick.lines.length && !pick.unknown.length)) {
+    pages.append(h('div', { class: 'empty' }, t('pick.empty')));
+    $('printBtn').disabled = true;
+    return;
+  }
+  const units = pick.lines.reduce((n, l) => n + l.qty, 0);
+  $('count').textContent = t('pick.summary', { orders: pick.orderCount, units, products: pick.lines.length });
+  const orderTag = (o) => h('span', { class: 'pick-order' }, h('span', { class: 'pick-dot', style: { background: o.color } }), `${o.id}${o.qty > 1 ? ` ×${o.qty}` : ''}`);
+  const page = h(
+    'section',
+    { class: 'page pick' },
+    h('h2', null, t('pick.title')),
+    h('p', { class: 'pick-meta' }, `${formatDate(pick.createdAt, 'datetime')} · ${pick.stores.join(', ')} · ${t('pick.summary', { orders: pick.orderCount, units, products: pick.lines.length })}`),
+    h(
+      'table',
+      null,
+      h('thead', null, h('tr', null, h('th', null, '✓'), h('th', null, t('pick.product')), h('th', null, t('pick.sku')), h('th', { class: 'num' }, t('pick.qty')), h('th', null, t('pick.orders')))),
+      h(
+        'tbody',
+        null,
+        pick.lines.map((l) => h('tr', null, h('td', { class: 'box' }, '☐'), h('td', null, l.name || '—'), h('td', { class: 'mono' }, l.sku || '—'), h('td', { class: 'num qty' }, formatNumber(l.qty)), h('td', null, l.orders.map(orderTag)))),
+      ),
+    ),
+    pick.unknown.length ? h('div', { class: 'pick-unknown' }, h('b', null, t('pick.unknownTitle')), ' ', t('pick.unknownText'), h('div', null, pick.unknown.map(orderTag))) : null,
+  );
+  pages.append(page);
+  window.print();
+}
+
 async function main() {
   await initI18n();
   const settings = await getSettings();
   if (settings.theme === 'light' || settings.theme === 'dark') document.documentElement.dataset.theme = settings.theme;
   applyI18n();
   document.title = t('print.title');
+  if (new URLSearchParams(location.search).get('mode') === 'pick') return renderPickList();
 
   const [queue, invoices] = await Promise.all([getPrintQueue(), getInvoices()]);
   const byKey = new Map(invoices.map((i) => [`${i.shopId}::${i.orderId}`, i]));

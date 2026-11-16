@@ -84,6 +84,19 @@ Security:
 
 What was verified: against a mock of the API (pagination, 14-day windows, wrong token, accept, assemble → waybill → print, refusals for unsigned credit and own delivery, incremental sync) and read-only against a real store. Accept and assemble were **not** run on a real order.
 
+## Deadlines, profit, pick list
+
+**Deadlines** (column «Срок», filter «Только горящие», 🔥 counter in the sidebar and popup, notification once per order):
+- *ship* — Kaspi's planned courier hand-over date (`courierTransmissionPlanningDate`, Kaspi Delivery orders, API);
+- *accept* — the seller's own target in Settings › Сроки (default 2 h). Kaspi publishes no fixed acceptance limit, so this is not presented as a Kaspi rule;
+- "soon" = within Settings › «Предупреждать за» hours (default 2).
+
+**Profit** (column «Прибыль», section «Товары», Analytics KPIs and a per-store chart):
+`profit = revenue − cost price × quantity − Kaspi commission % × revenue − delivery cost for the seller`.
+Cost price is entered per SKU (shared by all stores selling that SKU); commission % per category or one default. Orders with a missing cost or commission show «?» and are counted separately — nothing is guessed. Needs order contents, i.e. API stores.
+
+**Pick list** («Сборочный лист» on the Orders toolbar): for the selected orders, or with no selection for every order still to assemble (new / accepted), one A4 table — product, SKU, total quantity, which orders (store colour) need it, a tick box. Orders without known contents (tab-mode stores) are listed separately.
+
 ## Demo mode (try it without Kaspi)
 
 `demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.

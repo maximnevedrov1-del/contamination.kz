@@ -20,9 +20,10 @@ import {
   formatDate,
   formatRelative,
   formatChatTime,
+  formatDuration,
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
-import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS } from '../shared/storage.js';
+import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
   h,
   clear,
@@ -40,6 +41,11 @@ import {
   itemKey,
   storeCounts,
   STORE_COLORS,
+  deadlineOf,
+  urgencyOf,
+  orderProfit,
+  commissionPct,
+  productKey,
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
 
@@ -47,10 +53,10 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'chat', 'settings'];
+const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'chat', 'settings'];
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
-const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', selected: new Set(), focus: 0 });
+const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, selected: new Set(), focus: 0 });
 
 const state = {
   /** @type {{settings:any, snapshots:Record<string,any>, lastSync:number, tabs:any[], unauthTabs:number}|null} */
@@ -65,6 +71,8 @@ const state = {
   chatUi: { active: null, unreadOnly: false, loading: false, error: null, sending: false, drafts: {}, pending: {} },
   job: null,
   invoiceCount: 0,
+  costs: {},
+  productsQ: '',
   disposers: [],
 };
 
@@ -197,9 +205,34 @@ const COLUMNS = {
   reason: { label: 'table.reason', value: (r) => reasonText(r.reason), render: (r) => reasonText(r.reason) || h('span', { class: 'muted' }, '—'), wrap: true },
   amount: { label: 'table.amount', value: (r) => r.amount, render: (r) => formatMoney(r.amount), num: true },
   payment: { label: 'table.payment', value: (r) => t(`payment.${r.paymentStatus}`), render: paymentBadge },
+  deadline: { label: 'table.deadline', value: (r) => deadlineOf(r, settingsNow())?.at ?? null, render: deadlineBadge },
+  profit: { label: 'table.profit', value: (r) => orderProfit(r, state.costs, settingsNow().profit)?.profit ?? null, render: profitCell, num: true },
 };
+
+function settingsNow() {
+  return state.data?.settings || {};
+}
+
+/** "принять через 1 ч 20 мин" / "просрочен на 15 мин", coloured by urgency. */
+function deadlineBadge(r) {
+  const dl = deadlineOf(r, settingsNow());
+  if (!dl) return h('span', { class: 'muted' }, '—');
+  const u = urgencyOf(dl, settingsNow());
+  const left = dl.at - Date.now();
+  const text = u === 'overdue' ? t('deadline.overdue', { time: formatDuration(left) }) : t(`deadline.${dl.kind}`, { time: formatDuration(left) });
+  const title = `${t(`deadline.${dl.kind}Title`)}: ${formatDate(dl.at, 'datetime')} · ${t(`deadline.source.${dl.source}`)}`;
+  return h('span', { class: ['badge', u === 'overdue' ? 'badge--danger' : u === 'soon' ? 'badge--warn' : ''], title }, text);
+}
+
+/** Profit of an API order; "?" when a cost price or commission is missing. */
+function profitCell(r) {
+  const p = orderProfit(r, state.costs, settingsNow().profit);
+  if (!p) return h('span', { class: 'muted' }, '—');
+  if (!p.complete) return h('span', { class: 'muted', title: t('profit.incomplete') }, '?');
+  return h('span', { class: p.profit < 0 ? 'neg' : null, title: t('profit.breakdown', { revenue: formatMoney(p.revenue), cogs: formatMoney(p.cogs), commission: formatMoney(p.commission), delivery: formatMoney(p.delivery) }) }, formatMoney(p.profit));
+}
 const SECTION_COLUMNS = {
-  orders: ['id', 'store', 'date', 'customer', 'status', 'amount', 'payment'],
+  orders: ['id', 'store', 'date', 'customer', 'status', 'deadline', 'amount', 'profit', 'payment'],
   returns: ['id', 'store', 'date', 'status', 'reason', 'amount', 'payment'],
   refusals: ['id', 'store', 'date', 'status', 'reason', 'amount', 'payment'],
   payments: ['id', 'store', 'date', 'status', 'amount', 'payment'],
@@ -216,6 +249,7 @@ function filterAndSort(route, rows) {
     (r) =>
       (ts.status === 'all' || r.status === ts.status) &&
       (ts.payment === 'all' || r.paymentStatus === ts.payment) &&
+      (!ts.urgent || ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()))) &&
       (!q || [r.id, r.customer, r.reason, storeName(r.shopId)].some((v) => v && String(v).toLowerCase().includes(q))),
   );
   if (route === 'payments') out = out.filter((r) => r.paymentStatus === state.paymentGroup);
@@ -282,7 +316,15 @@ function renderTable(route, allRows) {
         { class: 'select', 'aria-label': t('table.payment'), dataset: { fkey: `${route}-payment` }, onchange: (e) => ((ts.payment = e.target.value), renderView()) },
         ['all', 'paid', 'pending', 'failed', 'refunded', 'unknown'].map((p) => h('option', { value: p, selected: ts.payment === p }, t(`payment.${p}`))),
       ),
+    route === 'orders' &&
+      h(
+        'label',
+        { class: 'check' },
+        h('input', { type: 'checkbox', checked: ts.urgent, dataset: { fkey: 'orders-urgent' }, onchange: (e) => ((ts.urgent = e.target.checked), renderView()) }),
+        t('deadline.onlyUrgent'),
+      ),
     h('div', { class: 'toolbar__spacer' }),
+    route === 'orders' && h('button', { type: 'button', class: 'btn btn--sm', onclick: () => openPickList(allRows) }, t('pick.button')),
     h('span', { class: 'toolbar__count' }, t('table.rows', { count: rows.length })),
   );
 
@@ -576,6 +618,178 @@ function viewPayments() {
 }
 
 /* ===================================================================== */
+/* Pick list                                                              */
+/* ===================================================================== */
+
+/**
+ * Build the pick list (what to take from the shelf) for the selected orders, or —
+ * with no selection — for every order still to assemble (new / accepted), and open it
+ * on the print page. Same product in several stores = one line with a per-store split.
+ */
+async function openPickList(allRows) {
+  const ts = state.tables.orders;
+  const selected = allRows.filter((r) => ts.selected.has(r.key));
+  const orders = selected.length ? selected : allRows.filter((r) => r.kind === 'order' && (r.status === 'new' || r.status === 'accepted'));
+  if (!orders.length) return toast(t('pick.empty'), 'info');
+  const lines = new Map();
+  const unknown = [];
+  for (const o of orders) {
+    if (!o.entries?.length) {
+      unknown.push({ id: o.id, store: storeName(o.shopId), color: storeColor(o.shopId) });
+      continue;
+    }
+    for (const e of o.entries) {
+      const k = productKey(e);
+      const line = lines.get(k) || { name: e.name || e.category, sku: e.sku, qty: 0, orders: [] };
+      line.qty += e.quantity || 1;
+      line.orders.push({ id: o.id, store: storeName(o.shopId), color: storeColor(o.shopId), qty: e.quantity || 1 });
+      lines.set(k, line);
+    }
+  }
+  await setPickList({
+    createdAt: Date.now(),
+    orderCount: orders.length,
+    stores: [...new Set(orders.map((o) => storeName(o.shopId)))],
+    lines: [...lines.values()].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    unknown,
+  });
+  chrome.tabs.create({ url: chrome.runtime.getURL('dashboard/print.html?mode=pick') });
+}
+
+/* ===================================================================== */
+/* View: products & cost prices                                           */
+/* ===================================================================== */
+
+/** Products sold in the period (from order contents), with cost, commission and profit. */
+function productRows() {
+  const map = new Map();
+  for (const r of sectionRows('orders')) {
+    if (!r.entries?.length || r.kind !== 'order' || ['cancelled', 'returned'].includes(r.status)) continue;
+    for (const e of r.entries) {
+      const k = productKey(e);
+      const p = map.get(k) || { key: k, sku: e.sku, name: e.name, category: e.category, units: 0, revenue: 0, shops: new Set() };
+      p.units += e.quantity || 1;
+      p.revenue += e.total ?? (e.price || 0) * (e.quantity || 1);
+      p.shops.add(r.shopId);
+      map.set(k, p);
+    }
+  }
+  const prof = settingsNow().profit;
+  return [...map.values()].map((p) => {
+    const cost = state.costs[p.sku];
+    const pct = commissionPct(p.category, prof);
+    const known = Number.isFinite(cost) && pct != null;
+    const profit = known ? p.revenue - cost * p.units - (p.revenue * pct) / 100 : null;
+    return { ...p, cost, pct, profit, margin: known && p.revenue ? profit / p.revenue : null };
+  });
+}
+
+function viewProducts() {
+  const prof = settingsNow().profit;
+  const rows = productRows()
+    .filter((p) => !state.productsQ || `${p.name} ${p.sku}`.toLowerCase().includes(state.productsQ.toLowerCase()))
+    .sort((a, b) => b.revenue - a.revenue);
+  const categories = [...new Set(productRows().map((p) => p.category).filter(Boolean))].sort();
+  const saveProfit = (patch) => updateSettings({ profit: { ...prof, ...patch, byCategory: { ...prof.byCategory, ...(patch.byCategory || {}) } } }, { silent: true });
+  const pctInput = (value, onSave, label) =>
+    h('input', { class: 'input', type: 'number', min: 0, max: 100, step: 0.1, style: { width: '90px' }, value: value ?? '', placeholder: '%', 'aria-label': label, onchange: (e) => onSave(e.target.value === '' ? null : Number(e.target.value)) });
+
+  const commissionCard = h(
+    'section',
+    { class: 'card', style: { marginBottom: '16px' } },
+    h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('products.commissionTitle')), h('div', { class: 'card__sub' }, t('products.commissionHint')))),
+    h(
+      'div',
+      { class: 'card__body', style: { display: 'flex', flexWrap: 'wrap', gap: '16px' } },
+      h('label', { class: 'check' }, t('products.defaultCommission'), pctInput(prof.defaultCommission, (v) => saveProfit({ defaultCommission: v }), t('products.defaultCommission'))),
+      categories.map((c) =>
+        h(
+          'label',
+          { class: 'check' },
+          c,
+          pctInput(prof.byCategory?.[c], (v) => {
+            const byCategory = { ...prof.byCategory };
+            if (v == null) delete byCategory[c];
+            else byCategory[c] = v;
+            updateSettings({ profit: { ...prof, byCategory } }, { silent: true });
+          }, c),
+        ),
+      ),
+    ),
+  );
+
+  if (!rows.length && !state.productsQ)
+    return h('div', null, commissionCard, h('section', { class: 'card' }, emptyState(t('products.emptyTitle'), t('products.emptyText'))));
+
+  const table = h(
+    'table',
+    { class: 'data' },
+    h(
+      'thead',
+      null,
+      h('tr', null, ['analytics.product', 'products.category', 'nav.stores', 'analytics.units', 'analytics.revenue', 'products.cost', 'products.commission', 'products.profit', 'products.margin'].map((k, i) => h('th', { scope: 'col', class: i >= 3 && 'num' }, t(k)))),
+    ),
+    h(
+      'tbody',
+      null,
+      rows.map((p) =>
+        h(
+          'tr',
+          null,
+          h('td', { class: 'wrap' }, p.name || p.sku, p.sku ? h('div', { class: 'muted mono' }, p.sku) : null),
+          h('td', { class: 'wrap muted' }, p.category || '—'),
+          h('td', { class: 'wrap' }, [...p.shops].map((id) => h('div', null, storeChip(id)))),
+          h('td', { class: 'num' }, formatNumber(p.units)),
+          h('td', { class: 'num' }, formatMoney(p.revenue)),
+          h(
+            'td',
+            { class: 'num' },
+            p.sku
+              ? h('input', {
+                  class: 'input',
+                  type: 'number',
+                  min: 0,
+                  step: 1,
+                  style: { width: '110px', textAlign: 'right' },
+                  value: Number.isFinite(p.cost) ? p.cost : '',
+                  placeholder: '₸',
+                  'aria-label': `${t('products.cost')}: ${p.name}`,
+                  dataset: { fkey: `cost-${p.sku}` },
+                  onchange: async (e) => {
+                    await send('ui:saveCost', { sku: p.sku, cost: e.target.value === '' ? null : Number(e.target.value) });
+                    state.costs = await getCosts();
+                    renderView();
+                  },
+                })
+              : '—',
+          ),
+          h('td', { class: 'num' }, p.pct == null ? h('span', { class: 'muted' }, '?') : formatPercent(p.pct / 100)),
+          h('td', { class: ['num', p.profit < 0 && 'neg'] }, p.profit == null ? h('span', { class: 'muted', title: t('profit.incomplete') }, '?') : formatMoney(p.profit)),
+          h('td', { class: 'num' }, formatPercent(p.margin)),
+        ),
+      ),
+    ),
+  );
+  return h(
+    'div',
+    null,
+    commissionCard,
+    h(
+      'section',
+      { class: 'card' },
+      h(
+        'div',
+        { class: 'toolbar' },
+        h('input', { type: 'search', class: 'input', placeholder: t('products.search'), 'aria-label': t('common.search'), value: state.productsQ, dataset: { fkey: 'products-search' }, oninput: debounce((e) => ((state.productsQ = e.target.value), renderView()), 200) }),
+        h('div', { class: 'toolbar__spacer' }),
+        h('span', { class: 'toolbar__count' }, t('products.hint')),
+      ),
+      h('div', { class: 'table-wrap' }, table),
+    ),
+  );
+}
+
+/* ===================================================================== */
 /* View: analytics                                                        */
 /* ===================================================================== */
 
@@ -658,7 +872,29 @@ function computeAnalytics() {
       conversion: viewsKnown.length ? ratio(sumBy(viewsKnown, (p) => p.kpi.orders), sumBy(viewsKnown, (p) => p.kpi.views)) : null,
     },
     products: perStore.flatMap((p) => p.products),
+    profit: computeProfit(),
   };
+}
+
+/** Profit over orders that have contents; incomplete ones (missing cost/commission) are counted, not guessed. */
+function computeProfit() {
+  const rows = sectionRows('orders');
+  const per = {};
+  let profit = 0;
+  let revenue = 0;
+  let complete = 0;
+  let total = 0;
+  for (const r of rows) {
+    const p = orderProfit(r, state.costs, settingsNow().profit);
+    if (!p) continue;
+    total++;
+    if (!p.complete) continue;
+    complete++;
+    profit += p.profit;
+    revenue += p.revenue;
+    per[r.shopId] = (per[r.shopId] || 0) + p.profit;
+  }
+  return { profit: complete ? profit : null, margin: complete && revenue ? profit / revenue : null, complete, total, per };
 }
 
 /** A chart card with a chart/table toggle (table = accessible alternative). */
@@ -720,6 +956,8 @@ function viewAnalytics() {
     kpi(t('analytics.returnRate'), formatPercent(A.kpi.returnRate), t('nav.returns')),
     kpi(t('analytics.refusalRate'), formatPercent(A.kpi.refusalRate), t('nav.refusals')),
     kpi(t('analytics.conversion'), formatPercent(A.kpi.conversion, 2), A.kpi.conversion == null ? t('analytics.conversionNA') : t('analytics.conversionHint')),
+    kpi(t('analytics.profit'), formatMoney(A.profit.profit), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA')),
+    kpi(t('analytics.margin'), formatPercent(A.profit.margin), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA')),
   );
 
   const hasSeries = A.series.some((p) => p.revenue);
@@ -769,6 +1007,16 @@ function viewAnalytics() {
     ),
   );
 
+  const profitBars = A.perStore.map((p) => ({ label: storeName(p.store.id), color: p.store.color, value: A.profit.per[p.store.id] ?? null }));
+  const profitCard = h(
+    'div',
+    { class: 'grid-2' },
+    chartCard('byStoreProfit', t('analytics.profitByStore'), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA'), (c) => barChart(c, { bars: profitBars, format: formatMoney, label: t('analytics.profitByStore') }), {
+      head: [t('table.store'), t('analytics.profit')],
+      rows: profitBars.map((b) => [b.label, formatMoney(b.value)]),
+    }),
+  );
+
   const productTable = (title, list) =>
     h(
       'section',
@@ -809,7 +1057,7 @@ function viewAnalytics() {
   const byRevenue = [...A.products].sort((a, b) => compareValues(b.revenue, a.revenue)).slice(0, 10);
   const byReturns = A.products.filter((p) => p.returnRate != null).sort((a, b) => b.returnRate - a.returnRate).slice(0, 10);
 
-  return h('div', null, kpis, lines, bars, h('div', { class: 'grid-2' }, productTable(t('analytics.topByRevenue'), byRevenue), productTable(t('analytics.topByReturns'), byReturns)));
+  return h('div', null, kpis, lines, bars, profitCard, h('div', { class: 'grid-2' }, productTable(t('analytics.topByRevenue'), byRevenue), productTable(t('analytics.topByReturns'), byReturns)));
 }
 
 /* ===================================================================== */
@@ -1121,7 +1369,23 @@ function viewSettings() {
         h('input', { id: 'pollSec', type: 'number', min: 30, step: 5, class: 'input', style: { width: '100px' }, value: st.chatPollSec, onchange: (e) => updateSettings({ chatPollSec: Math.max(30, Number(e.target.value) || 30) }) }),
       ),
     ),
-    card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
+    card(
+      t('settings.deadlines'),
+      t('settings.deadlinesHint'),
+      h(
+        'div',
+        { class: 'field' },
+        h('label', { class: 'field__label', for: 'acceptHours' }, t('settings.acceptHours')),
+        h('input', { id: 'acceptHours', type: 'number', min: 0, step: 0.5, class: 'input', style: { width: '100px' }, value: st.deadlines.acceptHours ?? '', onchange: (e) => updateSettings({ deadlines: { ...st.deadlines, acceptHours: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) } }) }),
+      ),
+      h(
+        'div',
+        { class: 'field' },
+        h('label', { class: 'field__label', for: 'warnHours' }, t('settings.warnHours')),
+        h('input', { id: 'warnHours', type: 'number', min: 0, step: 0.5, class: 'input', style: { width: '100px' }, value: st.deadlines.warnHours ?? 2, onchange: (e) => updateSettings({ deadlines: { ...st.deadlines, warnHours: Math.max(0, Number(e.target.value) || 0) } }) }),
+      ),
+    ),
+    card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
     card(
       t('settings.data'),
       t('settings.invoicesStored', { count: state.invoiceCount }),
@@ -1280,6 +1544,15 @@ function renderSidebar() {
   const unread = enabledStores().reduce((n, s) => n + sumBy(state.chat[s.id]?.conversations || [], (c) => c.unread), 0);
   const setCount = (k, v) => (document.querySelector(`[data-count="${k}"]`).textContent = v ? formatNumber(v) : '');
   setCount('orders', sum('newOrders'));
+  const urgent = enabledStores().reduce(
+    (n, s) => n + (state.data.snapshots[s.id]?.sections?.orders?.items || []).filter((it) => ['soon', 'overdue'].includes(urgencyOf(deadlineOf(it, settingsNow()), settingsNow()))).length,
+    0,
+  );
+  const u = document.querySelector('[data-count="urgent"]');
+  if (u) {
+    u.textContent = urgent ? `🔥 ${formatNumber(urgent)}` : '';
+    u.title = urgent ? t('deadline.sidebar', { count: urgent }) : '';
+  }
   setCount('returns', sum('returns'));
   setCount('refusals', sum('refusals'));
   setCount('payments', sum('unpaid'));
@@ -1329,6 +1602,7 @@ const VIEWS = {
   refusals: () => viewTable('refusals'),
   payments: viewPayments,
   analytics: viewAnalytics,
+  products: viewProducts,
   chat: viewChat,
   settings: viewSettings,
 };
@@ -1377,6 +1651,7 @@ function renderAll() {
 async function loadState() {
   state.data = await send('ui:getState');
   state.chat = await getChat();
+  state.costs = await getCosts();
   renderAll();
 }
 
@@ -1484,6 +1759,10 @@ function bindShell() {
     if (pollChanged) manageChatPolling();
   });
   onLangChange(() => renderAll());
+  onKeyChange(KEYS.costs, (next) => {
+    state.costs = next || {};
+    if (state.route !== 'products') renderView();
+  });
   setInterval(() => !state.syncing && renderTopbar(), 30000); // keep "updated N min ago" fresh
 }
 
