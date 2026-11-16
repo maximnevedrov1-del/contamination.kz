@@ -15,8 +15,18 @@
  * All selectors come from globalThis.KSH_SELECTORS (shared/selectors.js).
  */
 (() => {
-  if (globalThis.__KSH_CONTENT__) return;
-  globalThis.__KSH_CONTENT__ = true;
+  /** Is this script's extension context still alive (false after the extension is reloaded)? */
+  const alive = () => {
+    try {
+      return !!chrome.runtime?.id;
+    } catch {
+      return false;
+    }
+  };
+  // Skip if a live instance already runs in this tab. An orphaned instance from a
+  // previous extension version must not block a fresh injection.
+  if (globalThis.__KSH_CONTENT_ALIVE__?.()) return;
+  globalThis.__KSH_CONTENT_ALIVE__ = alive;
 
   const S = globalThis.KSH_SELECTORS;
   const LOG = '[KSH]';
@@ -136,11 +146,25 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  /** "16.11.2026 14:30", "16.11.26", ISO, "сегодня 14:30", "кеше 09:10" → ISO string */
+  /** Month stems (RU, KK) for dates written with words: "16 ноября 2026", "16 қараша". */
+  const MONTHS = [
+    ['янв', 'қаң'], ['фев', 'ақп'], ['мар', 'нау'], ['апр', 'сәу'], ['мая', 'май', 'мам'], ['июн', 'мау'],
+    ['июл', 'шіл'], ['авг', 'там'], ['сен', 'қыр'], ['окт', 'қаз'], ['ноя', 'қар'], ['дек', 'жел'],
+  ];
+
+  /**
+   * "16.11.2026 14:30", "16.11.26", ISO 8601, epoch ms/s, "16 ноября 2026",
+   * "сегодня 14:30", "кеше 09:10" → ISO string (or null).
+   */
   function parseDate(text) {
-    if (!text) return null;
-    if (typeof text === 'number') return new Date(text).toISOString();
+    if (text == null || text === '') return null;
+    if (typeof text === 'number') return new Date(text < 1e12 ? text * 1000 : text).toISOString();
     const s = String(text).trim().toLowerCase();
+    if (/^\d{10,13}$/.test(s)) return parseDate(Number(s));
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const iso = new Date(String(text).trim());
+      return Number.isNaN(iso.getTime()) ? null : iso.toISOString();
+    }
     const time = s.match(/(\d{1,2}):(\d{2})/);
     const setTime = (d) => {
       if (time) d.setHours(+time[1], +time[2], 0, 0);
@@ -153,17 +177,38 @@
       const y = dmy[3].length === 2 ? 2000 + +dmy[3] : +dmy[3];
       return setTime(new Date(y, +dmy[2] - 1, +dmy[1]));
     }
+    const words = s.match(/(\d{1,2})\s+([а-яәіңғүұқөһ]+)\.?(?:\s+(\d{4}))?/);
+    if (words) {
+      const m = MONTHS.findIndex((stems) => stems.some((st) => words[2].startsWith(st)));
+      if (m >= 0) {
+        const now = new Date();
+        let y = words[3] ? +words[3] : now.getFullYear();
+        if (!words[3] && new Date(y, m, +words[1]) > now) y -= 1; // "15 декабря" seen in January
+        return setTime(new Date(y, m, +words[1]));
+      }
+    }
     if (time && s.length <= 5) return setTime(new Date());
     const d = new Date(text);
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
 
-  /** Map raw text onto a normalized key using a { key: [substrings] } map. */
+  /**
+   * Map raw text onto a normalized key using a { key: [substrings] } map.
+   * The LONGEST matching substring wins, so "не оплачен" (failed) beats
+   * "оплачен" (paid) and "бас тарту" (refused) beats "бас тарт".
+   */
   function normalize(raw, map, fallback = 'unknown') {
-    const s = String(raw || '').toLowerCase();
+    const s = String(raw || '').toLowerCase().replace(/\s+/g, ' ');
     if (!s) return fallback;
-    for (const [key, needles] of Object.entries(map)) if (needles.some((n) => s.includes(n))) return key;
-    return fallback;
+    let best = fallback;
+    let bestLen = 0;
+    for (const [key, needles] of Object.entries(map))
+      for (const n of needles)
+        if (n.length > bestLen && s.includes(n)) {
+          best = key;
+          bestLen = n.length;
+        }
+    return best;
   }
 
   const getPath = (obj, path) => (path ? path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj) : obj);
@@ -208,7 +253,9 @@
     const shopName = readField(document, S.session.shopName, 'session.shopName', authenticated);
     const rawId = readField(document, S.session.shopId, 'session.shopId', false);
     const shopId = rawId || (shopName ? hash(shopName) : null);
-    return { authenticated, shopId: authenticated ? shopId : null, shopName, pageType, url: location.href, origin: location.origin };
+    // Only seller-cabinet tabs (or Kaspi's login page) count as "store tabs".
+    const isCabinet = authenticated || pageType === 'login' || (S.pages.cabinet || []).some((m) => location.href.includes(m));
+    return { authenticated, isCabinet, shopId: authenticated ? shopId : null, shopName, pageType, url: location.href, origin: location.origin };
   }
 
   /* ================= network cache (from network-tap.js) ================= */
@@ -326,11 +373,12 @@
         status: 'ok',
         source: 'dom',
         items: items
-          .map((el, i) => {
+          .map((el) => {
             const f = C.conversationFields;
-            const id = readField(el, f.id) || el.getAttribute('data-id') || `idx-${i}`;
+            const id = conversationIdOf(el);
             return {
               id,
+              stableId: !id.startsWith('~'),
               customer: readField(el, f.customer, 'chat.customer', true),
               preview: readField(el, f.preview),
               time: parseDate(readField(el, f.time)),
@@ -350,6 +398,18 @@
     }
     if (detectPage() === 'chat') missing.add('chat.conversationItem');
     return { status: 'notVisible' };
+  }
+
+  /**
+   * Conversation id: the configured attribute, else a hash of customer + order
+   * prefixed with "~" (unstable — replies are refused for such ids, see chatSend).
+   */
+  function conversationIdOf(el) {
+    const f = S.chat.conversationFields;
+    const id = readField(el, f.id) || el.getAttribute('data-id');
+    if (id) return id;
+    if (!missing.has('chat.conversationFields.id')) missing.add('chat.conversationFields.id');
+    return `~${hash(`${readField(el, f.customer)}|${readField(el, f.orderId)}`)}`;
   }
 
   /** Parse the currently open chat thread. */
@@ -417,6 +477,22 @@
     btn.click();
     const confirm = await waitFor(S.orders.packConfirm, 3000);
     if (confirm) confirm.click();
+
+    // Proof that Kaspi accepted it: the button went away, a success marker or a
+    // new invoice appeared, or the row's status now reads "packed".
+    const packedProof = await new Promise((resolve) => {
+      const check = () =>
+        !btn.isConnected ||
+        btn.disabled ||
+        !!findFirst(S.orders.packedMarker) ||
+        !!findFirst([...S.invoice.link, ...S.invoice.container], document, (el) => !before.has(el)) ||
+        (row?.isConnected && normalize(readField(row, S.orders.fields.status), S.statusMap) === 'packed');
+      if (check()) return resolve(true);
+      const obs = new MutationObserver(() => check() && (obs.disconnect(), clearTimeout(timer), resolve(true)));
+      obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+      const timer = setTimeout(() => (obs.disconnect(), resolve(check())), S.timing.waitTimeoutMs);
+    });
+    if (!packedProof) return { ok: false, error: 'packNotConfirmed', missingSelectors: [...missing] };
     const invoice = await captureInvoice(orderId, { before, scope: row }).catch((e) => ({ error: e.message }));
     return { ok: true, invoice: invoice && !invoice.error ? invoice : null, invoiceError: invoice?.error, missingSelectors: [...missing] };
   }
@@ -478,7 +554,7 @@
   /** Current payment statuses for a list of order ids (from visible data). */
   function paymentStatuses({ orderIds }) {
     const list = parseList('orders');
-    if (list.status !== 'ok') return { ok: false, error: 'ordersNotVisible' };
+    if (list.status !== 'ok') return { ok: false, error: 'ordersNotVisible', needsNavigation: true };
     const map = new Map(list.items.map((i) => [i.id, i]));
     return {
       ok: true,
@@ -490,10 +566,7 @@
   async function openConversation(conversationId) {
     const current = parseThread();
     if (current && current.conversationId === String(conversationId)) return true;
-    const item = queryAll(S.chat.conversationItem).find((el, i) => {
-      const id = readField(el, S.chat.conversationFields.id) || el.getAttribute('data-id') || `idx-${i}`;
-      return id === String(conversationId);
-    });
+    const item = queryAll(S.chat.conversationItem).find((el) => conversationIdOf(el) === String(conversationId));
     if (!item) return false;
     (item.querySelector('a,button') || item).click();
     await waitFor(S.chat.threadRoot, 5000);
@@ -527,7 +600,16 @@
   async function chatSend({ conversationId, text }) {
     missing.clear();
     if (!text || !text.trim()) return { ok: false, error: 'emptyMessage' };
+    if (String(conversationId).startsWith('~')) return { ok: false, error: 'conversationIdUnstable', missingSelectors: ['chat.conversationFields.id'] };
     if (!(await openConversation(conversationId))) return { ok: false, error: 'conversationNotVisible', needsNavigation: true };
+    // Never type into a thread we cannot prove is the requested one.
+    const opened = parseThread();
+    if (!opened || opened.conversationId !== String(conversationId)) {
+      return { ok: false, error: 'conversationIdUnstable', missingSelectors: [...missing, 'chat.threadId'] };
+    }
+    const needle = text.trim().slice(0, 40);
+    const countMine = (th) => (th?.messages || []).filter((m) => m.from === 'seller' && m.text.includes(needle)).length;
+    const before = countMine(opened);
     const input = queryOne(S.chat.input, document, 'chat.input', true);
     if (!input) return { ok: false, error: 'chatInputNotFound', missingSelectors: [...missing] };
     insertText(input, text);
@@ -538,9 +620,7 @@
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
       const thread = parseThread();
-      if (thread?.messages.some((m) => m.from === 'seller' && m.text.includes(text.trim().slice(0, 40)))) {
-        return { ok: true, verified: true, messages: thread.messages };
-      }
+      if (countMine(thread) > before) return { ok: true, verified: true, messages: thread.messages };
       await sleep(400);
     }
     return { ok: true, verified: false };
@@ -579,7 +659,15 @@
 
   /* ================= announcements & live updates ================= */
 
-  const send = (msg) => chrome.runtime.sendMessage(msg).catch(() => {}); // SW may be asleep — it re-pings on demand
+  /** Message the worker; after an extension reload this instance shuts itself down. */
+  const send = (msg) => {
+    if (!alive()) return shutdown();
+    try {
+      chrome.runtime.sendMessage(msg).catch(() => {}); // the worker may be asleep — it re-pings on demand
+    } catch {
+      shutdown();
+    }
+  };
 
   let lastHref = '';
   function hello() {
@@ -592,8 +680,9 @@
   let lastPushAt = 0;
   /** Push a fresh snapshot when the visible data changes (debounced, ≥10 s apart). */
   function scheduleUpdate() {
-    clearTimeout(updateTimer);
+    if (updateTimer) return; // already scheduled — never starve on pages that mutate constantly
     updateTimer = setTimeout(() => {
+      updateTimer = null;
       if (!['orders', 'returns', 'refusals', 'analytics', 'chat'].includes(detectPage()) && !Object.keys(netCache).length) return;
       if (Date.now() - lastPushAt < 10000) return scheduleUpdate();
       const snap = snapshot();
@@ -605,7 +694,15 @@
     }, 4000);
   }
 
-  new MutationObserver(scheduleUpdate).observe(document.documentElement, { childList: true, subtree: true });
-  setInterval(() => location.href !== lastHref && hello(), 1000); // SPA route changes
+  const observer = new MutationObserver(scheduleUpdate);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  const routeTimer = setInterval(() => location.href !== lastHref && hello(), 1000); // SPA route changes
+
+  function shutdown() {
+    observer.disconnect();
+    clearInterval(routeTimer);
+    clearTimeout(updateTimer);
+  }
+
   hello();
 })();

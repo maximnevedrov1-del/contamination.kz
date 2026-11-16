@@ -93,7 +93,7 @@
       "many": "{count} строк",
       "other": "{count} строки"
     },
-    "keyboardHint": "↑↓ — перемещение, Пробел — выбрать, Enter — открыть в магазине",
+    "keyboardHint": "↑↓ — перемещение, Пробел — выбрать, Enter — открыть в магазине, Esc — снять выделение",
     "emptyTitle": "Ничего не найдено",
     "emptyFiltered": "Попробуйте изменить фильтры или период.",
     "emptyNoData": "Откройте вкладку кабинета Kaspi нужного раздела и нажмите «Обновить»."
@@ -329,7 +329,9 @@
     "emptyMessage": "пустое сообщение",
     "noResponse": "нет ответа",
     "generic": "ошибка: {error}",
-    "partial": "Не удалось для {count}: {details}"
+    "partial": "Не удалось для {count}: {details}",
+    "packNotConfirmed": "Kaspi не подтвердил упаковку (кнопка осталась, статус не изменился)",
+    "conversationIdUnstable": "не удалось надёжно определить диалог — ответ не отправлен (настройте chat.conversationFields.id и chat.threadId)"
   },
   "format": {
     "monthsShort": [

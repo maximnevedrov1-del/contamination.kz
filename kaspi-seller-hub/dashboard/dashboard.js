@@ -22,7 +22,7 @@ import {
   formatChatTime,
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
-import { getChat, getInvoices, clearInvoices, saveSettings, getSnapshots, setSnapshots, setChat, onKeyChange, KEYS } from '../shared/storage.js';
+import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS } from '../shared/storage.js';
 import {
   h,
   clear,
@@ -431,6 +431,13 @@ function onTableKey(e, route, rows) {
       e.preventDefault();
       openItem(rows[i]);
       break;
+    case 'Escape':
+      if (ts.selected.size) {
+        e.preventDefault();
+        ts.selected.clear();
+        renderView();
+      }
+      break;
     case 'a':
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -442,9 +449,17 @@ function onTableKey(e, route, rows) {
   }
 }
 
-/** Open the order/return in its store tab. */
+/** Open the order/return in its store tab. Scraped links are used only on the store's own https origin. */
 function openItem(row) {
-  if (row.url) chrome.tabs.create({ url: row.url });
+  const origin = stores()[row.shopId]?.origin;
+  let url = null;
+  try {
+    const u = new URL(row.url);
+    if (u.protocol === 'https:' && u.origin === origin) url = u.href;
+  } catch {
+    /* no or invalid link */
+  }
+  if (url) chrome.tabs.create({ url });
   else send('ui:openStore', { shopId: row.shopId });
 }
 
@@ -458,7 +473,12 @@ async function runJob(kind, type, payload, okKey) {
   renderView();
   try {
     const res = await send(type, payload);
-    if (res?.results) reportResults(res.results, okKey);
+    if (res?.results) {
+      reportResults(res.results, okKey);
+      // Done items leave the selection; failed ones stay selected for a retry.
+      const sel = state.tables[state.route]?.selected;
+      if (sel) res.results.filter((r) => r.ok).forEach((r) => sel.delete(itemKey(r.shopId, r.orderId)));
+    }
     else if (res?.ok === false) toast(errorText(res.error), 'error');
     return res;
   } finally {
@@ -787,7 +807,7 @@ function conversations() {
   return Object.entries(state.chat)
     .filter(([shopId]) => ids.has(shopId))
     .flatMap(([shopId, c]) => (c.conversations || []).map((conv) => ({ ...conv, shopId, key: itemKey(shopId, conv.id) })))
-    .filter((c) => !state.chatUi.unreadOnly || c.unread > 0)
+    .filter((c) => !state.chatUi.unreadOnly || c.unread > 0 || c.key === state.chatUi.active)
     .sort((a, b) => compareValues(b.time, a.time));
 }
 
@@ -982,10 +1002,18 @@ function manageChatPolling() {
 /* View: settings                                                         */
 /* ===================================================================== */
 
+/** Settings are written by the worker (under its lock), never directly from here. */
 async function updateSettings(patch, { silent } = {}) {
-  state.data.settings = await saveSettings(patch);
-  await send('ui:settingsChanged');
+  const next = await send('ui:saveSettings', { patch });
+  if (next?.stores) state.data.settings = next;
   if (!silent) toast(t('settings.saved'), 'ok', 2000);
+  renderAll();
+}
+
+async function updateStore(shopId, patch) {
+  const next = await send('ui:updateStore', { shopId, patch });
+  if (next?.stores) state.data.settings = next;
+  toast(t('settings.saved'), 'ok', 2000);
   renderAll();
 }
 
@@ -1008,7 +1036,7 @@ function viewSettings() {
             all.map((s) => {
               const snap = state.data.snapshots[s.id];
               const status = snap?.status || 'noTab';
-              const patchStore = (p) => updateSettings({ stores: { ...st.stores, [s.id]: { ...s, ...p } } });
+              const patchStore = (p) => updateStore(s.id, p);
               return h(
                 'tr',
                 null,
@@ -1105,16 +1133,9 @@ function viewSettings() {
 
 async function removeStore(s) {
   if (!(await confirmDialog(t('common.remove'), t('settings.removeStoreConfirm', { store: s.alias || s.name })))) return;
-  const storesNext = { ...state.data.settings.stores };
-  delete storesNext[s.id];
-  const snaps = await getSnapshots();
-  delete snaps[s.id];
-  await setSnapshots(snaps);
-  const chat = await getChat();
-  delete chat[s.id];
-  await setChat(chat);
+  await send('ui:removeStore', { shopId: s.id });
   if (state.filters.shopId === s.id) state.filters.shopId = 'all';
-  await updateSettings({ stores: storesNext });
+  toast(t('settings.cleared'), 'ok', 2000);
   await loadState();
 }
 

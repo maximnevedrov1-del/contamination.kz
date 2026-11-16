@@ -21,15 +21,19 @@ const $ = (id) => document.getElementById(id);
 function sanitize(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('script, iframe, object, embed, base, link, meta, form, noscript').forEach((el) => el.remove());
+  const URL_ATTRS = ['src', 'href', 'xlink:href', 'srcset', 'action', 'formaction', 'background', 'poster', 'ping', 'data', 'srcdoc', 'lowsrc', 'dynsrc'];
+  // Remote url(...) in CSS would make the print page fetch from the network.
+  const stripCssUrls = (css) => css.replace(/@import[^;]+;?/gi, '').replace(/url\((?!\s*['"]?data:image\/)[^)]*\)/gi, 'none');
   doc.querySelectorAll('*').forEach((el) => {
     for (const attr of [...el.attributes]) {
       const name = attr.name.toLowerCase();
       const val = attr.value.trim().toLowerCase();
       if (name.startsWith('on')) el.removeAttribute(attr.name);
-      else if (['src', 'href', 'xlink:href', 'srcset', 'action'].includes(name) && !(val.startsWith('data:image/') || val.startsWith('#'))) el.removeAttribute(attr.name);
+      else if (URL_ATTRS.includes(name) && !(val.startsWith('data:image/') || val.startsWith('#'))) el.removeAttribute(attr.name);
+      else if (name === 'style') el.setAttribute('style', stripCssUrls(attr.value));
     }
   });
-  doc.querySelectorAll('style').forEach((st) => (st.textContent = st.textContent.replace(/@import[^;]+;/gi, '').replace(/url\((?!\s*['"]?data:image\/)[^)]*\)/gi, 'none')));
+  doc.querySelectorAll('style').forEach((st) => (st.textContent = stripCssUrls(st.textContent)));
   const styles = [...doc.querySelectorAll('style')].map((st) => st.outerHTML).join('');
   return styles + doc.body.innerHTML;
 }

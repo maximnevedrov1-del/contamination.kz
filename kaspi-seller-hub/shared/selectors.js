@@ -42,6 +42,9 @@
       analytics: ['#/analytics', '/analytics', '/statistics'], // TODO
       chat: ['#/chat', '/messages'], // TODO
       login: ['/login', '/signin', 'idmc.shop.kaspi.kz'], // TODO: auth pages
+      // URL markers of the seller cabinet. Kaspi tabs outside the cabinet (the
+      // public shop, etc.) are ignored and never reported as "not logged in".
+      cabinet: ['/mc/', '/mc#', 'mc.shop.kaspi.kz'], // TODO
     },
 
     /**
@@ -193,6 +196,8 @@
       },
       // Currently open thread.
       threadRoot: ['[data-testid="chat-thread"]', '.chat-thread'], // TODO
+      // REQUIRED for replies: id of the open thread. A reply is sent only when it equals
+      // conversationFields.id of the clicked conversation (prevents answering the wrong customer).
       threadId: { sel: ['[data-testid="chat-thread"]'], attr: 'data-conversation-id' }, // TODO
       message: ['[data-testid="chat-message"]', '.chat-thread__message'], // TODO
       messageFields: {

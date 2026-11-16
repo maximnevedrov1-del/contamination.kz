@@ -89,7 +89,7 @@
       "one": "{count} жол",
       "other": "{count} жол"
     },
-    "keyboardHint": "↑↓ — жылжу, Бос орын — таңдау, Enter — дүкенде ашу",
+    "keyboardHint": "↑↓ — жылжу, Бос орын — таңдау, Enter — дүкенде ашу, Esc — белгілеуді алып тастау",
     "emptyTitle": "Ештеңе табылмады",
     "emptyFiltered": "Сүзгілерді немесе кезеңді өзгертіп көріңіз.",
     "emptyNoData": "Kaspi кабинетінің қажетті бөлімін ашып, «Жаңарту» батырмасын басыңыз."
@@ -303,7 +303,9 @@
     "emptyMessage": "бос хабарлама",
     "noResponse": "жауап жоқ",
     "generic": "қате: {error}",
-    "partial": "{count} үшін мүмкін болмады: {details}"
+    "partial": "{count} үшін мүмкін болмады: {details}",
+    "packNotConfirmed": "Kaspi қаптауды растамады (батырма қалды, мәртебе өзгермеді)",
+    "conversationIdUnstable": "диалогты сенімді анықтау мүмкін болмады — жауап жіберілмеді (chat.conversationFields.id және chat.threadId баптаңыз)"
   },
   "format": {
     "monthsShort": [

@@ -78,6 +78,7 @@ function registerTab(tabId, info) {
 async function upsertStore({ shopId, shopName, origin }) {
   const settings = await getSettings();
   const existing = settings.stores[shopId];
+  if (existing && existing.origin === origin && (!shopName || existing.name === shopName) && Date.now() - (existing.lastSeen || 0) < 60000) return;
   const used = Object.values(settings.stores).map((s) => s.color);
   settings.stores[shopId] = {
     id: shopId,
@@ -260,10 +261,8 @@ async function sync() {
   );
 
   const byShop = {};
-  let unauthTabs = 0;
   results.forEach((r) => {
     if (r?.ok && r.authenticated && r.shopId) (byShop[r.shopId] ??= []).push(r);
-    else if (r?.ok && !r.authenticated) unauthTabs++;
   });
 
   await lock(async () => {
@@ -275,7 +274,9 @@ async function sync() {
       else
         next[shopId] = {
           ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
-          status: unauthTabs ? 'notAuth' : 'noTab',
+          // A store without a live tab is "tab closed". Logged-out cabinet tabs cannot be
+          // attributed to a store, so they are reported separately (unauthTabs).
+          status: 'noTab',
           checkedAt: Date.now(),
         };
     }
@@ -305,7 +306,7 @@ async function onContentUpdate(snap) {
 async function getState() {
   const [settings, snapshots, lastSync, registry] = await Promise.all([getSettings(), getSnapshots(), getLastSync(), getRegistry()]);
   const tabs = Object.values(registry);
-  return { settings, snapshots, lastSync, tabs, unauthTabs: tabs.filter((e) => !e.authenticated).length };
+  return { settings, snapshots, lastSync, tabs, unauthTabs: tabs.filter((e) => !e.authenticated && e.isCabinet).length };
 }
 
 /* ===================================================================== */
@@ -333,8 +334,10 @@ async function notifyDiff(prev, next, settings) {
     if (store && !store.enabled) continue;
     const name = store?.alias || store?.name || snap.shopName;
     const newIds = (sec, filter = () => true) => {
-      const old = new Set((before.sections[sec]?.items || []).map((i) => i.id));
-      return (snap.sections[sec]?.items || []).filter((i) => filter(i) && !old.has(i.id));
+      // Without a previous list for this section everything would look "new".
+      if (before.sections[sec]?.status !== 'ok' || snap.sections[sec]?.status !== 'ok') return [];
+      const old = new Set(before.sections[sec].items.map((i) => i.id));
+      return snap.sections[sec].items.filter((i) => filter(i) && !old.has(i.id));
     };
     if (settings.notifications.newOrders) {
       const n = newIds('orders', (o) => o.status === 'new').length;
@@ -349,10 +352,10 @@ async function notifyDiff(prev, next, settings) {
 
 async function updateBadge() {
   const [snapshots, chat, settings] = await Promise.all([getSnapshots(), getChat(), getSettings()]);
-  const enabled = Object.values(snapshots).filter((s) => settings.stores[s.shopId]?.enabled !== false);
+  const enabled = Object.values(snapshots).filter((s) => settings.stores[s.shopId]?.enabled === true);
   const totals = sumCounts(enabled.map(storeCounts));
   const unread = Object.entries(chat)
-    .filter(([id]) => settings.stores[id]?.enabled !== false)
+    .filter(([id]) => settings.stores[id]?.enabled === true)
     .reduce((n, [, c]) => n + (c.conversations || []).reduce((m, x) => m + (x.unread || 0), 0), 0);
   const total = (totals.newOrders || 0) + unread;
   await chrome.action.setBadgeText({ text: total ? String(total > 99 ? '99+' : total) : '' });
@@ -391,6 +394,16 @@ async function runJob(kind, items, perItem) {
     }),
   );
   return { jobId, results };
+}
+
+/** A URL taken from Kaspi's page, accepted only on the store's own https origin. */
+function safeStoreUrl(url, origin) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.origin === origin ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 async function storeInvoice(shopId, res) {
@@ -433,14 +446,16 @@ const actions = {
         continue;
       }
       for (let i = 0; i < list.length; i++) {
-        const url = list[i].url || new URL(fillTemplate(tpl, { orderId: list[i].orderId }), origin).href;
+        // Links scraped from the page are used only if they stay on the store's origin.
+        const scraped = safeStoreUrl(list[i].url, origin);
+        const url = scraped || new URL(fillTemplate(tpl, { orderId: list[i].orderId }), origin).href;
         if (i === 0 && entry) {
           await chrome.tabs.update(entry.tabId, { url, active: true });
           const tab = await chrome.tabs.get(entry.tabId);
           await chrome.windows.update(tab.windowId, { focused: true });
         } else {
           const opener = entry ? await chrome.tabs.get(entry.tabId).catch(() => null) : null;
-          await chrome.tabs.create({ url, active: false, openerTabId: opener?.id, index: opener ? opener.index + 1 + i : undefined });
+          await chrome.tabs.create({ url, active: false, openerTabId: opener?.id, index: opener ? opener.index + i : undefined });
         }
         results.push({ ...list[i], ok: true });
       }
@@ -480,7 +495,7 @@ const actions = {
 /** Passive poll: read the conversation list from every store's tabs. Never navigates. */
 async function pollChat() {
   const settings = await getSettings();
-  const registry = Object.values(await getRegistry()).filter((e) => e.authenticated && e.shopId && settings.stores[e.shopId]?.enabled !== false);
+  const registry = Object.values(await getRegistry()).filter((e) => e.authenticated && e.shopId && settings.stores[e.shopId]?.enabled === true);
   const shops = [...new Set(registry.map((e) => e.shopId))];
   if (!shops.length) return;
   const responses = await Promise.all(
@@ -573,7 +588,8 @@ async function openChatTabs() {
 /* ===================================================================== */
 
 async function openDashboard(route = 'orders') {
-  const [tab] = await chrome.tabs.query({ url: `${DASHBOARD_URL}*` });
+  // chrome-extension:// URLs are not valid match patterns, so filter manually.
+  const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
   const url = `${DASHBOARD_URL}#${route}`;
   if (tab) {
     await chrome.tabs.update(tab.id, { active: true, url });
@@ -623,13 +639,49 @@ const uiHandlers = {
   'ui:openChatTabs': () => openChatTabs(),
   'ui:openStore': (p) => openStore(p),
   'ui:openDashboard': (p) => openDashboard(p?.route),
+  /** Partial settings update (never the store list — see ui:updateStore). */
+  'ui:saveSettings': async ({ patch }) => {
+    const rest = { ...(patch || {}) };
+    delete rest.stores;
+    const next = await lock(() => saveSettings(rest));
+    await scheduleAlarms();
+    await updateBadge();
+    return next;
+  },
+  /** Patch one store's alias / colour / enabled flag. */
+  'ui:updateStore': async ({ shopId, patch }) => {
+    const next = await lock(async () => {
+      const settings = await getSettings();
+      if (!settings.stores[shopId]) return settings;
+      const { alias, color, enabled } = patch || {};
+      Object.assign(settings.stores[shopId], Object.fromEntries(Object.entries({ alias, color, enabled }).filter(([, v]) => v !== undefined)));
+      return saveSettings({ stores: settings.stores });
+    });
+    await updateBadge();
+    return next;
+  },
+  /** Forget a store and its cached data (it comes back if its cabinet is opened again). */
+  'ui:removeStore': async ({ shopId }) => {
+    const next = await lock(async () => {
+      const settings = await getSettings();
+      delete settings.stores[shopId];
+      const [snaps, chat] = await Promise.all([getSnapshots(), getChat()]);
+      delete snaps[shopId];
+      delete chat[shopId];
+      await Promise.all([setSnapshots(snaps), setChat(chat)]);
+      return saveSettings({ stores: settings.stores });
+    });
+    await updateBadge();
+    broadcast('bg:stateChanged', await getState());
+    return next;
+  },
   'ui:settingsChanged': async () => {
     await scheduleAlarms();
     await updateBadge();
     return { ok: true };
   },
   'ui:clearCache': async () => {
-    await clearCache();
+    await lock(() => clearCache());
     await updateBadge();
     return { ok: true };
   },
@@ -659,10 +711,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => unregisterTab(tabId));
+/** Chrome match pattern → RegExp ("https://*.kaspi.kz/*" also matches kaspi.kz itself). */
+const patternToRegExp = (p) => {
+  const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]+)(\/.*)$/);
+  const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const hostRe = host.startsWith('*.') ? `([^/]+\\.)?${esc(host.slice(2))}` : esc(host);
+  return new RegExp(`^${esc(scheme)}://${hostRe}${esc(path).replace(/\*/g, '.*')}$`);
+};
+const TAB_PATTERNS = S.tabMatchPatterns.map(patternToRegExp);
+
 chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.url && !S.tabMatchPatterns.some((p) => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(change.url))) {
-    unregisterTab(tabId);
-  }
+  if (change.url && !TAB_PATTERNS.some((re) => re.test(change.url))) unregisterTab(tabId);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

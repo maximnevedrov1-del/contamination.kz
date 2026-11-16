@@ -92,6 +92,14 @@ A missing selector never crashes anything: it's logged to the console with a `[K
 
 **Host permissions:** `manifest.json` currently matches `https://kaspi.kz/mc/*` and `https://*.kaspi.kz/*`. Narrow this to the exact cabinet hosts. Change it in three places: `host_permissions`, both `content_scripts[].matches`, and `tabMatchPatterns` in `selectors.js`.
 
+## Safety guarantees in the action code
+
+- **Packing is verified.** After clicking Упаковать the content script waits for proof: the button disappears or is disabled, a success marker or a new invoice appears, or the row status becomes "packed". Without proof the order is reported as failed (`packNotConfirmed`) and stays selected for a retry; successfully packed orders leave the selection.
+- **Chat replies go only to a provably correct thread.** A reply is typed only when the open thread's id (`chat.threadId`) equals the conversation id from the list (`chat.conversationFields.id`). If Kaspi exposes no id, conversations get a temporary `~hash` id, they can be read but replies are refused (`conversationIdUnstable`). Configure both selectors before using replies.
+- **Status text is matched by the longest substring**, so «Не оплачен» is `failed`, not `paid`.
+- **Links scraped from Kaspi pages** are opened only if they stay on the store's own `https` origin.
+- **Settings are written only by the service worker** (under one lock), so edits in the dashboard and stores discovered in the background never overwrite each other.
+
 ## Invoices and printing
 
 - **Pack selected** clicks Упаковать for each order in its store tab, confirms Kaspi's dialog if one appears, then captures the invoice Kaspi shows.
@@ -181,4 +189,8 @@ Analytics never invents numbers:
   - worker → content: `ksh:*`
   - content → worker: `content:hello`, `content:update`
   - worker → UI broadcasts: `bg:stateChanged`, `bg:progress`, `bg:chatUpdated`
-- The whole flow was tested in Chromium against mock store pages built on the placeholder selectors: sync of 3 stores, filters, sorting, keyboard navigation, pack → invoice → print, chat reply, RU/KZ, light/dark. Real Kaspi markup will need the `TODO` selectors filled in.
+- Tested in Chromium (headless) against mock store pages built on the placeholder selectors:
+  - parsers: 31 unit cases (money, dates incl. ISO/epoch/words in RU and KK, status and payment mapping);
+  - end-to-end: popup → dashboard, discovery of 3 stores, logged-out and non-cabinet Kaspi tabs, sorting, 7/30-day and custom ranges, search, keyboard selection, pack success and verified failure, invoice capture and A4 print (HTML and, with pdf.js, PDF), returns processing, payment refresh with navigation, alias/colour/disable/remove store, chat replies (duplicate text, refusal on unstable ids), closed store tab, toolbar badge, re-injection over an orphaned content script, JSON capture via fetch and XHR;
+  - ESLint (no-undef, unused vars, unreachable code): clean.
+- Real Kaspi markup will need the `TODO` selectors filled in.
