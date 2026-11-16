@@ -216,6 +216,7 @@
         el('td', { class: 'num' }, `${a.last_store_count ?? '—'} / ${a.status === 'active' ? a.store_limit : '—'}`),
         el('td', null, date(a.last_seen_at, true)),
         el('td', null, date(a.created_at)),
+        el('td', null, a.terms_accepted_at ? date(a.terms_accepted_at, true) : '—', el('div', { class: 'muted mono' }, a.terms_version || '')),
         el(
           'td',
           null,
@@ -244,7 +245,7 @@
     const totals = list.reduce((m, a) => ((m[a.status] = (m[a.status] || 0) + 1), m), {});
     panel.replaceChildren(
       el('p', { class: 'muted' }, `Всего: ${list.length} · пробный: ${totals.trial || 0} · оплачен: ${totals.active || 0} · закончился: ${totals.expired || 0}`),
-      el('table', null, el('thead', null, el('tr', null, ['Клиент', 'Статус', 'Срок', 'Магазины (подкл./оплач.)', 'Был онлайн', 'Регистрация', ''].map((h) => el('th', null, h)))), el('tbody', null, rows)),
+      el('table', null, el('thead', null, el('tr', null, ['Клиент', 'Статус', 'Срок', 'Магазины (подкл./оплач.)', 'Был онлайн', 'Регистрация', 'Согласие с офертой', ''].map((h) => el('th', null, h)))), el('tbody', null, rows)),
     );
   }
 
@@ -253,6 +254,7 @@
     const f = {};
     const num = (k) => (f[k] = el('input', { class: 'input', type: 'number', min: 0, value: c[k] }));
     f.kaspi_qr_url = el('input', { class: 'input', placeholder: 'https://…/kaspi-qr.png', value: c.kaspi_qr_url || '', style: 'min-width:420px' });
+    f.terms_version = el('input', { class: 'input', value: c.terms_version || '', placeholder: '2026-11-16' });
     f.payment_instructions = el('textarea', { placeholder: 'Например: Оплатите по QR в приложении Kaspi или дождитесь счёта на ваш номер.' }, c.payment_instructions || '');
     const preview = el('img', { class: 'qr-preview', alt: 'QR', src: c.kaspi_qr_url || '', hidden: !c.kaspi_qr_url });
     f.kaspi_qr_url.addEventListener('input', () => {
@@ -274,6 +276,15 @@
       ),
       el('h2', { style: 'margin-top:20px' }, 'Оплата через Kaspi'),
       el('div', { class: 'grid2' }, 'Ссылка на картинку QR Kaspi Pay', f.kaspi_qr_url, '', preview, 'Инструкция для клиента', f.payment_instructions),
+      el('h2', { style: 'margin-top:20px' }, 'Оферта и политика'),
+      el(
+        'div',
+        { class: 'grid2' },
+        'Версия условий',
+        f.terms_version,
+        '',
+        el('span', { class: 'muted' }, 'Опубликовали новую редакцию оферты или политики — поменяйте версию (например, на сегодняшнюю дату). Каждый клиент при следующем открытии расширения снова поставит галочку согласия; дата и версия сохраняются во вкладке «Клиенты».'),
+      ),
       el(
         'div',
         { class: 'row', style: 'margin-top:16px' },
@@ -287,6 +298,7 @@
               ['base_price', 'base_stores', 'extra_store_price', 'trial_days', 'trial_store_limit', 'max_months', 'remind_days'].forEach((k) => (p[k] = Number(f[k].value)));
               p.kaspi_qr_url = f.kaspi_qr_url.value.trim();
               p.payment_instructions = f.payment_instructions.value.trim();
+              if (f.terms_version.value.trim()) p.terms_version = f.terms_version.value.trim();
               try {
                 await rpc('admin_update_config', { p });
                 toast('Сохранено. Новые цены действуют для новых счетов.');

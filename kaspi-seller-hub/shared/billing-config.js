@@ -16,3 +16,20 @@ export const BILLING = Object.freeze({
   refreshMinutes: 10,
   offlineGraceDays: 3,
 });
+
+/**
+ * Public offer and privacy policy shown next to the consent checkbox.
+ * Empty URL → the copy bundled in the extension (legal/terms.html) is opened.
+ * After publishing the texts on your site, put the links here; when the texts
+ * change, also raise «Версия условий» in the admin page so clients accept again.
+ */
+export const LEGAL = Object.freeze({
+  offerUrl: '',
+  privacyUrl: '',
+});
+
+/** Link for the offer ('offer') or the privacy policy ('privacy'). */
+export function legalUrl(kind) {
+  const own = kind === 'privacy' ? LEGAL.privacyUrl : LEGAL.offerUrl;
+  return own || chrome.runtime.getURL(`legal/terms.html#${kind}`);
+}

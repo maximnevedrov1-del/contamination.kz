@@ -83,6 +83,25 @@ create unique index if not exists invoices_one_pending on public.invoices (user_
 create index if not exists invoices_status_created on public.invoices (status, created_at desc);
 
 -- ---------- admins (add yourself once, see billing/README.md) ----------
+-- ---------- consent to the offer and privacy policy (clickwrap) ----------
+-- billing_config.terms_version = the version every client must have accepted.
+-- Bump it (admin page → «Цены и QR») after publishing new texts: every client
+-- then has to tick the box again before the extension works.
+alter table public.billing_config add column if not exists terms_version text not null default '2026-11-16';
+alter table public.accounts add column if not exists terms_version text;
+alter table public.accounts add column if not exists terms_accepted_at timestamptz;
+
+-- Evidence log: one row per acceptance (never updated or deleted by clients).
+create table if not exists public.consents (
+  id          bigserial primary key,
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  version     text not null,
+  accepted_at timestamptz not null default now(),
+  ip          text,
+  user_agent  text
+);
+create index if not exists consents_user_idx on public.consents (user_id, accepted_at desc);
+
 create table if not exists public.admins (
   user_id uuid primary key references auth.users (id) on delete cascade
 );
@@ -92,6 +111,7 @@ alter table public.billing_config enable row level security;
 alter table public.accounts       enable row level security;
 alter table public.invoices       enable row level security;
 alter table public.admins         enable row level security;
+alter table public.consents       enable row level security;
 
 drop policy if exists accounts_read_own on public.accounts;
 create policy accounts_read_own on public.accounts for select to authenticated using (user_id = auth.uid());
@@ -181,6 +201,9 @@ begin
     'paid_until', acc.paid_until,
     'coverage_end', public.coverage_end(acc),
     'remind_days', c.remind_days,
+    'terms_version', acc.terms_version,
+    'terms_accepted_at', acc.terms_accepted_at,
+    'terms_required', c.terms_version,
     'store_limit', lim,
     'paid_store_limit', acc.store_limit,
     'server_time', now(),
@@ -212,6 +235,7 @@ declare acc public.accounts; c public.billing_config; ph text; n_stores int; inv
 begin
   acc := public.ensure_account();
   select * into c from public.billing_config where id = 1;
+  if acc.terms_version is distinct from c.terms_version then raise exception 'terms_required' using errcode = '42501'; end if;
   if p_months is null or p_months < 1 or p_months > c.max_months then raise exception 'invalid_months' using errcode = '22023'; end if;
   if p_stores is null or p_stores < 1 or p_stores > c.max_stores then raise exception 'invalid_stores' using errcode = '22023'; end if;
   ph := public.phone_or_account(p_phone, acc);
@@ -310,6 +334,25 @@ begin
   return found;
 end $$;
 
+-- The client ticked «Принимаю оферту и политику» → record the CURRENT version
+-- (the server decides which version that is), the time, IP and browser.
+create or replace function public.accept_terms()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare acc public.accounts; c public.billing_config; hdr jsonb; ip text; ua text;
+begin
+  acc := public.ensure_account();
+  select * into c from public.billing_config where id = 1;
+  begin
+    hdr := nullif(current_setting('request.headers', true), '')::jsonb;
+  exception when others then hdr := null;
+  end;
+  ip := left(btrim(split_part(coalesce(hdr->>'x-forwarded-for', hdr->>'x-real-ip', ''), ',', 1)), 64);
+  ua := left(hdr->>'user-agent', 300);
+  insert into public.consents (user_id, version, ip, user_agent) values (acc.user_id, c.terms_version, nullif(ip, ''), ua);
+  update public.accounts set terms_version = c.terms_version, terms_accepted_at = now() where user_id = acc.user_id;
+  return jsonb_build_object('version', c.terms_version, 'accepted_at', now());
+end $$;
+
 -- ---------- admin functions ----------
 create or replace function public.admin_invoices(p_status text default 'pending')
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -367,6 +410,7 @@ begin
       'user_id', a.user_id, 'email', a.email, 'phone', a.phone, 'trial_ends_at', a.trial_ends_at,
       'paid_until', a.paid_until, 'store_limit', a.store_limit, 'last_store_count', a.last_store_count,
       'last_seen_at', a.last_seen_at, 'created_at', a.created_at,
+      'terms_version', a.terms_version, 'terms_accepted_at', a.terms_accepted_at,
       'status', case when a.paid_until > now() then 'active' when a.trial_ends_at > now() then 'trial' else 'expired' end
     ) order by a.created_at desc) from public.accounts a), '[]'::jsonb);
 end $$;
@@ -405,6 +449,7 @@ begin
     trial_store_limit    = coalesce((p->>'trial_store_limit')::int, trial_store_limit),
     max_months           = coalesce((p->>'max_months')::int, max_months),
     remind_days          = coalesce((p->>'remind_days')::int, remind_days),
+    terms_version        = coalesce(nullif(btrim(p->>'terms_version'), ''), terms_version),
     kaspi_qr_url         = case when p ? 'kaspi_qr_url' then nullif(p->>'kaspi_qr_url', '') else kaspi_qr_url end,
     payment_instructions = case when p ? 'payment_instructions' then nullif(p->>'payment_instructions', '') else payment_instructions end,
     updated_at           = now()
@@ -416,7 +461,7 @@ end $$;
 revoke execute on all functions in schema public from public, anon;
 grant execute on function
   public.get_license(int), public.create_invoice(int, int, text), public.cancel_my_invoice(bigint),
-  public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text),
+  public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text), public.accept_terms(),
   public.billing_price(int, int), public.is_admin(),
   public.admin_invoices(text), public.admin_confirm_invoice(bigint, text), public.admin_cancel_invoice(bigint, text),
   public.admin_accounts(), public.admin_grant_days(uuid, int, int), public.admin_get_config(), public.admin_update_config(jsonb)

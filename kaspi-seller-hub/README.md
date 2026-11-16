@@ -97,6 +97,14 @@ Cost price is entered per SKU (shared by all stores selling that SKU); commissio
 
 **Pick list** («Сборочный лист» on the Orders toolbar): for the selected orders, or with no selection for every order still to assemble (new / accepted), one A4 table — product, SKU, total quantity, which orders (store colour) need it, a tick box. Orders without known contents (tab-mode stores) are listed separately.
 
+## Subscription, offer and consent
+
+Billing (Supabase, Kaspi QR, invoices) is described in [`billing/README.md`](billing/README.md).
+The login screen has a clickwrap consent checkbox linking to the public offer and
+privacy policy (`legal/terms.html`, or your own URLs in `shared/billing-config.js` → `LEGAL`).
+Acceptance is logged server-side (`accept_terms()`, table `consents`: version, time, IP,
+user agent). Raising «Версия условий» in the admin page makes every client accept again.
+
 ## Demo mode (try it without Kaspi)
 
 `demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.

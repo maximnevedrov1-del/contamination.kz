@@ -23,6 +23,7 @@ import {
   formatDuration,
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
+import { legalUrl } from '../shared/billing-config.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
   h,
@@ -1637,6 +1638,87 @@ const fmtPhone = (p) => (p && /^7\d{10}$/.test(p) ? `+7 ${p.slice(1, 4)} ${p.sli
 /** Same formula as public.billing_price() on the server (display only — the server computes the invoice). */
 const priceOf = (pr, stores, months) => (pr.base_price + Math.max(0, stores - pr.base_stores) * pr.extra_store_price) * months;
 
+/* ---------- consent to the offer and privacy policy (clickwrap) ---------- */
+
+/** «☐ Я принимаю условия Публичной оферты и даю согласие … Политикой конфиденциальности» */
+function consentLabel(checked, onchange) {
+  const link = (kind, key) => h('a', { href: legalUrl(kind), target: '_blank', rel: 'noopener' }, t(key));
+  const box = h('input', { type: 'checkbox', checked, dataset: { fkey: 'consent' }, onchange: (e) => onchange(e.target.checked) });
+  return h('label', { class: 'consent' }, box, h('span', null, t('terms.before'), link('offer', 'terms.offer'), t('terms.middle'), link('privacy', 'terms.privacy'), t('terms.after')));
+}
+
+const terms = { open: false };
+
+/** Blocking window: tick the box → «Принимаю». Shown at login-less moments, e.g. new texts. */
+function openTerms() {
+  const dlg = $('termsDialog');
+  const lic = state.data?.license || {};
+  terms.open = true;
+  let checked = false;
+  let busy = false;
+  const render = () => {
+    const accept = h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn btn--primary',
+        disabled: !checked || busy,
+        onclick: async () => {
+          busy = true;
+          render();
+          const res = await send('ui:billingAcceptTerms');
+          busy = false;
+          if (res?.ok) {
+            closeTerms();
+            state.data.license = res.license;
+            toast(t('terms.accepted'), 'ok');
+            await loadState();
+          } else {
+            render();
+            toast(errorText(res?.error), 'error');
+          }
+        },
+      },
+      t(busy ? 'terms.saving' : 'terms.accept'),
+    );
+    clear(dlg).append(
+      h(
+        'div',
+        { class: 'pay terms' },
+        h('h2', { class: 'pay__title', id: 'termsTitle' }, t(lic.termsAcceptedAt ? 'terms.updatedTitle' : 'terms.title')),
+        h('p', { class: 'pay__sub' }, t(lic.termsAcceptedAt ? 'terms.updatedText' : 'terms.text')),
+        consentLabel(checked, (v) => ((checked = v), render())),
+        h(
+          'div',
+          { class: 'pay__actions' },
+          accept,
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'btn btn--ghost',
+              onclick: async () => {
+                await send('ui:billingLogout');
+                closeTerms();
+                await loadState();
+              },
+            },
+            t('pay.logout'),
+          ),
+        ),
+      ),
+    );
+  };
+  render();
+  if (!dlg.open) dlg.showModal();
+}
+
+function closeTerms() {
+  terms.open = false;
+  const dlg = $('termsDialog');
+  if (dlg.open) dlg.close();
+}
+
 /* ---------- Kaspi payment window ---------- */
 
 const pay = { open: false, blocking: false, timer: null };
@@ -1675,7 +1757,8 @@ function payMode(lic) {
 }
 
 function maybePay() {
-  if (pay.open || !state.data) return;
+  if (pay.open || terms.open || !state.data) return;
+  if (state.data.license?.needsConsent) return openTerms(); // the offer comes before any payment
   if (state.forcePay && state.data.license?.pendingInvoice) {
     state.forcePay = false;
     return openPay(false);
@@ -1796,6 +1879,7 @@ function renderPay() {
         ),
     ),
     h('p', { class: 'pay__wait' }, t('pay.waiting')),
+    inv && h('p', { class: 'pay__legal' }, t('terms.payBefore'), h('a', { href: legalUrl('offer'), target: '_blank', rel: 'noopener' }, t('terms.offerShort')), t('terms.payAfter')),
   );
   clear(dlg).append(body);
 }
@@ -1847,13 +1931,14 @@ function bindConnectDialog() {
 /** Full-page notice shown instead of a section when there is no usable subscription. */
 function paywall() {
   const lic = state.data.license || {};
+  if (lic.needsConsent) return h('section', { class: 'card' }, emptyState(t('terms.title'), t('terms.text'), h('button', { type: 'button', class: 'btn btn--primary', onclick: openTerms }, t('terms.open'))));
   const text = lic.status === 'loggedOut' ? 'account.paywallLoggedOut' : lic.status === 'offline' ? 'account.paywallOffline' : 'account.paywallExpired';
   return h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton'))));
 }
 
 function viewAccount() {
   const lic = state.data.license || { status: 'unconfigured' };
-  const ui = (state.acct ??= { email: '', step: 'email', busy: false, error: null, stores: null, months: 1, phone: null });
+  const ui = (state.acct ??= { email: '', step: 'email', busy: false, error: null, stores: null, months: 1, phone: null, consent: false });
   const card = (title, sub, ...body) => h('section', { class: 'card' }, h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, title), sub && h('div', { class: 'card__sub' }, sub))), h('div', { class: 'card__body' }, ...body));
   const errBox = () => ui.error && h('div', { class: 'banner', role: 'alert' }, icon('warn'), h('span', { class: 'banner__text' }, errorText(ui.error)));
   const run = async (fn) => {
@@ -1882,23 +1967,25 @@ function viewAccount() {
             'form',
             {
               class: 'field',
-              style: { justifyContent: 'flex-start', gap: '8px' },
+              style: { justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' },
               onsubmit: async (e) => {
                 e.preventDefault();
+                if (!ui.consent) return;
                 const res = await run(() => send('ui:billingRequestCode', { email: ui.email }));
                 if (res?.ok) ui.step = 'code';
                 renderView();
               },
             },
             emailInput,
-            h('button', { type: 'submit', class: 'btn btn--primary', disabled: ui.busy }, t(ui.busy ? 'account.sending' : 'account.sendCode')),
+            h('button', { type: 'submit', class: 'btn btn--primary', disabled: ui.busy || !ui.consent }, t(ui.busy ? 'account.sending' : 'account.sendCode')),
+            consentLabel(ui.consent, (v) => ((ui.consent = v), renderView())),
           )
         : h(
             'form',
             {
               onsubmit: async (e) => {
                 e.preventDefault();
-                const res = await run(() => send('ui:billingVerify', { email: ui.email, code: codeInput.value }));
+                const res = await run(() => send('ui:billingVerify', { email: ui.email, code: codeInput.value, consent: ui.consent }));
                 if (res?.ok) {
                   state.acct = null;
                   await loadState();
@@ -2142,6 +2229,7 @@ function routeFromHash() {
 function bindShell() {
   bindConnectDialog();
   // Esc closes the payment window only when the cabinet is not blocked.
+  $('termsDialog').addEventListener('cancel', (e) => e.preventDefault()); // must answer: accept or log out
   $('payDialog').addEventListener('cancel', (e) => {
     e.preventDefault();
     if (!pay.blocking) closePay();
@@ -2225,11 +2313,11 @@ function bindShell() {
   // Every minute: re-evaluate the subscription (cached in the worker; dates checked
   // locally), so an expiry or a new invoice shows the QR window without waiting for a sync.
   setInterval(async () => {
-    if (!state.data || state.syncing || pay.open) return;
+    if (!state.data || state.syncing || pay.open || terms.open) return;
     const lic = await send('ui:billingState', { force: false }).catch(() => null);
     if (!lic) return;
     const before = state.data.license || {};
-    const changed = lic.status !== before.status || lic.canUse !== before.canUse || lic.pendingInvoice?.id !== before.pendingInvoice?.id || lic.pendingInvoice?.amount !== before.pendingInvoice?.amount;
+    const changed = lic.status !== before.status || lic.canUse !== before.canUse || lic.needsConsent !== before.needsConsent || lic.pendingInvoice?.id !== before.pendingInvoice?.id || lic.pendingInvoice?.amount !== before.pendingInvoice?.amount;
     state.data.license = lic;
     if (changed) await loadState();
     else maybePay();

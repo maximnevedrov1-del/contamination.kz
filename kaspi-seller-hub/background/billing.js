@@ -51,7 +51,7 @@ async function http(path, { method = 'POST', body, token } = {}) {
   if (!res.ok) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
-    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'not_authenticated', 'forbidden'];
+    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'not_authenticated', 'forbidden'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -89,6 +89,12 @@ export async function verifyCode(email, code) {
   await saveSession(s);
   await set(LICENSE_KEY, null);
   return { ok: true };
+}
+
+/** The client ticked «I accept the offer and the privacy policy» → logged on the server. */
+export async function acceptTerms() {
+  await rpc('accept_terms');
+  return licenseView({ force: true });
 }
 
 export async function logout() {
@@ -172,9 +178,15 @@ export async function licenseView({ force = false, storeCount } = {}) {
   const coverageEnd = lic.coverage_end || (paid ? lic.paid_until : lic.trial_ends_at);
   const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
   const remindDays = lic.remind_days ?? 5;
+  // Offer/policy not accepted (or a new version published) → nothing works until the
+  // box is ticked. Old servers without terms_required never ask.
+  const needsConsent = !!lic.terms_required && lic.terms_version !== lic.terms_required;
   return {
     status,
-    canUse: status !== 'expired',
+    canUse: status !== 'expired' && !needsConsent,
+    needsConsent,
+    termsVersion: lic.terms_required || null,
+    termsAcceptedAt: lic.terms_accepted_at || null,
     storeLimit,
     coverageEnd,
     daysLeft: Math.max(0, Math.ceil(msLeft / DAY)),

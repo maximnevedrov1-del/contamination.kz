@@ -34,9 +34,10 @@ function render() {
   const lic = state.license;
   const blocked = lic && !lic.canUse;
   const inv = lic?.pendingInvoice;
-  const needPay = !!inv && (lic.renewalDue || blocked || inv.kind === 'addon');
+  const needPay = !!inv && !lic.needsConsent && (lic.renewalDue || blocked || inv.kind === 'addon');
   $('licenseNotice').hidden = !(blocked || needPay);
-  if (needPay) $('licenseNotice').textContent = `${t('notifications.payTitle', { amount: formatMoney(inv.amount) })} — ${t('pay.openQr')}`;
+  if (lic?.needsConsent) $('licenseNotice').textContent = `${t('terms.popup')} →`;
+  else if (needPay) $('licenseNotice').textContent = `${t('notifications.payTitle', { amount: formatMoney(inv.amount) })} — ${t('pay.openQr')}`;
   else if (blocked) $('licenseNotice').textContent = `${t(`account.status.${lic.status}`, { date: '' })} — ${t('account.paywallButton')}`;
   const allowed = state.allowedStoreIds;
   const stores = storeList().filter((s) => !allowed || allowed.includes(s.id));

@@ -132,7 +132,7 @@ let lastReconcileAt = 0;
  */
 async function billingMaintenance(force = false) {
   let lic = await currentLicense(force);
-  if (!B.isConfigured()) return lic;
+  if (!B.isConfigured() || lic?.needsConsent) return lic; // no invoices before the offer is accepted
   if (force || Date.now() - lastReconcileAt > 60000) {
     lastReconcileAt = Date.now();
     try {
@@ -1109,10 +1109,18 @@ const uiHandlers = {
       return { ok: true, license: lic };
     }),
   'ui:billingSetPhone': (p) => billingCall(async () => ({ ok: true, license: await B.setPhone(p) })),
+  'ui:billingAcceptTerms': () =>
+    billingCall(async () => {
+      const lic = await B.acceptTerms();
+      sync().catch((e) => console.warn(LOG, 'sync after consent', e));
+      return { ok: true, license: lic };
+    }),
   'ui:billingRequestCode': ({ email }) => billingCall(() => B.requestCode(email)),
-  'ui:billingVerify': ({ email, code }) =>
+  'ui:billingVerify': ({ email, code, consent }) =>
     billingCall(async () => {
       await B.verifyCode(email, code);
+      // The box was ticked on the login screen before the code was requested.
+      if (consent) await B.acceptTerms().catch((e) => console.warn(LOG, 'accept terms', e));
       const lic = await currentLicense(true);
       sync().catch((e) => console.warn(LOG, 'sync after login', e));
       return { ok: true, license: lic };
