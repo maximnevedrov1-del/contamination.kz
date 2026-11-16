@@ -252,6 +252,11 @@
      */
     api: {
       base: 'https://kaspi.kz/shop/api/v2',
+      // Card creation (guide.kaspi.kz/partner/ru/shop/api/goods/q3216–q3222): categories,
+      // attributes, attribute values, POST import, import status, import result.
+      productsBase: 'https://kaspi.kz/shop/api/products',
+      importPollMinutes: 2, // how often pending card uploads are re-checked
+      importGiveUpHours: 72,
       // Order states — the list endpoint returns nothing without a state filter.
       states: ['NEW', 'SIGN_REQUIRED', 'PICKUP', 'DELIVERY', 'KASPI_DELIVERY', 'ARCHIVE'],
       windowDays: 14, // creationDate range per request

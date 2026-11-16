@@ -559,13 +559,89 @@ begin
   return jsonb_build_object('claims', claims);
 end $$;
 
+-- ---------- price lists for Kaspi (automatic upload by URL) ----------
+-- Each connected store gets a secret feed id. The extension uploads the store's XML
+-- price list to Storage at  pricelists/<feed_id>/<shop_key>.xml ; the client pastes the
+-- public URL once in the Kaspi cabinet (Товары → Загрузить прайс-лист → Автоматическая
+-- загрузка) and Kaspi re-reads it every 60 minutes. The URL holds only prices/stock.
+create table if not exists public.price_feeds (
+  feed_id    uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  shop_key   text not null check (shop_key ~ '^shop-[a-z0-9]{1,13}$'),
+  created_at timestamptz not null default now(),
+  unique (user_id, shop_key)
+);
+alter table public.price_feeds enable row level security;
+
+-- Trial or paid, and the current offer accepted.
+create or replace function public.has_access()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.accounts a, public.billing_config c
+    where a.user_id = auth.uid() and c.id = 1
+      and (a.paid_until > now() or a.trial_ends_at > now())
+      and a.terms_version is not distinct from c.terms_version);
+$$;
+
+-- Feed for one store; at most as many stores as the subscription covers.
+create or replace function public.ensure_price_feed(p_shop_key text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare acc public.accounts; c public.billing_config; f public.price_feeds; lim int;
+begin
+  acc := public.ensure_account();
+  if not public.has_access() then raise exception 'subscription_required' using errcode = '42501'; end if;
+  if p_shop_key is null or p_shop_key !~ '^shop-[a-z0-9]{1,13}$' then raise exception 'invalid_shop' using errcode = '22023'; end if;
+  select * into f from public.price_feeds where user_id = acc.user_id and shop_key = p_shop_key;
+  if found then return jsonb_build_object('feed_id', f.feed_id, 'shop_key', f.shop_key); end if;
+  select * into c from public.billing_config where id = 1;
+  lim := case when acc.paid_until > now() then acc.store_limit else greatest(c.trial_store_limit, acc.store_limit) end;
+  if (select count(*) from public.price_feeds where user_id = acc.user_id) >= lim then
+    raise exception 'store_limit' using errcode = '42501';
+  end if;
+  insert into public.price_feeds (user_id, shop_key) values (acc.user_id, p_shop_key) returning * into f;
+  return jsonb_build_object('feed_id', f.feed_id, 'shop_key', f.shop_key);
+end $$;
+
+-- Storage rule: "<feed_id>/<shop_key>.xml" of the caller's own feed, while subscribed.
+create or replace function public.can_write_feed(p_name text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare parts text[] := string_to_array(coalesce(p_name, ''), '/');
+begin
+  if array_length(parts, 1) <> 2 or parts[1] !~ '^[0-9a-f-]{36}$' then return false; end if;
+  return public.has_access() and exists (
+    select 1 from public.price_feeds f
+    where f.feed_id = parts[1]::uuid and f.user_id = auth.uid() and parts[2] = f.shop_key || '.xml');
+end $$;
+
+do $$ begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    -- public bucket = files readable by URL without a key (Kaspi fetches them); 5 MB, XML only
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('pricelists', 'pricelists', true, 5242880, array['application/xml', 'text/xml'])
+      on conflict (id) do update set public = true, file_size_limit = 5242880, allowed_mime_types = array['application/xml', 'text/xml'];
+    drop policy if exists "pricelists insert own" on storage.objects;
+    drop policy if exists "pricelists update own" on storage.objects;
+    drop policy if exists "pricelists select own" on storage.objects;
+    drop policy if exists "pricelists delete own" on storage.objects;
+    create policy "pricelists insert own" on storage.objects for insert to authenticated
+      with check (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists update own" on storage.objects for update to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name))
+      with check (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists select own" on storage.objects for select to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists delete own" on storage.objects for delete to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name));
+  end if;
+end $$;
+
 -- ---------- who may call what ----------
 -- Supabase grants EXECUTE on new functions to anon AND authenticated by default:
 -- take it away from everyone, then allow only the client API below.
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function
   public.get_license(int, text[]), public.create_invoice(int, int, text), public.cancel_my_invoice(bigint),
-  public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text), public.accept_terms(),
+  public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text), public.accept_terms(), public.ensure_price_feed(text), public.can_write_feed(text),
   public.billing_price(int, int), public.is_admin(),
   public.admin_invoices(text, text, int, int), public.admin_confirm_invoice(bigint, text), public.admin_cancel_invoice(bigint, text),
   public.admin_accounts(text, text, int, int), public.admin_grant_days(uuid, int, int), public.admin_get_config(), public.admin_update_config(jsonb)

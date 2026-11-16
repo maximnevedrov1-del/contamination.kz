@@ -299,3 +299,32 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .dialog__title { margin: 0 0 var(--space-2); font-size: 16px; font-weight: 600; }
 .dialog__text { margin: 0; color: var(--text-2); white-space: pre-line; }
 .dialog__actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-5); }
+
+/* ---------- Выгрузка товаров ---------- */
+.grow { flex: 1; }
+.small { font-size: 12px; }
+.banner--warn { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); background: var(--warn-bg); }
+.catalog-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.catalog-toolbar .input[type=search] { width: 240px; }
+.catalog-table td { vertical-align: top; }
+.dialog--wide { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+.catalog-form { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
+.catalog-field { display: grid; gap: 4px; font-weight: 500; }
+.catalog-field .input, .catalog-field .select, .catalog-field textarea { width: 100%; }
+.catalog-field textarea { min-height: 60px; padding: 8px 10px; font: inherit; resize: vertical; }
+.catalog-section { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3) var(--space-4) var(--space-4); display: grid; gap: var(--space-3); }
+.catalog-section legend { padding: 0 6px; font-weight: 600; }
+.catalog-attrs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.store-picker { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.store-picker__all { flex-basis: 100%; }
+.catalog-overrides { display: grid; gap: var(--space-2); }
+.catalog-override { display: grid; grid-template-columns: minmax(140px, 1fr) 120px 120px; gap: var(--space-2); align-items: center; }
+.feed { border-top: 1px solid var(--border); padding: var(--space-4) 0; display: grid; gap: var(--space-3); }
+.feed:first-of-type { border-top: 0; }
+.feed__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.feed__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
+.feed__url { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.feed__url code { font-family: var(--font-mono); font-size: 12px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--surface-2); word-break: break-all; }
+.feed__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 640px) { .catalog-override { grid-template-columns: 1fr 1fr; } .catalog-override > :first-child { grid-column: 1 / -1; } }

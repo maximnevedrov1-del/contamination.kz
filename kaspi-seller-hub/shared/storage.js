@@ -19,6 +19,10 @@ export const KEYS = Object.freeze({
   costs: 'ksh.costs', // { [sku]: cost price in ₸ } — written by the worker only
   deadlineNotified: 'ksh.deadlineNotified', // session: order keys already warned about
   pickList: 'ksh.pickList', // session: pick list handed to print.html
+  catalog: 'ksh.catalog', // { [sku]: Product } — the seller's assortment (shared/catalog.js)
+  feeds: 'ksh.feeds', // { [shopId]: price-list settings + upload status }
+  imports: 'ksh.imports', // card uploads to Kaspi: [{ shopId, code, skus, status, result, at }]
+  contentCache: 'ksh.contentCache', // Kaspi categories/attributes (24 h)
 });
 
 /**
@@ -139,6 +143,14 @@ export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
 
 export const getCosts = () => read(local, KEYS.costs, {});
 export const setCosts = (v) => write(local, KEYS.costs, v);
+export const getCatalog = () => read(local, KEYS.catalog, {});
+export const setCatalog = (v) => write(local, KEYS.catalog, v);
+export const getFeeds = () => read(local, KEYS.feeds, {});
+export const setFeeds = (v) => write(local, KEYS.feeds, v);
+export const getImports = () => read(local, KEYS.imports, []);
+export const setImports = (v) => write(local, KEYS.imports, v);
+export const getContentCache = () => read(local, KEYS.contentCache, {});
+export const setContentCache = (v) => write(local, KEYS.contentCache, v);
 export const getPickList = () => read(session, KEYS.pickList, null);
 export const setPickList = (v) => write(session, KEYS.pickList, v);
 

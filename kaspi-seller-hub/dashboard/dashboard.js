@@ -24,6 +24,7 @@ import {
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
 import { legalUrl } from '../shared/billing-config.js';
+import { createCatalogView } from './catalog-view.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
   h,
@@ -54,7 +55,7 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'chat', 'settings', 'account'];
+const ROUTES = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
 const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, selected: new Set(), focus: 0 });
@@ -2123,7 +2124,11 @@ function viewAccount() {
   return h('div', { class: 'settings' }, statusCard, pendingCard, planCard, historyCard);
 }
 
+// "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
+const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog });
+
 const VIEWS = {
+  catalog: catalogView.view,
   orders: () => viewTable('orders'),
   returns: () => viewTable('returns'),
   refusals: () => viewTable('refusals'),
@@ -2148,7 +2153,7 @@ function renderView() {
   const lic = state.data.license;
   if (lic && !lic.canUse && state.route !== 'account') view.append(paywall());
   else {
-    const needsStores = !['settings', 'account'].includes(state.route) && !dataStores().length;
+    const needsStores = !['settings', 'account', 'catalog'].includes(state.route) && !dataStores().length;
     view.append(needsStores ? noStores() : VIEWS[state.route]());
   }
   renderSidebar();
@@ -2238,6 +2243,7 @@ function bindShell() {
   });
   window.addEventListener('hashchange', () => {
     state.route = routeFromHash();
+    if (state.route === 'catalog') catalogView.reload();
     renderAll();
     manageChatPolling();
     $('view').focus({ preventScroll: true });

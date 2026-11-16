@@ -51,7 +51,7 @@ async function http(path, { method = 'POST', body, token } = {}) {
   if (!res.ok) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
-    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'not_authenticated', 'forbidden'];
+    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'subscription_required', 'store_limit', 'invalid_shop', 'not_authenticated', 'forbidden'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -342,4 +342,38 @@ export async function setPhone({ phone }) {
 export async function cancelInvoice({ id }) {
   await rpc('cancel_my_invoice', { p_id: Number(id) });
   return licenseView({ force: true });
+}
+
+/* ---------------- price-list feeds (Supabase Storage) ---------------- */
+
+/** Secret feed of one store (created on first use). */
+export async function ensureFeed(shopKey) {
+  return rpc('ensure_price_feed', { p_shop_key: shopKey });
+}
+
+/** Public URL Kaspi fetches the price list from. */
+export const feedUrl = (feedId, shopKey) => `${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/pricelists/${feedId}/${shopKey}.xml`;
+
+/** Upload (overwrite) the store's XML price list. */
+export async function uploadFeed(feedId, shopKey, xml) {
+  const token = await accessToken();
+  if (!token) throw new BillingError('billingLoggedOut');
+  let res;
+  try {
+    res = await fetch(`${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/pricelists/${feedId}/${shopKey}.xml`, {
+      method: 'POST',
+      headers: { apikey: BILLING.supabaseAnonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/xml', 'x-upsert': 'true', 'cache-control': 'max-age=60' },
+      body: new Blob([xml], { type: 'application/xml' }),
+    });
+  } catch (e) {
+    throw new BillingError('billingNetwork', e.message);
+  }
+  if (res.status === 413) throw new BillingError('feedTooLarge');
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    // Storage answers 400 {"statusCode":"403","message":"new row violates row-level security policy"}
+    if (res.status === 401 || res.status === 403 || /row-level security|"403"|Unauthorized/i.test(text)) throw new BillingError('feedForbidden', text.slice(0, 200));
+    throw new BillingError('billingHttp', `${res.status} ${text.slice(0, 200)}`);
+  }
+  return feedUrl(feedId, shopKey);
 }

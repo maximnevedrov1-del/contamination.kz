@@ -242,3 +242,58 @@ export function toOrderItem(o) {
     },
   };
 }
+
+/* ---------------- product cards (Content API) ----------------
+ * guide.kaspi.kz/partner/ru/shop/api/goods: q3216 categories, q3217 attributes,
+ * q3218 attribute values, q3219 POST import, q3221 import status, q3222 import result.
+ * A card upload creates the product in Kaspi's catalog (Kaspi checks it); price and
+ * stock come from the price list, not from this API.
+ */
+const P = (path) => A().productsBase + path;
+
+/** @returns {Promise<Array<{code:string,title:string}>>} */
+export async function getCategories(token) {
+  return json(await apiRequest(token, P('/classification/categories'), { accept: 'application/json' }));
+}
+
+/** @returns {Promise<Array<{code:string,type:'boolean'|'enum'|'string'|'number',multiValued:boolean,mandatory:boolean}>>} */
+export async function getAttributes(token, category) {
+  return json(await apiRequest(token, P('/classification/attributes'), { params: { c: category }, accept: 'application/json' }));
+}
+
+/** @returns {Promise<Array<{code:string,name:string}>>} */
+export async function getAttributeValues(token, category, attribute) {
+  return json(await apiRequest(token, P('/classification/attribute/values'), { params: { c: category, a: attribute }, accept: 'application/json' }));
+}
+
+/**
+ * Upload product cards. Kaspi documents Content-Type text/plain with a JSON array body.
+ * @returns {Promise<{code:string,status:string}>} code = upload id for status/result
+ */
+export async function importProducts(token, items) {
+  const url = P('/import');
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Auth-Token': token, Accept: 'application/json', 'Content-Type': 'text/plain' },
+      body: JSON.stringify(items),
+      credentials: 'omit',
+    });
+  } catch (e) {
+    throw new ApiError('apiNetwork', 0, e.message);
+  }
+  if (res.status === 401 || res.status === 403) throw new ApiError('apiUnauthorized', res.status);
+  if (!res.ok) throw new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300));
+  return json(res);
+}
+
+/** @returns {Promise<{code:string,status:string}>} */
+export async function getImportStatus(token, code) {
+  return json(await apiRequest(token, P('/import'), { params: { i: code }, accept: 'application/json' }));
+}
+
+/** @returns {Promise<{errors:number,warnings:number,skipped:number,total:number,result:Record<string,any>}>} */
+export async function getImportResult(token, code) {
+  return json(await apiRequest(token, P('/import/result'), { params: { i: code }, accept: 'application/json' }));
+}

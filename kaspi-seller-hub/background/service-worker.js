@@ -36,6 +36,7 @@ import {
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
+import { catalogHandlers, pollImports, ALARM_IMPORTS } from './catalog-service.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
@@ -1166,7 +1167,15 @@ const billingCall = (fn) => fn().catch((e) => ({ ok: false, error: e.code || e.m
 const NEEDS_LICENSE = new Set([
   'ui:pack', 'ui:accept', 'ui:fetchInvoices', 'ui:print', 'ui:process', 'ui:refreshPayments',
   'ui:chatList', 'ui:chatThread', 'ui:chatSend', 'ui:openChatTabs', 'ui:connectApi',
+  'ui:catalogPublish', 'ui:catalogImport', 'ui:feedSettings', 'ui:feedSync',
+  'ui:contentCategories', 'ui:contentAttributes', 'ui:contentValues',
 ]);
+
+// Product upload ("Выгрузка товаров"): catalog, Kaspi cards, price lists per store.
+Object.assign(
+  uiHandlers,
+  catalogHandlers({ allowedShopIds: async (settings) => allowedStoreIds(settings, await currentLicense()) }),
+);
 
 /**
  * Subscription gate for UI actions: no licence → refused; items from stores
@@ -1177,7 +1186,7 @@ async function licenseGate(type, payload) {
   if (!NEEDS_LICENSE.has(type)) return null;
   const lic = await currentLicense();
   if (!lic.canUse) return { ok: false, error: 'subscriptionRequired' };
-  const shops = [...(payload?.items || []).map((i) => i.shopId), payload?.shopId].filter(Boolean);
+  const shops = [...(payload?.items || []).map((i) => i.shopId), payload?.shopId, ...(payload?.shopIds || [])].filter(Boolean);
   if (shops.length && type !== 'ui:connectApi') {
     const allowed = new Set(allowedStoreIds(await getSettings(), lic));
     if (shops.some((id) => !allowed.has(id))) return { ok: false, error: 'storeOverLimit' };
@@ -1225,6 +1234,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => console.warn(LOG, 'chat poll', e));
   if (alarm.name === ALARM_SYNC) sync().catch((e) => console.warn(LOG, 'sync', e));
+  if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => console.warn(LOG, 'card imports', e));
 });
 
 chrome.notifications.onClicked.addListener((id) => {

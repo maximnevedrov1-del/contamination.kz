@@ -105,6 +105,26 @@ privacy policy (`legal/terms.html`, or your own URLs in `shared/billing-config.j
 Acceptance is logged server-side (`accept_terms()`, table `consents`: version, time, IP,
 user agent). Raising «Версия условий» in the admin page makes every client accept again.
 
+## Product upload («Выгрузка товаров»)
+
+The seller keeps the whole assortment in the extension and puts products on sale in **all
+stores or only the ones ticked**. Two official Kaspi mechanisms are used
+(guide.kaspi.kz/partner/ru/shop/api/goods, …/shop/goods/price_list):
+
+- **Product cards** — `POST /shop/api/products/import` (categories, attributes and values come
+  from `/shop/api/products/classification/*`), sent with the API token of each chosen store;
+  status and result are polled (`/import?i=`, `/import/result?i=`).
+- **Price & stock** — a per-store XML price list (`kaspi_catalog`, `offer sku`, `availability
+  storeId/stockCount/preOrder`, `price`). It is uploaded to Supabase Storage
+  (`pricelists/<secret feed id>/<shop>.xml`, write access only for the owner while subscribed,
+  at most as many stores as paid); the seller pastes the URL once in the cabinet
+  (Товары → Загрузить прайс-лист → Автоматическая загрузка) and Kaspi re-reads it hourly.
+
+Kaspi takes products **missing** from a price list off sale, so a store's list is only switched on
+after the seller imported the current assortment (Kaspi Excel/XML price list) and confirmed it.
+Code: `shared/catalog.js` (XML builder, .xlsx/.xml reader), `background/catalog-service.js`,
+`dashboard/catalog-view.js`.
+
 ## Release build and anti-tampering
 
 `node tools/build-release.mjs` builds `dist/kaspi-seller-hub-<version>.zip` for the Chrome

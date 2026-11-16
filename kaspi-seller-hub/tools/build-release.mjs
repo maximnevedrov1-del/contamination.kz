@@ -58,6 +58,8 @@ if (anonKey.split('.').length === 3) {
 const selectors = fs.readFileSync(path.join(ROOT, 'shared/selectors.js'), 'utf8');
 const apiBase = (selectors.match(/base:\s*'([^']+)'/) || [])[1];
 if (apiBase !== 'https://kaspi.kz/shop/api/v2') fail(`shared/selectors.js api.base must be https://kaspi.kz/shop/api/v2 (now: ${apiBase}).`);
+const productsBase = (selectors.match(/productsBase:\s*'([^']+)'/) || [])[1];
+if (productsBase !== 'https://kaspi.kz/shop/api/products') fail(`shared/selectors.js api.productsBase must be https://kaspi.kz/shop/api/products (now: ${productsBase}).`);
 
 if (errors.length) {
   console.error('\n✗ Release build refused:\n' + errors.map((e) => '  - ' + e).join('\n') + '\n');
