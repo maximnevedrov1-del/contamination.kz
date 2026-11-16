@@ -119,9 +119,27 @@ function allowedStoreIds(settings, lic) {
 }
 
 /** Licence view for the current state (cached; re-checked online every few minutes). */
+/** SHA-256 of each connected Kaspi store id: lets the server give one free trial per
+ *  store without ever receiving the ids themselves. */
+const storeKeyCache = new Map();
+async function storeKeys(stores) {
+  const out = [];
+  for (const st of stores) {
+    const id = String(st.id ?? '');
+    if (!id) continue;
+    if (!storeKeyCache.has(id)) {
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`ksh:${id}`));
+      storeKeyCache.set(id, [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join(''));
+    }
+    out.push(storeKeyCache.get(id));
+  }
+  return out;
+}
+
 async function currentLicense(force = false) {
   const settings = await getSettings();
-  return B.licenseView({ force, storeCount: enabledStoreList(settings).length });
+  const stores = enabledStoreList(settings);
+  return B.licenseView({ force, storeCount: stores.length, storeKeys: await storeKeys(Object.values(settings.stores)) });
 }
 
 let lastReconcileAt = 0;

@@ -51,7 +51,7 @@ async function http(path, { method = 'POST', body, token } = {}) {
   if (!res.ok) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
-    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'not_authenticated', 'forbidden'];
+    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'not_authenticated', 'forbidden'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -104,11 +104,11 @@ export async function logout() {
   return { ok: true };
 }
 
-/** Valid access token, refreshed when about to expire; null when logged out. */
-async function accessToken() {
+/** Valid access token, refreshed when about to expire (or now, with force); null when logged out. */
+async function accessToken(force = false) {
   const s = await get(SESSION_KEY);
   if (!s) return null;
-  if (s.expires_at - 60000 > Date.now()) return s.access_token;
+  if (!force && s.expires_at - 60000 > Date.now()) return s.access_token;
   try {
     const fresh = await http('/auth/v1/token?grant_type=refresh_token', { body: { refresh_token: s.refresh_token } });
     await saveSession(fresh, { email: s.email, id: s.user_id });
@@ -118,6 +118,81 @@ async function accessToken() {
     await chrome.storage.local.remove([SESSION_KEY]); // refresh token revoked/expired → log in again
     return null;
   }
+}
+
+/* ---------- signed licence ----------
+ * With BILLING.licenseKeys set, the subscription dates and limits are taken ONLY from
+ * the access token, which Supabase Auth signs with the project's private key (the
+ * custom_access_token_hook in 001_billing.sql puts the licence into it). Editing
+ * chrome.storage, replaying or faking server answers cannot produce a valid signature.
+ */
+export const signingRequired = () => Array.isArray(BILLING.licenseKeys) && BILLING.licenseKeys.length > 0;
+
+const b64url = (str) => {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+};
+const ALGS = {
+  ES256: { kty: 'EC', import: { name: 'ECDSA', namedCurve: 'P-256' }, verify: { name: 'ECDSA', hash: 'SHA-256' } },
+  RS256: { kty: 'RSA', import: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, verify: { name: 'RSASSA-PKCS1-v1_5' } },
+};
+let keysPromise = null;
+function verifyingKeys() {
+  keysPromise ??= Promise.all(
+    BILLING.licenseKeys.map(async (jwk) => {
+      const alg = Object.keys(ALGS).find((a) => ALGS[a].kty === jwk.kty);
+      if (!alg) return null;
+      const { kty, crv, x, y, n, e } = jwk; // public parts only
+      const key = await crypto.subtle.importKey('jwk', { kty, crv, x, y, n, e }, ALGS[alg].import, false, ['verify']).catch(() => null);
+      return key && { kid: jwk.kid || null, alg, key };
+    }),
+  ).then((list) => list.filter(Boolean));
+  return keysPromise;
+}
+
+/** Claims of a JWT whose signature checks out against licenseKeys; otherwise null. */
+export async function verifiedClaims(jwt, expectedSub = null) {
+  const parts = String(jwt || '').split('.');
+  if (parts.length !== 3) return null;
+  let header, payload;
+  try {
+    header = JSON.parse(new TextDecoder().decode(b64url(parts[0])));
+    payload = JSON.parse(new TextDecoder().decode(b64url(parts[1])));
+  } catch {
+    return null;
+  }
+  if (!ALGS[header?.alg]) return null; // never "none" or HS256 (symmetric: the secret would have to ship in the extension)
+  const iss = BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1';
+  if (payload.iss !== iss || (expectedSub && payload.sub !== expectedSub)) return null;
+  const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const sig = b64url(parts[2]);
+  for (const k of await verifyingKeys()) {
+    if (k.alg !== header.alg || (header.kid && k.kid && k.kid !== header.kid)) continue;
+    if (await crypto.subtle.verify(ALGS[k.alg].verify, k.key, sig, data).catch(() => false)) return payload;
+  }
+  return null;
+}
+
+const sec = (iso) => (iso ? Math.floor(new Date(iso).getTime() / 1000) : null);
+/** Server answer and token disagree (just paid, consent given…) → the token is older. */
+const claimsStale = (k, lic) =>
+  !k || (k.pu ?? null) !== sec(lic.paid_until) || (k.te ?? null) !== sec(lic.trial_ends_at) || k.sl !== lic.paid_store_limit || (k.tv ?? null) !== (lic.terms_version ?? null) || (k.tr ?? null) !== (lic.terms_required ?? null);
+// Server state we already refreshed the token for (no refresh loop if the hook is off).
+let refreshedFor = null;
+
+/** The licence fields that matter for access, from the signed token. */
+async function trustedLicence(lic, fresh) {
+  let s = await get(SESSION_KEY);
+  let claims = await verifiedClaims(s?.access_token, s?.user_id);
+  // Fresh server data newer than the token → get a new token once (throttled).
+  const state = JSON.stringify([lic.paid_until, lic.trial_ends_at, lic.paid_store_limit, lic.terms_version, lic.terms_required]);
+  if (fresh && claimsStale(claims?.ksh, lic) && refreshedFor !== state) {
+    refreshedFor = state;
+    await accessToken(true);
+    s = await get(SESSION_KEY);
+    claims = await verifiedClaims(s?.access_token, s?.user_id);
+  }
+  return claims?.ksh ? claims : null;
 }
 
 async function rpc(fn, args = {}) {
@@ -131,14 +206,17 @@ async function rpc(fn, args = {}) {
  * licence is used for up to offlineGraceDays.
  * @param {{ force?: boolean, storeCount?: number }} [opts] storeCount is reported for the owner's admin page
  */
-export async function getLicense({ force = false, storeCount } = {}) {
+export async function getLicense({ force = false, storeCount, storeKeys } = {}) {
   if (!isConfigured()) return null;
   const cache = await get(LICENSE_KEY);
-  const fresh = cache && Date.now() - cache.fetchedAt < BILLING.refreshMinutes * 60000;
+  // A cache "from the future" was edited by hand → ignore it.
+  const age = cache ? Date.now() - cache.fetchedAt : Infinity;
+  const usable = cache && age >= -60000;
+  const fresh = usable && age < BILLING.refreshMinutes * 60000;
   if (cache && fresh && !force) return cache.data;
   if (!(await get(SESSION_KEY))) return null;
   try {
-    const data = await rpc('get_license', { p_store_count: storeCount ?? null });
+    const data = await rpc('get_license', { p_store_count: storeCount ?? null, p_store_keys: storeKeys?.length ? storeKeys : null });
     // Server clock offset, so a wrong local clock cannot stretch a licence.
     const skew = data.server_time ? new Date(data.server_time).getTime() - Date.now() : 0;
     await set(LICENSE_KEY, { data, fetchedAt: Date.now(), skew });
@@ -148,7 +226,7 @@ export async function getLicense({ force = false, storeCount } = {}) {
       await chrome.storage.local.remove([SESSION_KEY, LICENSE_KEY]);
       return null;
     }
-    if (cache && Date.now() - cache.fetchedAt < BILLING.offlineGraceDays * DAY) return cache.data;
+    if (usable && age < BILLING.offlineGraceDays * DAY) return cache.data;
     throw e;
   }
 }
@@ -157,34 +235,61 @@ export async function getLicense({ force = false, storeCount } = {}) {
  * What the rest of the extension needs to know — safe to send to pages.
  * status: 'unconfigured' (developer mode) | 'loggedOut' | 'trial' | 'active' | 'expired' | 'offline'
  */
-export async function licenseView({ force = false, storeCount } = {}) {
+export async function licenseView({ force = false, storeCount, storeKeys } = {}) {
   if (!isConfigured()) return { status: 'unconfigured', canUse: true, storeLimit: null };
   const session = await get(SESSION_KEY);
   if (!session) return { status: 'loggedOut', canUse: false, storeLimit: 0 };
   let lic;
   try {
-    lic = await getLicense({ force, storeCount });
+    lic = await getLicense({ force, storeCount, storeKeys });
   } catch (e) {
     return { status: 'offline', canUse: false, storeLimit: 0, email: session.email, error: e.code };
   }
   if (!lic) return { status: 'loggedOut', canUse: false, storeLimit: 0 };
   const cache = await get(LICENSE_KEY);
-  const now = Date.now() + (cache?.skew || 0);
+  const fresh = !!cache && Math.abs(Date.now() - cache.fetchedAt) < 5000;
+  // Server clock offset; a stored value is clamped so editing it cannot rewind time far.
+  const skew = Math.max(-DAY, Math.min(DAY, Number(cache?.skew) || 0));
+  let now = Date.now() + skew;
+
+  // Access-relevant fields: from the signed token when signing is configured.
+  let paidUntil = lic.paid_until;
+  let trialEnds = lic.trial_ends_at;
+  let paidLimit = lic.paid_store_limit;
+  let trialLimit = lic.store_limit;
+  let termsOk = !lic.terms_required || lic.terms_version === lic.terms_required;
+  if (signingRequired()) {
+    const claims = await trustedLicence(lic, fresh);
+    if (!claims) return { status: 'invalid', canUse: false, storeLimit: 0, email: session.email, error: 'licenseInvalid' };
+    const k = claims.ksh;
+    const iat = (claims.iat || 0) * 1000;
+    if (now < iat - 10 * 60000) return { status: 'clock', canUse: false, storeLimit: 0, email: session.email, error: 'licenseClock' }; // clock turned back
+    now = Math.max(now, iat);
+    // A token that expired long ago (network blocked to keep an old licence) stops working.
+    if ((claims.exp || 0) * 1000 + BILLING.offlineGraceDays * DAY < now) return { status: 'offline', canUse: false, storeLimit: 0, email: session.email, error: 'billingNetwork' };
+    paidUntil = k.pu ? new Date(k.pu * 1000).toISOString() : null;
+    trialEnds = k.te ? new Date(k.te * 1000).toISOString() : null;
+    paidLimit = k.sl;
+    trialLimit = Math.max(k.tsl || 0, k.sl || 0);
+    termsOk = !k.tr || k.tv === k.tr;
+  }
+
   // Dates are re-evaluated locally so a licence ends on time even between checks.
-  const paid = lic.paid_until && new Date(lic.paid_until).getTime() > now;
-  const trial = !paid && lic.trial_ends_at && new Date(lic.trial_ends_at).getTime() > now;
+  const paid = !!paidUntil && new Date(paidUntil).getTime() > now;
+  const trial = !paid && !!trialEnds && new Date(trialEnds).getTime() > now;
   const status = paid ? 'active' : trial ? 'trial' : 'expired';
-  const storeLimit = status === 'expired' ? 0 : lic.store_limit || lic.paid_store_limit || lic.pricing?.base_stores || 3;
-  const coverageEnd = lic.coverage_end || (paid ? lic.paid_until : lic.trial_ends_at);
+  const storeLimit = status === 'expired' ? 0 : (paid ? paidLimit : trialLimit) || lic.pricing?.base_stores || 3;
+  const coverageEnd = paid ? paidUntil : trialEnds;
   const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
   const remindDays = lic.remind_days ?? 5;
-  // Offer/policy not accepted (or a new version published) → nothing works until the
-  // box is ticked. Old servers without terms_required never ask.
-  const needsConsent = !!lic.terms_required && lic.terms_version !== lic.terms_required;
+  // Offer/policy not accepted (or a new version published) → nothing works until the box is ticked.
+  const needsConsent = !termsOk;
   return {
     status,
     canUse: status !== 'expired' && !needsConsent,
     needsConsent,
+    signed: signingRequired(),
+    trialBlocked: !!lic.trial_blocked,
     termsVersion: lic.terms_required || null,
     termsAcceptedAt: lic.terms_accepted_at || null,
     storeLimit,
@@ -194,8 +299,8 @@ export async function licenseView({ force = false, storeCount } = {}) {
     renewalDue: status === 'expired' || msLeft <= remindDays * DAY,
     email: lic.email || session.email,
     phone: lic.phone,
-    trialEndsAt: lic.trial_ends_at,
-    paidUntil: lic.paid_until,
+    trialEndsAt: trialEnds,
+    paidUntil,
     pricing: lic.pricing,
     payment: lic.payment,
     pendingInvoice: lic.pending_invoice,
@@ -217,7 +322,7 @@ export async function createInvoice({ stores, months, phone }) {
  * @returns {Promise<boolean>} true when the server was asked (licence then re-read)
  */
 export async function reconcileInvoice(storeCount, view) {
-  if (!isConfigured() || !view || ['loggedOut', 'offline', 'unconfigured'].includes(view.status)) return false;
+  if (!isConfigured() || !view || ['loggedOut', 'offline', 'unconfigured', 'invalid', 'clock'].includes(view.status)) return false;
   if (view.renewalDue) await rpc('ensure_renewal_invoice', { p_stores: storeCount });
   else if (storeCount > view.storeLimit) await rpc('request_store_addon', { p_total_stores: storeCount });
   else return false;

@@ -105,6 +105,16 @@ privacy policy (`legal/terms.html`, or your own URLs in `shared/billing-config.j
 Acceptance is logged server-side (`accept_terms()`, table `consents`: version, time, IP,
 user agent). Raising «Версия условий» in the admin page makes every client accept again.
 
+## Release build and anti-tampering
+
+`node tools/build-release.mjs` builds `dist/kaspi-seller-hub-<version>.zip` for the Chrome
+Web Store and refuses to build in developer mode, without a licence signing key, with a
+service_role key or with test hosts. It strips demo hosts and tightens the CSP
+(connect-src: kaspi.kz + your Supabase). Licence dates and limits are read only from the
+access token signed by Supabase Auth (ES256, `custom_access_token_hook`), verified with
+`BILLING.licenseKeys`; the free trial is bound to hashed Kaspi store ids. Details and
+limits: `billing/README.md` → «Защита от взлома».
+
 ## Demo mode (try it without Kaspi)
 
 `demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.

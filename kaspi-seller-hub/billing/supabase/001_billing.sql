@@ -102,6 +102,17 @@ create table if not exists public.consents (
 );
 create index if not exists consents_user_idx on public.consents (user_id, accepted_at desc);
 
+-- ---------- anti-abuse: one free trial per Kaspi store ----------
+-- The extension reports SHA-256 hashes of the connected stores' Kaspi IDs (never the
+-- IDs themselves). The first account that shows a store "claims" it; a NEW account that
+-- connects a store already claimed by someone else gets no free trial.
+create table if not exists public.store_claims (
+  store_key  text primary key check (store_key ~ '^[0-9a-f]{64}$'),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  claimed_at timestamptz not null default now()
+);
+alter table public.accounts add column if not exists trial_blocked boolean not null default false;
+
 create table if not exists public.admins (
   user_id uuid primary key references auth.users (id) on delete cascade
 );
@@ -112,6 +123,7 @@ alter table public.accounts       enable row level security;
 alter table public.invoices       enable row level security;
 alter table public.admins         enable row level security;
 alter table public.consents       enable row level security;
+alter table public.store_claims   enable row level security;
 
 drop policy if exists accounts_read_own on public.accounts;
 create policy accounts_read_own on public.accounts for select to authenticated using (user_id = auth.uid());
@@ -181,7 +193,8 @@ returns timestamptz language sql stable as $$
 $$;
 
 -- Licence for the extension: status, limits, pricing, payment details, open invoice.
-create or replace function public.get_license(p_store_count int default null)
+drop function if exists public.get_license(int);
+create or replace function public.get_license(p_store_count int default null, p_store_keys text[] default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare acc public.accounts; c public.billing_config; st text; lim int;
 begin
@@ -189,6 +202,16 @@ begin
   update public.accounts set last_store_count = coalesce(p_store_count, last_store_count), last_seen_at = now()
     where user_id = acc.user_id;
   select * into c from public.billing_config where id = 1;
+  if p_store_keys is not null and cardinality(p_store_keys) between 1 and 500 then
+    insert into public.store_claims (store_key, user_id)
+      select distinct k, acc.user_id from unnest(p_store_keys) k where k ~ '^[0-9a-f]{64}$'
+    on conflict (store_key) do nothing;
+    -- never paid + still on trial + a store already used by another account → trial is over
+    if acc.paid_until is null and acc.trial_ends_at > now() and exists (
+         select 1 from public.store_claims sc where sc.store_key = any (p_store_keys) and sc.user_id <> acc.user_id) then
+      update public.accounts set trial_ends_at = now(), trial_blocked = true where user_id = acc.user_id returning * into acc;
+    end if;
+  end if;
   st := case when acc.paid_until > now() then 'active' when acc.trial_ends_at > now() then 'trial' else 'expired' end;
   lim := case when st = 'active' then acc.store_limit
               when st = 'trial' then greatest(c.trial_store_limit, acc.store_limit)
@@ -204,6 +227,7 @@ begin
     'terms_version', acc.terms_version,
     'terms_accepted_at', acc.terms_accepted_at,
     'terms_required', c.terms_version,
+    'trial_blocked', acc.trial_blocked,
     'store_limit', lim,
     'paid_store_limit', acc.store_limit,
     'server_time', now(),
@@ -228,6 +252,15 @@ begin
   return ph;
 end $$;
 
+-- At most 30 invoices per client per 24 h (stops scripts flooding the table).
+create or replace function public.check_invoice_rate(p_user uuid)
+returns void language plpgsql stable security definer set search_path = public as $$
+begin
+  if (select count(*) from public.invoices where user_id = p_user and created_at > now() - interval '24 hours') >= 30 then
+    raise exception 'rate_limited' using errcode = '54000';
+  end if;
+end $$;
+
 -- New invoice chosen by the client (replaces an open one). Amount is computed server-side.
 create or replace function public.create_invoice(p_stores int, p_months int, p_phone text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -240,6 +273,7 @@ begin
   if p_stores is null or p_stores < 1 or p_stores > c.max_stores then raise exception 'invalid_stores' using errcode = '22023'; end if;
   ph := public.phone_or_account(p_phone, acc);
   n_stores := greatest(p_stores, c.base_stores);   -- the base price already covers base_stores
+  perform public.check_invoice_rate(acc.user_id);
   update public.invoices set status = 'cancelled', admin_note = coalesce(admin_note, 'replaced by client')
     where user_id = acc.user_id and status = 'pending';
   insert into public.invoices (user_id, kind, stores, months, amount, phone)
@@ -305,6 +339,7 @@ begin
     update public.invoices set stores = n, amount = amt where id = pend.id returning * into pend;
     return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
   end if;
+  perform public.check_invoice_rate(acc.user_id);
   if found then                                                        -- replace an unpaid manual plan
     update public.invoices set status = 'cancelled', admin_note = 'replaced by add-on' where id = pend.id;
   end if;
@@ -348,7 +383,10 @@ begin
   end;
   ip := left(btrim(split_part(coalesce(hdr->>'x-forwarded-for', hdr->>'x-real-ip', ''), ',', 1)), 64);
   ua := left(hdr->>'user-agent', 300);
-  insert into public.consents (user_id, version, ip, user_agent) values (acc.user_id, c.terms_version, nullif(ip, ''), ua);
+  -- one evidence row per version (repeat calls cannot flood the table)
+  if not exists (select 1 from public.consents where user_id = acc.user_id and version = c.terms_version) then
+    insert into public.consents (user_id, version, ip, user_agent) values (acc.user_id, c.terms_version, nullif(ip, ''), ua);
+  end if;
   update public.accounts set terms_version = c.terms_version, terms_accepted_at = now() where user_id = acc.user_id;
   return jsonb_build_object('version', c.terms_version, 'accepted_at', now());
 end $$;
@@ -410,7 +448,7 @@ begin
       'user_id', a.user_id, 'email', a.email, 'phone', a.phone, 'trial_ends_at', a.trial_ends_at,
       'paid_until', a.paid_until, 'store_limit', a.store_limit, 'last_store_count', a.last_store_count,
       'last_seen_at', a.last_seen_at, 'created_at', a.created_at,
-      'terms_version', a.terms_version, 'terms_accepted_at', a.terms_accepted_at,
+      'terms_version', a.terms_version, 'terms_accepted_at', a.terms_accepted_at, 'trial_blocked', a.trial_blocked,
       'status', case when a.paid_until > now() then 'active' when a.trial_ends_at > now() then 'trial' else 'expired' end
     ) order by a.created_at desc) from public.accounts a), '[]'::jsonb);
 end $$;
@@ -457,12 +495,47 @@ begin
   return public.admin_get_config();
 end $$;
 
+-- ---------- signed licence (Supabase Auth → Hooks → Custom Access Token) ----------
+-- Puts the licence into the user's access token. Supabase Auth signs the token with
+-- the project's asymmetric key (ES256); the extension checks that signature with the
+-- PUBLIC key from shared/billing-config.js. Editing the browser storage or faking the
+-- server's answer therefore cannot extend a subscription.
+create or replace function public.custom_access_token_hook(event jsonb)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare acc public.accounts; c public.billing_config; claims jsonb := coalesce(event->'claims', '{}'::jsonb);
+begin
+  select * into acc from public.accounts where user_id = (event->>'user_id')::uuid;
+  select * into c from public.billing_config where id = 1;
+  if acc.user_id is not null then
+    claims := jsonb_set(claims, '{ksh}', jsonb_build_object(
+      'pu',  floor(extract(epoch from acc.paid_until)),      -- paid until (unix s) or null
+      'te',  floor(extract(epoch from acc.trial_ends_at)),   -- trial ends (unix s)
+      'sl',  acc.store_limit,                                 -- paid store limit
+      'tsl', c.trial_store_limit,                             -- stores during the trial
+      'tv',  acc.terms_version,                               -- accepted offer version
+      'tr',  c.terms_version                                  -- required offer version
+    ));
+  end if;
+  return jsonb_build_object('claims', claims);
+end $$;
+
 -- ---------- who may call what ----------
-revoke execute on all functions in schema public from public, anon;
+-- Supabase grants EXECUTE on new functions to anon AND authenticated by default:
+-- take it away from everyone, then allow only the client API below.
+revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function
-  public.get_license(int), public.create_invoice(int, int, text), public.cancel_my_invoice(bigint),
+  public.get_license(int, text[]), public.create_invoice(int, int, text), public.cancel_my_invoice(bigint),
   public.ensure_renewal_invoice(int), public.request_store_addon(int), public.set_my_phone(text), public.accept_terms(),
   public.billing_price(int, int), public.is_admin(),
   public.admin_invoices(text), public.admin_confirm_invoice(bigint, text), public.admin_cancel_invoice(bigint, text),
   public.admin_accounts(), public.admin_grant_days(uuid, int, int), public.admin_get_config(), public.admin_update_config(jsonb)
 to authenticated;
+
+-- Only Supabase Auth may run the access-token hook.
+revoke execute on function public.custom_access_token_hook(jsonb) from authenticated, anon, public;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    grant usage on schema public to supabase_auth_admin;
+    grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
+  end if;
+end $$;

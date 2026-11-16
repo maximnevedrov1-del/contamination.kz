@@ -1747,7 +1747,7 @@ const memo = {
  * @returns {'blocking'|'show'|null}
  */
 function payMode(lic) {
-  if (!lic || lic.status === 'unconfigured' || lic.status === 'loggedOut' || lic.status === 'offline') return null;
+  if (!lic || ['unconfigured', 'loggedOut', 'offline', 'invalid', 'clock'].includes(lic.status)) return null;
   if (lic.status === 'expired') return 'blocking';
   const inv = lic.pendingInvoice;
   if (!inv) return null;
@@ -1819,7 +1819,7 @@ function renderPay() {
     renewal: t('pay.renewTitle', { count: lic.daysLeft ?? 0, date: until }),
   }[kind];
   const sub = {
-    expired: t('pay.expiredText'),
+    expired: lic.trialBlocked && !lic.paidUntil ? t('account.trialUsed') : t('pay.expiredText'),
     addon: t('pay.addonText', { date: until }),
     renewal: t('pay.renewText', { stores: inv?.stores ?? '' }),
   }[kind];
@@ -1932,7 +1932,7 @@ function bindConnectDialog() {
 function paywall() {
   const lic = state.data.license || {};
   if (lic.needsConsent) return h('section', { class: 'card' }, emptyState(t('terms.title'), t('terms.text'), h('button', { type: 'button', class: 'btn btn--primary', onclick: openTerms }, t('terms.open'))));
-  const text = lic.status === 'loggedOut' ? 'account.paywallLoggedOut' : lic.status === 'offline' ? 'account.paywallOffline' : 'account.paywallExpired';
+  const text = { loggedOut: 'account.paywallLoggedOut', offline: 'account.paywallOffline', invalid: 'account.paywallInvalid', clock: 'account.paywallClock' }[lic.status] || (lic.trialBlocked ? 'account.trialUsed' : 'account.paywallExpired');
   return h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton'))));
 }
 

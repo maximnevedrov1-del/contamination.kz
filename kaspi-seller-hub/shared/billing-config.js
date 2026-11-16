@@ -15,6 +15,12 @@ export const BILLING = Object.freeze({
   // trusted while the server cannot be reached.
   refreshMinutes: 10,
   offlineGraceDays: 3,
+  // PUBLIC signing key(s) of the Supabase project (Settings → JWT Keys, the ES256
+  // key's public JWK — the entries of https://<project>.supabase.co/auth/v1/.well-known/jwks.json).
+  // When set, the subscription is read ONLY from tokens signed by this key, so it cannot
+  // be faked by editing the browser storage. Paste the objects as they are, e.g.
+  //   licenseKeys: [{ kty: 'EC', crv: 'P-256', x: '…', y: '…', kid: '…', alg: 'ES256' }],
+  licenseKeys: [],
 });
 
 /**

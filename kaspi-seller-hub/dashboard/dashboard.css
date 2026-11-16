@@ -40,7 +40,7 @@ body { min-width: 1280px; }
 }
 .plan-chip--trial { background: var(--info-bg); color: var(--info); }
 .plan-chip--active { background: var(--ok-bg); color: var(--ok); }
-.plan-chip--expired, .plan-chip--offline, .plan-chip--loggedOut { background: var(--danger-bg); color: var(--danger); }
+.plan-chip--expired, .plan-chip--offline, .plan-chip--loggedOut, .plan-chip--invalid, .plan-chip--clock { background: var(--danger-bg); color: var(--danger); }
 .sidebar__connect { width: 100%; justify-content: center; margin-top: var(--space-3); }
 .connect__field { display: grid; gap: 4px; margin-top: var(--space-3); font-weight: 500; }
 .connect__field .input { width: 100%; }
