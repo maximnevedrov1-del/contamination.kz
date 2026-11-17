@@ -1,0 +1,88 @@
+# Checks of the Kaspi Seller Hub extension on every push / pull request that touches it.
+name: kaspi-seller-hub
+
+on:
+  push:
+    paths: ['kaspi-seller-hub/**', '.github/workflows/kaspi-seller-hub.yml']
+  pull_request:
+    paths: ['kaspi-seller-hub/**', '.github/workflows/kaspi-seller-hub.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: kaspi-seller-hub
+
+jobs:
+  unit:
+    name: Unit tests, syntax, translations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax of every script
+        run: |
+          find background dashboard popup shared content tools -name '*.js' -o -name '*.mjs' | grep -v vendor | while read -r f; do
+            node --check "$f" || exit 1
+          done
+      - name: manifest.json and translations are valid JSON
+        run: for f in manifest.json locales/*.json; do node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" || exit 1; done
+      - name: Unit tests (Kazakhstan time, retries, price-list guard, migrations, error journal)
+        run: TZ=America/New_York node tests/unit/robust.test.mjs
+      - name: Russian and Kazakh texts match
+        run: node tests/unit/locales.test.mjs
+      - name: No eval / remote code in the extension
+        run: |
+          if grep -rnE '\beval\s*\(|new Function\s*\(' background dashboard popup shared content --include=*.js; then
+            echo 'eval / new Function found'; exit 1
+          fi
+      - name: Release build refuses an unconfigured build
+        run: |
+          if node tools/build-release.mjs; then echo 'release build must refuse an empty subscription config'; exit 1; fi
+
+  sql:
+    name: Database (billing, consent, attacks, price lists)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql 16
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: SQL tests
+        run: tests/sql/run.sh
+
+  catalog:
+    name: Price list / Excel import (in Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright + Chromium
+        working-directory: kaspi-seller-hub/tests/e2e
+        run: npm install --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Catalog unit tests
+        working-directory: kaspi-seller-hub/tests/e2e
+        run: |
+          node catunit.js | tee out.txt
+          grep -q '^ALL' out.txt
