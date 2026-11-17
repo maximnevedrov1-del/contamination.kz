@@ -18,7 +18,7 @@ for t in cattest billtest hack billtest2; do
 done
 # API / demo suites use their own copies
 rm -rf $S/apicopy && copyext $S/apicopy && sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" $S/apicopy/shared/selectors.js
-for t in apitest run2 demofile feat uxtest learn; do
+for t in apitest run2 demofile feat uxtest learn photoprint; do
   pkill -f "node mockapi.js"; (node mockapi.js > mock.log 2>&1 &); sleep 1; rm -rf apiprof profile2
   echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
 done

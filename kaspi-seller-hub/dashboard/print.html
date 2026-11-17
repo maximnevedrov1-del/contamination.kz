@@ -26,6 +26,11 @@
       .page__label { position: absolute; top: 3mm; right: 5mm; font: 9px var(--font-sans); color: #888; }
       .page img.pdf-page { display: block; width: 100%; height: auto; }
       .page iframe { width: 100%; height: 270mm; border: 0; }
+      .page--sheet { padding: 0; }
+      .page--sheet img.pdf-page { width: 100%; height: 100%; object-fit: contain; }
+      .orig-link { margin: -8px 0 0; font-size: 13px; }
+      .pick-photo { width: 52px; padding: 3px !important; }
+      .pick-photo img { display: block; width: 46px; height: 46px; object-fit: contain; }
       .empty { padding: 80px; text-align: center; color: var(--text-3); }
       .pick { font: 12px var(--font-sans); }
       .pick h2 { margin: 0 0 4px; font-size: 18px; }
@@ -45,6 +50,8 @@
         .pages { padding: 0; gap: 0; display: block; }
         .page { width: auto; min-height: 0; padding: 0; box-shadow: none; border-radius: 0; break-after: page; page-break-after: always; }
         .page:last-child { break-after: auto; page-break-after: auto; }
+        .page--sheet { overflow: hidden; }
+        img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
     </style>
   </head>

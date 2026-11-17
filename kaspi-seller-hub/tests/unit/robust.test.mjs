@@ -45,6 +45,7 @@ const M = await import('../../shared/migrations.js');
 const L = await import('../../shared/errorlog.js');
 const C = await import('../../background/catalog-service.js');
 const I = await import('../../shared/i18n.js');
+const P = await import('../../shared/photos.js');
 
 /* ---------------- Kazakhstan time (UTC+5) ---------------- */
 await test('dayKey: 19:30 UTC is already the next day in Kazakhstan', () => {
@@ -211,6 +212,23 @@ await test('report is plain text with version and errors', () => {
   const txt = L.formatReport({ version: '1.2.3', browser: 'Chrome/130', dataVersion: 1, stores: 3, apiStores: 2, licence: 'active', errors: [{ at: Date.UTC(2026, 0, 1, 19), where: 'worker:sync', code: 'apiHttp', status: 502, msg: '', n: 2 }] });
   assert.match(txt, /Версия: 1\.2\.3/);
   assert.match(txt, /2026-01-02 00:00 worker:sync \[apiHttp 502\] ×2/);
+});
+
+/* ---------------- product photos ---------------- */
+await test('photo: Kaspi CDN links and small images allowed', () => {
+  assert.ok(P.isAllowedPhoto('https://resources.cdn-kaspi.kz/img/m/p/h44/h88/63854412398622.jpg'));
+  assert.ok(P.isAllowedPhoto('https://kaspi.kz/img/x.png'));
+  assert.ok(P.isAllowedPhoto('data:image/jpeg;base64,/9j/4AAQSkZJRg=='));
+});
+await test('photo: other hosts, http, look-alike hosts, scripts refused', () => {
+  for (const bad of ['http://resources.cdn-kaspi.kz/a.jpg', 'https://evil.com/a.jpg', 'https://kaspi.kz.evil.com/a.jpg', 'https://evilkaspi.kz/a.jpg', 'https://user:pw@kaspi.kz/a.jpg', 'javascript:alert(1)', 'data:text/html;base64,PHNjcmlwdD4=', 'data:image/svg+xml;base64,PHN2Zz4=', '', null]) assert.equal(P.isAllowedPhoto(bad), false, String(bad));
+  assert.equal(P.isAllowedPhoto('data:image/jpeg;base64,' + 'A'.repeat(P.MAX_PHOTO_DATA)), false);
+});
+await test('photo: seller photo wins, then catalog, else none', () => {
+  const cat = { A1: { images: ['https://other.com/x.jpg', 'https://resources.cdn-kaspi.kz/a.jpg'] } };
+  assert.equal(P.photoFor('A1', {}, cat), 'https://resources.cdn-kaspi.kz/a.jpg');
+  assert.equal(P.photoFor('A1', { A1: 'https://resources.cdn-kaspi.kz/own.jpg' }, cat), 'https://resources.cdn-kaspi.kz/own.jpg');
+  assert.equal(P.photoFor('B2', {}, cat), null);
 });
 
 console.log(failures.length ? `${failures.length} FAILED (${passed} passed)` : `ALL ${passed} PASSED`);

@@ -26,7 +26,8 @@ import '../shared/selectors.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
-import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
+import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog } from '../shared/storage.js';
+import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import {
   h,
   clear,
@@ -610,6 +611,82 @@ function exportRows(route, list) {
   toast(t('export.done', { count: list.length }), 'ok');
 }
 
+/* ---------- product photos (shared/photos.js) ---------- */
+const photoOf = (key) => photoFor(key, state.photos || {}, state.catalog || {});
+
+/** Product thumbnail; with `edit`, a click opens the photo dialog for that SKU. */
+function thumb(key, { size = 48, edit = false, name = '', onSaved } = {}) {
+  const src = photoOf(key);
+  const img = src
+    ? h('img', { class: 'thumb', src, alt: name || key || '', loading: 'lazy', style: { width: `${size}px`, height: `${size}px` }, onerror: (e) => e.target.replaceWith(h('span', { class: 'thumb thumb--empty', style: { width: `${size}px`, height: `${size}px` } }, '📦')) })
+    : h('span', { class: 'thumb thumb--empty', style: { width: `${size}px`, height: `${size}px` }, 'aria-hidden': 'true' }, '📦');
+  if (!edit || !key) return img;
+  return h('button', { type: 'button', class: 'thumb-btn', title: t(src ? 'photo.change' : 'photo.add'), 'aria-label': t(src ? 'photo.change' : 'photo.add'), dataset: { photo: key }, onclick: () => openPhoto(key, name, onSaved) }, img, !src && h('span', { class: 'thumb-btn__plus' }, '+'));
+}
+
+/** Set the photo of a SKU: link to a Kaspi product image, or a file from the computer. */
+function openPhoto(sku, name, onSaved) {
+  let dlg = $('photoDialog');
+  if (!dlg) {
+    dlg = h('dialog', { id: 'photoDialog', class: 'dialog', 'aria-labelledby': 'photoTitle' });
+    document.body.append(dlg);
+  }
+  let value = state.photos?.[sku] || '';
+  const preview = h('div', { class: 'photo-preview' });
+  const err = h('p', { class: 'neg small', hidden: true });
+  const showPreview = () => {
+    clear(preview).append(isAllowedPhoto(value) ? h('img', { src: value, alt: name || sku }) : h('span', { class: 'muted' }, photoOf(sku) && !value ? t('photo.fromCatalog') : t('photo.none')));
+    if (!value && photoOf(sku)) preview.prepend(h('img', { src: photoOf(sku), alt: name || sku }));
+  };
+  const url = h('input', { class: 'input', type: 'url', placeholder: 'https://resources.cdn-kaspi.kz/…', value: value.startsWith('data:') ? '' : value, oninput: (e) => {
+    const v = e.target.value.trim();
+    err.hidden = !v || isAllowedPhoto(v);
+    err.textContent = t('errors.photoNotAllowed');
+    if (!v || isAllowedPhoto(v)) (value = v), showPreview();
+  } });
+  const file = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      value = await fileToPhoto(f);
+      url.value = '';
+      err.hidden = true;
+      showPreview();
+    } catch (x) {
+      err.hidden = false;
+      err.textContent = errorText(x.message);
+    }
+  } });
+  const save = async (src) => {
+    const res = await send('ui:setPhoto', { sku, src });
+    if (!res?.ok) return toast(errorText(res?.error), 'error');
+    state.photos = await getPhotos();
+    dlg.close();
+    toast(t(src ? 'photo.saved' : 'photo.removed'), 'ok');
+    renderView();
+    onSaved?.();
+  };
+  clear(dlg).append(
+    h('h2', { class: 'dialog__title', id: 'photoTitle' }, t('photo.title')),
+    h('p', { class: 'muted small' }, name || '', ' ', h('span', { class: 'mono' }, sku)),
+    preview,
+    h('label', { class: 'catalog-field' }, h('span', null, t('photo.urlLabel')), url),
+    h('p', { class: 'muted small' }, t('photo.urlHint')),
+    err,
+    h('div', { class: 'dialog__actions' },
+      h('button', { type: 'button', class: 'btn', onclick: () => file.click() }, t('photo.file')),
+      state.photos?.[sku] && h('button', { type: 'button', class: 'btn btn--ghost btn--danger', onclick: () => save(null) }, t('photo.remove')),
+      h('span', { class: 'grow' }),
+      h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, t('common.close')),
+      h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'photo-save' }, onclick: () => (isAllowedPhoto(value) ? save(value) : ((err.hidden = false), (err.textContent = t('errors.photoNotAllowed')))) }, t('photo.save')),
+      file,
+    ),
+  );
+  showPreview();
+  if (!dlg.open) dlg.showModal();
+}
+
 /* ---------- order card: contents, deadline, money, actions ---------- */
 function openOrder(r) {
   let dlg = $('orderDialog');
@@ -639,10 +716,11 @@ function openOrder(r) {
       h('h3', { class: 'order__sub' }, t('order.items')),
       entries.length
         ? h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
-            h('thead', null, h('tr', null, h('th', null, t('order.product')), h('th', { class: 'num' }, t('order.qty')), h('th', { class: 'num' }, t('order.price')), h('th', { class: 'num' }, t('products.cost')))),
-            h('tbody', null, entries.map((e) => h('tr', null,
-              h('td', null, e.name || e.category || '—', e.sku && h('div', { class: 'muted mono small' }, e.sku)),
-              h('td', { class: 'num' }, formatNumber(e.quantity || 1)),
+            h('thead', null, h('tr', null, h('th', { class: 'order__photo-col' }, h('span', { class: 'sr-only' }, t('photo.title'))), h('th', null, t('order.product')), h('th', { class: 'num' }, t('order.qty')), h('th', { class: 'num' }, t('order.price')), h('th', { class: 'num' }, t('products.cost')))),
+            h('tbody', null, entries.map((e) => h('tr', { class: 'order__line' },
+              h('td', null, thumb(productKey(e), { size: 72, edit: true, name: e.name, onSaved: () => openOrder(r) })),
+              h('td', null, h('div', { class: 'order__product' }, e.name || e.category || '—'), e.sku && h('div', { class: 'muted mono small' }, e.sku)),
+              h('td', { class: 'num' }, h('span', { class: ['order__qty', (e.quantity || 1) > 1 && 'order__qty--many'] }, `× ${formatNumber(e.quantity || 1)}`)),
               h('td', { class: 'num' }, formatMoney(e.total ?? (e.price || 0) * (e.quantity || 1))),
               h('td', { class: 'num' }, state.costs[productKey(e)] != null ? formatMoney(state.costs[productKey(e)]) : h('span', { class: 'muted' }, '—')),
             ))),
@@ -658,7 +736,7 @@ function openOrder(r) {
       ),
     ),
   );
-  dlg.showModal();
+  if (!dlg.open) dlg.showModal(); // re-rendered after a photo was set
 }
 
 const hasApi = (items) => items.some((i) => stores()[i.shopId]?.api?.connected);
@@ -764,7 +842,7 @@ async function openPickList(allRows) {
     }
     for (const e of o.entries) {
       const k = productKey(e);
-      const line = lines.get(k) || { name: e.name || e.category, sku: e.sku, qty: 0, orders: [] };
+      const line = lines.get(k) || { name: e.name || e.category, sku: e.sku, photo: photoOf(k), qty: 0, orders: [] };
       line.qty += e.quantity || 1;
       line.orders.push({ id: o.id, store: storeName(o.shopId), color: storeColor(o.shopId), qty: e.quantity || 1 });
       lines.set(k, line);
@@ -851,7 +929,7 @@ function viewProducts() {
     h(
       'thead',
       null,
-      h('tr', null, ['analytics.product', 'products.category', 'nav.stores', 'analytics.units', 'analytics.revenue', 'products.cost', 'products.commission', 'products.profit', 'products.margin'].map((k, i) => h('th', { scope: 'col', class: i >= 3 && 'num' }, t(k)))),
+      h('tr', null, h('th', { scope: 'col' }, t('photo.title')), ['analytics.product', 'products.category', 'nav.stores', 'analytics.units', 'analytics.revenue', 'products.cost', 'products.commission', 'products.profit', 'products.margin'].map((k, i) => h('th', { scope: 'col', class: i >= 3 && 'num' }, t(k)))),
     ),
     h(
       'tbody',
@@ -860,6 +938,7 @@ function viewProducts() {
         h(
           'tr',
           null,
+          h('td', null, thumb(p.sku || p.name, { size: 44, edit: true, name: p.name })),
           h('td', { class: 'wrap' }, p.name || p.sku, p.sku ? h('div', { class: 'muted mono' }, p.sku) : null),
           h('td', { class: 'wrap muted' }, p.category || '—'),
           h('td', { class: 'wrap' }, [...p.shops].map((id) => h('div', null, storeChip(id)))),
@@ -1508,6 +1587,12 @@ function viewSettings() {
         h('label', { class: 'field__label', for: 'warnHours' }, t('settings.warnHours')),
         h('input', { id: 'warnHours', type: 'number', min: 0, step: 0.5, class: 'input', style: { width: '100px' }, value: st.deadlines.warnHours ?? 2, onchange: (e) => updateSettings({ deadlines: { ...st.deadlines, warnHours: Math.max(0, Number(e.target.value) || 0) } }) }),
       ),
+    ),
+    card(
+      t('settings.printTitle'),
+      t('settings.printHint'),
+      h('div', { class: 'field' }, h('span', { class: 'field__label' }, t('settings.printPaper')),
+        seg(st.print?.paper || 'original', [['original', t('settings.paperOriginal')], ['a4', t('settings.paperA4')]], (v) => updateSettings({ print: { ...st.print, paper: v } }, { silent: true }))),
     ),
     card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
     card(
@@ -2649,6 +2734,7 @@ async function loadState() {
   state.data = await send('ui:getState');
   state.chat = await getChat();
   state.costs = await getCosts();
+  [state.photos, state.catalog] = await Promise.all([getPhotos(), getCatalog()]);
   renderAll();
   maybePay();
 }
@@ -2792,6 +2878,14 @@ function bindShell() {
     if (pollChanged) manageChatPolling();
   });
   onLangChange(() => renderAll());
+  // photos: set here, or products added in «Выгрузка товаров» (their first image)
+  onKeyChange(KEYS.photos, (next) => {
+    state.photos = next || {};
+    if (!$('photoDialog')?.open) renderView();
+  });
+  onKeyChange(KEYS.catalog, (next) => {
+    state.catalog = next || {};
+  });
   onKeyChange(KEYS.costs, (next) => {
     state.costs = next || {};
     if (state.route !== 'products') renderView();

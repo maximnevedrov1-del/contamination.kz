@@ -12,7 +12,8 @@
  */
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts } from '../shared/storage.js';
+import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos } from '../shared/storage.js';
+import { isAllowedPhoto } from '../shared/photos.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
 
@@ -351,17 +352,31 @@ export function catalogHandlers({ allowedShopIds }) {
      * Backup of what lives only in this browser: settings, cost prices, catalog, price-list
      * settings. API tokens are NOT included (a file with tokens would give access to the stores).
      */
+    /** The seller's photo for a SKU (Kaspi image link or a resized file); null removes it. */
+    'ui:setPhoto': async ({ sku, src }) => {
+      if (typeof sku !== 'string' || !sku.trim() || sku.length > 200) return { ok: false, error: 'catalogInvalid' };
+      if (src != null && !isAllowedPhoto(src)) return { ok: false, error: 'photoNotAllowed' };
+      await lock(async () => {
+        const photos = await getPhotos();
+        if (src == null) delete photos[sku];
+        else photos[sku] = src;
+        await setPhotos(photos);
+      });
+      return { ok: true };
+    },
+
     'ui:backupExport': async () => {
-      const [settings, costs, catalog, feeds] = await Promise.all([getSettings(), getCosts(), getCatalog(), getFeeds()]);
+      const [settings, costs, catalog, feeds, photos] = await Promise.all([getSettings(), getCosts(), getCatalog(), getFeeds(), getPhotos()]);
       return {
         ok: true,
         backup: {
           app: 'kaspi-seller-hub',
           version: 1,
           createdAt: new Date().toISOString(),
-          settings: { lang: settings.lang, theme: settings.theme, chatPollSec: settings.chatPollSec, notifications: settings.notifications, deadlines: settings.deadlines, profit: settings.profit },
+          settings: { lang: settings.lang, theme: settings.theme, chatPollSec: settings.chatPollSec, notifications: settings.notifications, deadlines: settings.deadlines, profit: settings.profit, print: settings.print },
           stores: Object.fromEntries(storesOf(settings).map((s) => [s.id, { name: s.name, alias: s.alias || '', color: s.color }])),
           costs,
+          photos,
           catalog,
           feeds: Object.fromEntries(Object.entries(feeds).map(([id, f]) => [id, { merchantId: f.merchantId || '', company: f.company || '', warehouses: f.warehouses || [] }])),
         },
@@ -388,6 +403,9 @@ export function catalogHandlers({ allowedShopIds }) {
         const costs = await getCosts();
         for (const [k, v] of Object.entries(b.costs || {}).slice(0, 50000)) if (typeof k === 'string' && k.length <= 200 && num(v) != null) (costs[k] = num(v)), costsN++;
         await setCosts(costs);
+        const photos = await getPhotos();
+        for (const [k, v] of Object.entries(b.photos || {}).slice(0, 20000)) if (typeof k === 'string' && k.length <= 200 && isAllowedPhoto(v)) photos[k] = v;
+        await setPhotos(photos);
         const catalog = await getCatalog();
         for (const raw of Object.values(b.catalog || {}).slice(0, 50000)) {
           const stores = Object.fromEntries(Object.entries(raw?.stores || {}).filter(([id]) => idMap[id]).map(([id, o]) => [idMap[id], o]));
@@ -410,6 +428,7 @@ export function catalogHandlers({ allowedShopIds }) {
         const patch = {};
         if (['ru', 'kk'].includes(st.lang)) patch.lang = st.lang;
         if (['system', 'light', 'dark'].includes(st.theme)) patch.theme = st.theme;
+        if (['original', 'a4'].includes(st.print?.paper)) patch.print = { paper: st.print.paper };
         if (st.notifications && typeof st.notifications === 'object') patch.notifications = { ...settings.notifications, ...Object.fromEntries(Object.entries(st.notifications).filter(([k, v]) => k in settings.notifications && typeof v === 'boolean')) };
         if (st.deadlines && num(st.deadlines.acceptHours) != null) patch.deadlines = { acceptHours: num(st.deadlines.acceptHours), warnHours: num(st.deadlines.warnHours) ?? settings.deadlines.warnHours };
         if (st.profit && typeof st.profit === 'object') patch.profit = { defaultCommission: num(st.profit.defaultCommission), byCategory: Object.fromEntries(Object.entries(st.profit.byCategory || {}).filter(([, v]) => num(v) != null).map(([k, v]) => [String(k).slice(0, 200), num(v)])) };

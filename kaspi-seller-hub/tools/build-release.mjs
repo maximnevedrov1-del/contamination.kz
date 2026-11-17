@@ -129,7 +129,8 @@ manifest.content_security_policy = {
     "object-src 'self'",
     "frame-src 'self' blob:",
     `connect-src 'self' https://kaspi.kz https://*.kaspi.kz ${supa}`,
-    `img-src 'self' data: blob: ${supa}`,
+    // product photos: Kaspi's own image hosts only (shared/photos.js → PHOTO_HOSTS)
+    `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.kaspi.kz https://*.cdn-kaspi.kz`,
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; '),

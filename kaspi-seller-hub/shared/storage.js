@@ -23,6 +23,7 @@ export const KEYS = Object.freeze({
   feeds: 'ksh.feeds', // { [shopId]: price-list settings + upload status }
   imports: 'ksh.imports', // card uploads to Kaspi: [{ shopId, code, skus, status, result, at }]
   contentCache: 'ksh.contentCache', // Kaspi categories/attributes (24 h)
+  photos: 'ksh.photos', // { [sku]: photo } — the seller's own product photos (shared/photos.js)
 });
 
 /**
@@ -65,6 +66,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   deadlines: { acceptHours: 2, warnHours: 2 },
   // Kaspi commission in % — by product category, else the default. null = not set.
   profit: { defaultCommission: null, byCategory: {} },
+  // waybills: 'original' = page size of Kaspi's PDF (label printer or A4), 'a4' = fitted on an A4 sheet
+  print: { paper: 'original' },
   stores: {},
 });
 
@@ -87,6 +90,7 @@ export async function getSettings() {
     notifications: { ...d.notifications, ...s.notifications },
     deadlines: { ...d.deadlines, ...s.deadlines },
     profit: { ...d.profit, ...s.profit, byCategory: { ...(s.profit?.byCategory || {}) } },
+    print: { ...d.print, ...s.print },
   };
 }
 
@@ -143,6 +147,8 @@ export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
 
 export const getCosts = () => read(local, KEYS.costs, {});
 export const setCosts = (v) => write(local, KEYS.costs, v);
+export const getPhotos = () => read(local, KEYS.photos, {});
+export const setPhotos = (v) => write(local, KEYS.photos, v);
 export const getCatalog = () => read(local, KEYS.catalog, {});
 export const setCatalog = (v) => write(local, KEYS.catalog, v);
 export const getFeeds = () => read(local, KEYS.feeds, {});
