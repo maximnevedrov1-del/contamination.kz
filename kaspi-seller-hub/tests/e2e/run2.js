@@ -147,7 +147,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await d.evaluate(() => (location.hash = 'settings')); await sleep(600);
   const aliasInput = d.locator('tr', { hasText: 'Электроника Плюс' }).locator('input.input');
   await aliasInput.fill('Электроника (осн.)'); await aliasInput.dispatchEvent('change'); await sleep(600);
-  await d.locator('tr', { hasText: 'HomeStyle KZ' }).locator('.swatch').nth(6).click(); await sleep(600);
+  await d.locator('tr', { hasText: 'HomeStyle KZ' }).locator('.color-pick > summary').click(); await d.locator('tr', { hasText: 'HomeStyle KZ' }).locator('.color-pick__menu .swatch').nth(6).click(); await sleep(600);
   await d.evaluate(() => (location.hash = 'orders')); await sleep(600);
   const storesInTable = new Set((await rowsData()).map((r) => r.store));
   check('T12 alias shown in orders table', storesInTable.has('Электроника (осн.)'), [...storesInTable].join(', '));

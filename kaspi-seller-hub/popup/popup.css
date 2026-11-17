@@ -60,3 +60,14 @@ body {
   padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface);
 }
 .pp-updated { font-size: 12px; color: var(--text-3); }
+
+/* every number opens its list */
+.pp-total { font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.pp-total:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.pp-total:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* line icons instead of emoji / «₸?» */
+.ico { flex: none; vertical-align: -3px; }
+.pp-urgent { display: flex; align-items: center; gap: 6px; }
+.pp-store__counts span { display: inline-flex; align-items: center; gap: 3px; }
+.pp-store__counts .ico { color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .pp-total { transition: none; } .pp-total:hover { transform: none; } }

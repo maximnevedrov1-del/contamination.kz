@@ -523,3 +523,52 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .kpi--link:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .kpi--link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .kpi--link { transition: none; } .kpi--link:hover { transform: none; } }
+
+/* line icons (shared/icons.js) instead of emoji */
+.ico { flex: none; vertical-align: -3px; }
+.todo__icon { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--surface); color: var(--text-2); }
+.todo__item--danger .todo__icon { color: var(--danger); }
+.todo__item--info .todo__icon { color: var(--info); }
+.todo__item--warn .todo__icon { color: var(--warn); }
+.nav__urgent:not(:empty) { display: inline-flex; align-items: center; gap: 2px; }
+
+/* store colour: one dot, the palette opens on click */
+.color-pick { position: relative; }
+.color-pick > summary { list-style: none; display: block; }
+.color-pick > summary::-webkit-details-marker { display: none; }
+.swatch--current { width: 22px; height: 22px; }
+/* the palette opens inside the cell (the row grows): never cut off by the table's edge */
+.color-pick__menu { margin-top: 8px; padding: 8px; max-width: none; width: max-content; display: grid; grid-template-columns: repeat(5, 18px); gap: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+@media (max-width: 760px) {
+  /* order tabs scroll sideways instead of being cut off */
+  .tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs .tab { flex: none; }
+}
+
+/* ---------- phones: each table row becomes a card ---------- */
+@media (max-width: 760px) {
+  .table-wrap:has(> table.data--cards) { overflow: visible; }
+  table.data--cards, table.data--cards tbody { display: block; width: 100%; }
+  table.data--cards thead { display: none; }
+  table.data--cards tbody tr { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 14px 12px 44px; border-bottom: 1px solid var(--border); }
+  table.data--cards tbody td { display: block; padding: 0; border: 0; height: auto; white-space: normal; text-align: left; }
+  table.data--cards td.col-check { position: absolute; left: 14px; top: 14px; }
+  table.data--cards td.col-id { order: 1; font-weight: 600; font-size: 15px; }
+  table.data--cards td.col-amount { order: 2; margin-left: auto; font-weight: 700; font-size: 15px; }
+  table.data--cards td.col-store { order: 3; flex-basis: 100%; }
+  table.data--cards td.col-date { order: 4; color: var(--text-3); font-size: 13px; }
+  table.data--cards td.col-status, table.data--cards td.col-deadline, table.data--cards td.col-payment { order: 5; }
+  table.data--cards td.col-customer, table.data--cards td.col-reason, table.data--cards td.col-profit { order: 6; flex-basis: 100%; font-size: 14px; }
+  table.data--cards td.col-customer::before, table.data--cards td.col-reason::before, table.data--cards td.col-profit::before { content: attr(data-label) ': '; color: var(--text-3); }
+  table.data--cards td.cell--empty { display: none; }
+}
+
+/* phones: filters folded into one button */
+.filters-toggle { display: none; }
+@media (max-width: 760px) {
+  .filters-toggle:not([hidden]) { display: inline-flex; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body:not(.filters-open) .topbar__filters { display: none !important; }
+  body.filters-open .topbar__filters { width: 100%; padding-top: 4px; }
+}

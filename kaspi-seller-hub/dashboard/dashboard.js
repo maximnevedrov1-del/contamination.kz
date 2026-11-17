@@ -26,6 +26,7 @@ import '../shared/selectors.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
+import { svgIcon } from '../shared/icons.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
@@ -245,7 +246,8 @@ function deadlineBadge(r) {
 function profitCell(r) {
   const p = orderProfit(r, state.costs, settingsNow().profit);
   if (!p) return h('span', { class: 'muted' }, '—');
-  if (!p.complete) return h('span', { class: 'muted', title: t('profit.incomplete') }, '?');
+  // not every product of the order has a cost price yet: a dash with the reason, not a bare «?»
+  if (!p.complete) return h('span', { class: 'muted', title: t('profit.incomplete') }, '—');
   return h('span', { class: p.profit < 0 ? 'neg' : null, title: t('profit.breakdown', { revenue: formatMoney(p.revenue), cogs: formatMoney(p.cogs), commission: formatMoney(p.commission), delivery: formatMoney(p.delivery) }) }, formatMoney(p.profit));
 }
 const SECTION_COLUMNS = {
@@ -462,7 +464,12 @@ function renderTable(route, allRows) {
         'tr',
         { tabindex: i === ts.focus ? '0' : '-1', 'aria-selected': String(ts.selected.has(r.key)), dataset: { idx: i, fkey: `${route}-row-${r.key}` } },
         h('td', { class: 'col-check' }, h('input', { type: 'checkbox', tabindex: '-1', 'aria-label': t('common.selectRow', { id: r.id }), checked: ts.selected.has(r.key), onchange: () => toggleRow(route, r.key) })),
-        cols.map((key) => h('td', { class: [COLUMNS[key].num && 'num', COLUMNS[key].wrap && 'wrap'] }, COLUMNS[key].render(r))),
+        cols.map((key) => {
+          const content = COLUMNS[key].render(r);
+          // on phones the row becomes a card (CSS): cells know their column and hide when empty
+          const empty = (content?.textContent ?? String(content ?? '')).trim() === '—' || content == null || content === '';
+          return h('td', { class: [COLUMNS[key].num && 'num', COLUMNS[key].wrap && 'wrap', `col-${key}`, empty && 'cell--empty'], dataset: { label: t(COLUMNS[key].label) } }, content);
+        }),
       ),
     ),
   );
@@ -479,7 +486,7 @@ function renderTable(route, allRows) {
     toolbar,
     bulk,
     notes,
-    h('div', { class: 'table-wrap' }, h('table', { class: 'data', 'aria-rowcount': rows.length }, h('thead', null, head), tbody)),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'data data--cards', 'aria-rowcount': rows.length }, h('thead', null, head), tbody)),
     pageCount > 1 && pager(ts, pageCount, first, shown.length, rows.length),
     h('div', { class: 'kbd-hint' }, t('table.keyboardHint')),
   );
@@ -1008,7 +1015,7 @@ function viewProducts() {
               : '—',
           ),
           h('td', { class: 'num' }, p.pct == null ? h('span', { class: 'muted' }, '?') : formatPercent(p.pct / 100)),
-          h('td', { class: ['num', p.profit < 0 && 'neg'] }, p.profit == null ? h('span', { class: 'muted', title: t('profit.incomplete') }, '?') : formatMoney(p.profit)),
+          h('td', { class: ['num', p.profit < 0 && 'neg'] }, p.profit == null ? h('span', { class: 'muted', title: t('profit.incomplete') }, '—') : formatMoney(p.profit)),
           h('td', { class: 'num' }, formatPercent(p.margin)),
         ),
       ),
@@ -1586,10 +1593,14 @@ function viewSettings() {
                 h(
                   'td',
                   null,
-                  h(
-                    'div',
-                    { class: 'swatches', role: 'group', 'aria-label': t('settings.color') },
-                    STORE_COLORS.map((c, i) => h('button', { type: 'button', class: 'swatch', style: { background: c }, 'aria-pressed': String(s.color === c), 'aria-label': `${t('settings.color')} ${i + 1}`, onclick: () => patchStore({ color: c }) })),
+                  // one dot per store; the palette opens on click (10 dots per row were noisy)
+                  h('details', { class: 'color-pick' },
+                    h('summary', { class: 'swatch swatch--current', style: { background: s.color }, 'aria-label': t('settings.color'), title: t('settings.color') }),
+                    h(
+                      'div',
+                      { class: 'swatches color-pick__menu', role: 'group', 'aria-label': t('settings.color') },
+                      STORE_COLORS.map((c, i) => h('button', { type: 'button', class: 'swatch', style: { background: c }, 'aria-pressed': String(s.color === c), 'aria-label': `${t('settings.color')} ${i + 1}`, onclick: () => patchStore({ color: c }) })),
+                    ),
                   ),
                 ),
                 h('td', { title: s.id }, storeChip(s.id)),
@@ -1626,7 +1637,7 @@ function viewSettings() {
   return h(
     'div',
     { class: 'settings' },
-    card(t('settings.stores'), t('settings.storesHint'), storesTable),
+    card(t('settings.stores'), t(FEATURES.cabinet ? 'settings.storesHint' : 'settings.storesHintApi'), storesTable),
     apiCard(),
     card(t('readOnly.title'), t('readOnly.hint'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', dataset: { setting: 'readOnly' }, checked: !!st.readOnly, onchange: (e) => updateSettings({ readOnly: e.target.checked }) }), t('readOnly.toggle'))),
@@ -1841,7 +1852,15 @@ function renderTopbar() {
   $('pageSubtitle').textContent = t(`${state.route}.subtitle`);
   document.title = `${t(`${state.route}.title`)} · ${t('app.name')}`;
 
-  $('dataFilters').hidden = !['orders', 'returns', 'refusals', 'payments', 'analytics', 'products'].includes(state.route);
+  const hasFilters = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products'].includes(state.route);
+  $('dataFilters').hidden = !hasFilters;
+  // phones: the filters fold into one button that says what is selected («30 дней · Все магазины»)
+  const ft = $('filtersToggle');
+  ft.hidden = !hasFilters;
+  const f = state.filters;
+  const period = f.preset === 'custom' ? (f.from && f.to ? `${formatDate(startOfDay(f.from), 'short')} – ${formatDate(startOfDay(f.to), 'short')}` : t('topbar.custom')) : t(`topbar.last${f.preset}`);
+  ft.textContent = `${period} · ${f.shopId === 'all' ? t('common.allStores') : storeName(f.shopId)} ▾`;
+  ft.setAttribute('aria-expanded', String(document.body.classList.contains('filters-open')));
   const sel = clear($('storeFilter'));
   sel.append(h('option', { value: 'all' }, t('common.allStores')));
   enabledStores().forEach((s) => sel.append(h('option', { value: s.id, selected: state.filters.shopId === s.id }, s.alias || s.name)));
@@ -1886,7 +1905,8 @@ function renderSidebar() {
   );
   const u = document.querySelector('[data-count="urgent"]');
   if (u) {
-    u.textContent = urgent ? `🔥 ${formatNumber(urgent)}` : '';
+    clear(u);
+    if (urgent) u.append(svgIcon('fire', { size: 12 }), formatNumber(urgent));
     u.title = urgent ? t('deadline.sidebar', { count: urgent }) : '';
   }
   setCount('returns', sum('returns'));
@@ -2550,19 +2570,19 @@ function viewHome() {
 
   // 1. what to do now (only what needs a click)
   const todo = [
-    urgent.length && { tone: 'danger', icon: '🔥', text: t('home.todo.urgent', { count: urgent.length }), action: t('home.open'), go: goOrders('urgent') },
-    fresh.length && { tone: 'info', icon: '🆕', text: t('home.todo.new', { count: fresh.length }), action: t('home.open'), go: goOrders('new') },
-    unread && { tone: 'info', icon: '💬', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
-    lic.pendingInvoice && { tone: 'warn', icon: '💳', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
-    lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: '⏳', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
-    unpaid.length && { tone: 'muted', icon: '⌛', text: t('home.todo.unpaid', { count: unpaid.length }), action: t('home.open'), go: () => ((state.paymentGroup = 'pending'), (location.hash = 'payments')) },
+    urgent.length && { tone: 'danger', icon: 'fire', text: t('home.todo.urgent', { count: urgent.length }), action: t('home.open'), go: goOrders('urgent') },
+    fresh.length && { tone: 'info', icon: 'sparkle', text: t('home.todo.new', { count: fresh.length }), action: t('home.open'), go: goOrders('new') },
+    unread && { tone: 'info', icon: 'chat', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
+    lic.pendingInvoice && { tone: 'warn', icon: 'card', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
+    lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: 'hourglass', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
+    unpaid.length && { tone: 'muted', icon: 'wallet', text: t('home.todo.unpaid', { count: unpaid.length }), action: t('home.open'), go: () => ((state.paymentGroup = 'pending'), (location.hash = 'payments')) },
   ].filter(Boolean);
   const todoCard = h(
     'section',
     { class: 'card home-todo' },
     h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('home.todoTitle'))),
     todo.length
-      ? h('ul', { class: 'todo' }, todo.map((x) => h('li', { class: ['todo__item', `todo__item--${x.tone}`] }, h('span', { class: 'todo__icon', 'aria-hidden': 'true' }, x.icon), h('span', { class: 'todo__text' }, x.text), h('button', { type: 'button', class: 'btn btn--sm', onclick: x.go }, x.action))))
+      ? h('ul', { class: 'todo' }, todo.map((x) => h('li', { class: ['todo__item', `todo__item--${x.tone}`] }, h('span', { class: 'todo__icon', 'aria-hidden': 'true' }, svgIcon(x.icon)), h('span', { class: 'todo__text' }, x.text), h('button', { type: 'button', class: 'btn btn--sm', onclick: x.go }, x.action))))
       : h('p', { class: 'home-ok' }, '✅ ', t('home.allDone')),
   );
 
@@ -3001,6 +3021,10 @@ function bindShell() {
     updateSettings({ theme: dark ? 'light' : 'dark' }, { silent: true });
   });
   $('refreshBtn').addEventListener('click', sync);
+  $('filtersToggle').addEventListener('click', () => {
+    document.body.classList.toggle('filters-open');
+    renderTopbar();
+  });
 
   // Not an async listener: a returned promise counts as a reply in Chrome and would
   // answer other pages' messages to the worker (the popup got an empty state).

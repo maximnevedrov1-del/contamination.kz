@@ -48,7 +48,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const col = async (re) => (await d.$$eval('#view thead th', (ths) => ths.map((x) => x.innerText.trim()))).findIndex((x) => re.test(x));
   const [cProduct, cUnits, cRevenue, cProfit] = [await col(/^Товар/), await col(/^Продано|^Штук|^Кол/), await col(/^Выручка/), await col(/^Прибыль/)];
   check('5 product table columns found', [cProduct, cUnits, cRevenue, cProfit].every((i) => i >= 0), [cProduct, cUnits, cRevenue, cProfit].join(','));
-  check('5 profit "?" before costs are set', (await d.locator('tbody tr').first().locator('td').nth(cProfit).innerText()).trim() === '?');
+  check('5 profit «—» (not counted) before costs are set', (await d.locator('tbody tr').first().locator('td').nth(cProfit).innerText()).trim() === '—');
   const pct = d.locator('label:has-text("Для всех категорий") input'); await pct.fill('10'); await pct.dispatchEvent('change'); await sleep(700);
   const costs = { 'SKU-0': 5000, 'SKU-1': 3000, 'SKU-2': 1000 };
   for (const [sku, c] of Object.entries(costs)) { const inp = d.locator(`tr:has-text("${sku}") input[type=number]`); await inp.fill(String(c)); await inp.dispatchEvent('change'); await sleep(500); }

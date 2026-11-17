@@ -6,6 +6,7 @@ import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative,
 import { h, clear, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 import { FEATURES } from '../shared/features.js';
 import { withSnapshots } from '../shared/storage.js';
+import { svgIcon } from '../shared/icons.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
@@ -47,14 +48,16 @@ function render() {
   const totals = sumCounts(counts);
 
   const totalsEl = clear($('totals'));
+  // every number opens the list behind it in the dashboard
   [
-    ['newOrders', 'popup.newOrders'],
-    ['returns', 'popup.returns'],
-    ['refusals', 'popup.refusals'],
-    ['unpaid', 'popup.unpaid'],
-  ].forEach(([k, label]) =>
+    ['newOrders', 'popup.newOrders', 'orders'],
+    ['returns', 'popup.returns', 'returns'],
+    ['refusals', 'popup.refusals', 'refusals'],
+    ['unpaid', 'popup.unpaid', 'payments'],
+  ].forEach(([k, label, route]) =>
     totalsEl.append(
-      h('div', { class: 'pp-total' }, h('div', { class: 'pp-total__value' }, totals[k] == null ? '—' : formatNumber(totals[k])), h('div', { class: 'pp-total__label', title: t(label) }, t(label))),
+      h('button', { type: 'button', class: 'pp-total', dataset: { route }, title: t(label), onclick: async () => { await send('ui:openDashboard', { route }); window.close(); } },
+        h('div', { class: 'pp-total__value' }, totals[k] == null ? '—' : formatNumber(totals[k])), h('div', { class: 'pp-total__label' }, t(label))),
     ),
   );
 
@@ -64,7 +67,8 @@ function render() {
     0,
   );
   $('urgent').hidden = !urgent;
-  $('urgent').textContent = urgent ? `🔥 ${t('deadline.popup', { count: urgent })}` : '';
+  clear($('urgent'));
+  if (urgent) $('urgent').append(svgIcon('fire', { size: 16 }), ' ', t('deadline.popup', { count: urgent }));
 
   const list = clear($('storeList'));
   if (!stores.length) list.append(h('li', { class: 'pp-empty' }, t(FEATURES.cabinet ? 'popup.noStores' : 'popup.noStoresApi')));
@@ -82,9 +86,9 @@ function render() {
           'div',
           { class: 'pp-store__counts' },
           h('span', { title: t('popup.newOrders') }, h('b', null, n(c.newOrders)), ' ', t('popup.newOrders').toLowerCase()),
-          h('span', { title: t('popup.returns') }, '↩ ', h('b', null, n(c.returns))),
-          h('span', { title: t('popup.refusals') }, '✕ ', h('b', null, n(c.refusals))),
-          h('span', { title: t('popup.unpaid') }, '₸? ', h('b', null, n(c.unpaid))),
+          h('span', { title: t('popup.returns') }, svgIcon('return', { size: 14, label: t('popup.returns') }), h('b', null, n(c.returns))),
+          h('span', { title: t('popup.refusals') }, svgIcon('cancel', { size: 14, label: t('popup.refusals') }), h('b', null, n(c.refusals))),
+          h('span', { title: t('popup.unpaid') }, svgIcon('wallet', { size: 14, label: t('popup.unpaid') }), h('b', null, n(c.unpaid))),
         ),
         status !== 'ok' &&
           h(
