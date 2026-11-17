@@ -323,6 +323,29 @@ Analytics never invents numbers:
 - The daily series comes from the store's Kaspi analytics page when it's visible. Otherwise it's calculated from the loaded order list, and the dashboard says which source it used.
 - Conversion is shown only when Kaspi shows views.
 
+## Landing page (`site/`)
+
+A static site that presents the extension with real screenshots taken on demo data. The design
+follows `DESIGN.md`, the same look as the extension. The page has:
+- a scroll story;
+- the «5 cabinets → 1 window» animation;
+- a tilting product frame;
+- a sticky call-to-action on phones;
+- FAQ, pricing, a 404 page, `robots.txt`, `sitemap.xml`, an OG image and JSON-LD.
+
+```bash
+node tools/build-site.mjs        # → dist/site/ (upload to any static host)
+node tests/site/sitecheck.js     # phone / tablet / desktop, dark mode, keyboard, 404
+```
+
+At launch, fill in `site/site.config.json` (domain, WhatsApp/Telegram/e-mail, response time,
+hours). Blocks whose value is empty are left out of the build, so nothing is shown half-done.
+
+Reviews are hidden in `index.html` (`#reviews`) until there are real ones.
+
+To refresh the screenshots, run `tools/site-shots/shots.js` (with `tests/e2e/mockapi.js`), then
+`convert.py` and `og.js`.
+
 ## Interactive dashboard
 
 Every number leads to the orders behind it:

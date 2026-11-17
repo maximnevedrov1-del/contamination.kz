@@ -1,0 +1,9 @@
+{
+  "_comment": "Filled in at launch. Empty value = the block that needs it is left out of the built site (tools/build-site.mjs).",
+  "domain": "",
+  "whatsapp": "",
+  "telegram": "",
+  "email": "",
+  "responseTime": "",
+  "hours": ""
+}

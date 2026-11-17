@@ -25,7 +25,21 @@ const withLinks = (o) => ({ ...o, relationships: { entries: { links: { related: 
 const PDF = (code) => Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${Number(String(code).replace(/\D/g, '')) % 2 ? '283.46 425.2' : '595 842'}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n4 0 obj << /Length 60 >> stream\nBT /F1 28 Tf 60 700 Td (KASPI WAYBILL ${code}) Tj ET\nendstream endobj\n5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF`, 'latin1');
 http.createServer((req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`);
-  const send = (code, obj, type = 'application/vnd.api+json') => { res.writeHead(code, { 'Content-Type': type }); res.end(typeof obj === 'string' || Buffer.isBuffer(obj) ? obj : JSON.stringify(obj)); };
+  // Demo tokens GOOD-TOKEN-S<n> (landing-page screenshots): same orders, but their own order
+  // numbers and amounts, so several demo stores do not look identical. Tests don't use them.
+  const demo = /^GOOD-TOKEN-S(\d)$/.exec(req.headers['x-auth-token'] || '');
+  const OFF = demo ? Number(demo[1]) * 3100000 : 0;
+  const F = demo ? [1, 0.83, 1.27, 0.64][Number(demo[1]) % 4] : 1;
+  const demoOut = (obj) => {
+    for (const it of obj?.data ? [].concat(obj.data) : []) {
+      const a = it.attributes || {};
+      if (it.type === 'orders' && a.code) Object.assign(a, { code: String(Number(a.code) + OFF), totalPrice: Math.round(a.totalPrice * F) });
+      if (it.type === 'orderentries') Object.assign(a, { basePrice: Math.round(a.basePrice * F), totalPrice: Math.round(a.totalPrice * F) });
+    }
+    return obj;
+  };
+  if (demo && u.searchParams.get('filter[orders][code]')) u.searchParams.set('filter[orders][code]', String(Number(u.searchParams.get('filter[orders][code]')) - OFF));
+  const send = (code, obj, type = 'application/vnd.api+json') => { if (demo && obj && typeof obj === 'object' && !Buffer.isBuffer(obj)) obj = demoOut(structuredClone(obj)); res.writeHead(code, { 'Content-Type': type }); res.end(typeof obj === 'string' || Buffer.isBuffer(obj) ? obj : JSON.stringify(obj)); };
   if (u.pathname === '/__log') return send(200, log);
   if (u.pathname.startsWith('/waybill/')) { log.push({ waybillToken: req.headers['x-auth-token'] || null }); return send(200, PDF(u.pathname.split('/')[2]), 'application/pdf'); }
   if (!/^GOOD-TOKEN-/.test(req.headers['x-auth-token'] || '')) return send(401, { message: 'Full authentication is required to access this resource.' });
