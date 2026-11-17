@@ -2407,6 +2407,99 @@ function viewHome() {
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
 const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog });
 
+/* =====================================================================
+ * Learning inside the interface
+ *  - guideCard(): «Как это работает» — 3–4 steps for the current section; shown by itself
+ *    on the first visit, again with the «?» button in the top bar;
+ *  - startTour(): first-launch tour that points at the main controls;
+ *  - the Help page lists every guide.
+ * ===================================================================== */
+const GUIDE_ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
+const guideSteps = (route) => [1, 2, 3, 4, 5].map((n) => `guide.${route}.s${n}`).filter(hasKey).map((k) => t(k));
+
+function guideCard(route, { dismissible = true } = {}) {
+  return h(
+    'section',
+    { class: 'card guide', dataset: { guide: route } },
+    h('div', { class: 'guide__head' }, h('span', { class: 'guide__badge' }, t('guide.badge')), h('h2', { class: 'card__title' }, t(`guide.${route}.title`))),
+    h('ol', { class: 'guide__steps' }, guideSteps(route).map((x) => h('li', null, x))),
+    dismissible &&
+      h('div', { class: 'guide__actions' },
+        h('button', { type: 'button', class: 'btn btn--sm btn--primary', onclick: () => (memo.set(`ksh.guide.${route}`, '1'), (state.guideOpen = false), renderView()) }, t('guide.gotIt')),
+        h('a', { class: 'btn btn--sm btn--ghost', href: '#help' }, t('guide.all')),
+      ),
+  );
+}
+const guideVisible = (route) => GUIDE_ROUTES.includes(route) && (state.guideOpen || !memo.get(`ksh.guide.${route}`));
+
+const TOUR = [
+  { sel: '#connectStoreBtn', key: 'connect' },
+  { sel: 'a[data-route=home]', key: 'home' },
+  { sel: 'a[data-route=orders]', key: 'orders' },
+  { sel: 'a[data-route=catalog]', key: 'catalog' },
+  { sel: '#guideBtn', key: 'guide', main: true },
+  { sel: 'a[data-route=help]', key: 'help' },
+];
+const tour = { i: -1, el: null };
+
+function endTour() {
+  document.querySelector('.tour-target')?.classList.remove('tour-target');
+  tour.el?.remove();
+  tour.el = null;
+  tour.i = -1;
+  memo.set('ksh.tourDone', '1');
+  setMenu(false);
+}
+
+function showTourStep(i) {
+  const step = TOUR.at(i);
+  if (!step) return endTour();
+  tour.i = i;
+  document.querySelector('.tour-target')?.classList.remove('tour-target');
+  const narrow = window.matchMedia('(max-width: 760px)').matches;
+  setMenu(narrow && !step.main); // on a phone the menu items live in the slide-in menu
+  const target = document.querySelector(step.sel);
+  target?.classList.add('tour-target');
+  target?.scrollIntoView({ block: 'nearest' });
+  tour.el?.remove();
+  tour.el = h(
+    'div',
+    { class: 'tour', role: 'dialog', 'aria-label': t('tour.title') },
+    h('div', { class: 'tour__count' }, t('tour.step', { n: i + 1, total: TOUR.length })),
+    h('h3', { class: 'tour__title' }, t(`tour.${step.key}.title`)),
+    h('p', { class: 'tour__text' }, t(`tour.${step.key}.text`)),
+    h('div', { class: 'tour__actions' },
+      h('button', { type: 'button', class: 'btn btn--sm btn--ghost', dataset: { tour: 'skip' }, onclick: endTour }, t('tour.skip')),
+      h('span', { class: 'grow' }),
+      i > 0 && h('button', { type: 'button', class: 'btn btn--sm', onclick: () => showTourStep(i - 1) }, t('tour.back')),
+      h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { tour: 'next' }, onclick: () => showTourStep(i + 1) }, t(i === TOUR.length - 1 ? 'tour.done' : 'tour.next')),
+    ),
+  );
+  document.body.append(tour.el);
+  // beside the target on a wide screen, at the bottom on a phone (never over the target)
+  requestAnimationFrame(() => {
+    if (!tour.el) return;
+    const r = target?.getBoundingClientRect();
+    const w = tour.el.offsetWidth, hgt = tour.el.offsetHeight;
+    if (narrow || !r) {
+      // phone: full-width card at the bottom — or at the top when the target itself is low on the screen
+      const low = r && r.top + r.height / 2 > window.innerHeight / 2;
+      return Object.assign(tour.el.style, { left: '12px', right: '12px', width: 'auto', top: low ? '12px' : 'auto', bottom: low ? 'auto' : '12px' });
+    }
+    const right = r.right + 16 + w <= window.innerWidth;
+    const left = right ? r.right + 16 : Math.max(12, r.left - w - 16);
+    const top = Math.min(Math.max(12, r.top - 8), window.innerHeight - hgt - 12);
+    Object.assign(tour.el.style, { left: `${left}px`, top: `${top}px` });
+    tour.el.querySelector('[data-tour=next]').focus();
+  });
+}
+
+function startTour() {
+  if (document.querySelector('dialog[open]')) return; // consent / payment windows come first
+  location.hash = 'home';
+  showTourStep(0);
+}
+
 /* ---------- help: how-to answers + support contacts ---------- */
 function viewHelp() {
   const contacts = [
@@ -2421,6 +2514,10 @@ function viewHelp() {
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.contactTitle')), h('div', { class: 'card__sub' }, contacts.length ? SUPPORT.hours || t('help.contactText') : t('help.noContacts')))),
       contacts.length ? h('div', { class: 'card__body', style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, contacts) : null,
+    ),
+    h('section', { class: 'card' },
+      h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour' }, onclick: startTour }, t('help.startTour'))),
+      h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection'))))),
     ),
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('help.faqTitle'))),
@@ -2459,6 +2556,7 @@ function renderView() {
   if (lic && !lic.canUse && state.route !== 'account') view.append(paywall());
   else {
     const needsStores = !['home', 'settings', 'account', 'catalog', 'help'].includes(state.route) && !dataStores().length;
+    if (guideVisible(state.route)) view.append(guideCard(state.route));
     view.append(needsStores ? noStores() : VIEWS[state.route]());
   }
   renderSidebar();
@@ -2546,6 +2644,13 @@ function setMenu(open) {
 function bindShell() {
   bindConnectDialog();
   // narrow window: ☰ opens the menu; choosing a section or tapping outside closes it
+  $('guideBtn').addEventListener('click', () => {
+    if (!GUIDE_ROUTES.includes(state.route)) return (location.hash = 'help');
+    const shown = !!document.querySelector('#view > .guide');
+    state.guideOpen = !shown; // «?» shows the guide; pressed again, hides it for good
+    if (shown) memo.set(`ksh.guide.${state.route}`, '1');
+    renderView();
+  });
   $('menuBtn').addEventListener('click', () => setMenu(!document.body.classList.contains('nav-open')));
   $('scrim').addEventListener('click', () => setMenu(false));
   $('sidebar').addEventListener('click', (e) => e.target.closest('a, button') && setMenu(false));
@@ -2559,6 +2664,7 @@ function bindShell() {
   });
   window.addEventListener('hashchange', () => {
     state.route = routeFromHash();
+    state.guideOpen = false;
     if (state.route === 'catalog') catalogView.reload();
     renderAll();
     manageChatPolling();
@@ -2657,6 +2763,8 @@ async function main() {
   await loadState();
   manageChatPolling();
   sync(); // fresh snapshot from every store tab on open
+  // First launch → the tour. Not under browser automation (it would sit on top of the page under test).
+  if (!memo.get('ksh.tourDone') && !navigator.webdriver) setTimeout(startTour, 1200);
 }
 
 main();
