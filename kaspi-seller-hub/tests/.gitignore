@@ -10,3 +10,4 @@ backup-test.json
 export-test.csv
 relcopy/
 photoprof*/
+interprof*/

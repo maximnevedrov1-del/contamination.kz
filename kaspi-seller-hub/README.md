@@ -323,6 +323,24 @@ Analytics never invents numbers:
 - The daily series comes from the store's Kaspi analytics page when it's visible. Otherwise it's calculated from the loaded order list, and the dashboard says which source it used.
 - Conversion is shown only when Kaspi shows views.
 
+## Interactive dashboard
+
+Every number leads to the orders behind it:
+- Home tiles (today, yesterday, 7 and 30 days), store cards, and the KPI cards in «Аналитика»
+  open the matching list;
+- a click on a day in a chart opens that day's orders;
+- a click on a store's bar filters the whole dashboard to that store (`drillTo` in
+  `dashboard/dashboard.js`).
+
+Effects:
+- the 7- and 30-day tiles show sparklines;
+- the numbers count up when the dashboard opens;
+- cards lift on hover;
+- charts draw in once;
+- sections cross-fade (View Transitions API).
+
+Plain CSS and SVG, no libraries. Everything is off under «reduce motion».
+
 ## Reliability
 
 - **Kazakhstan time.** «Сегодня», day filters, charts and every date shown use UTC+5 (all of

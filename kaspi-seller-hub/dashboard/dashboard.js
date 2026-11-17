@@ -31,6 +31,7 @@ import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
 import {
   h,
+  s,
   clear,
   debounce,
   presetRange,
@@ -1188,16 +1189,19 @@ function viewAnalytics() {
   if (!filteredStores().length) return noStores();
   const A = computeAnalytics();
   const src = A.sources.has('kaspi') && !A.sources.has('orders') ? t('analytics.sourceKaspi') : A.sources.size ? t('analytics.sourceOrders') : t('analytics.noData');
-  const kpi = (label, value, sub) => h('div', { class: 'card kpi' }, h('div', { class: 'kpi__label' }, label), h('div', { class: 'kpi__value' }, value), h('div', { class: 'kpi__sub' }, sub));
+  // a KPI with `go` is a button: it opens the list behind the number (same period and store)
+  const kpi = (label, value, sub, go) =>
+    h(go ? 'button' : 'div', { class: ['card', 'kpi', go && 'kpi--link'], ...(go ? { type: 'button', title: t('home.showOrders'), onclick: go } : {}) }, h('div', { class: 'kpi__label' }, label), h('div', { class: 'kpi__value' }, value), h('div', { class: 'kpi__sub' }, sub));
+  const openList = (route) => () => (location.hash = route);
 
   const kpis = h(
     'div',
     { class: 'kpis' },
-    kpi(t('analytics.revenue'), formatMoney(A.kpi.revenue), src),
-    kpi(t('analytics.orders'), formatNumber(A.kpi.orders), src),
+    kpi(t('analytics.revenue'), formatMoney(A.kpi.revenue), src, openList('orders')),
+    kpi(t('analytics.orders'), formatNumber(A.kpi.orders), src, openList('orders')),
     kpi(t('analytics.aov'), formatMoney(A.kpi.aov), src),
-    kpi(t('analytics.returnRate'), formatPercent(A.kpi.returnRate), t('nav.returns')),
-    kpi(t('analytics.refusalRate'), formatPercent(A.kpi.refusalRate), t('nav.refusals')),
+    kpi(t('analytics.returnRate'), formatPercent(A.kpi.returnRate), t('nav.returns'), openList('returns')),
+    kpi(t('analytics.refusalRate'), formatPercent(A.kpi.refusalRate), t('nav.refusals'), openList('refusals')),
     kpi(t('analytics.conversion'), formatPercent(A.kpi.conversion, 2), A.kpi.conversion == null ? t('analytics.conversionNA') : t('analytics.conversionHint')),
     kpi(t('analytics.profit'), formatMoney(A.profit.profit), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA')),
     kpi(t('analytics.margin'), formatPercent(A.profit.margin), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA')),
@@ -1218,19 +1222,24 @@ function viewAnalytics() {
       'revenue',
       t('analytics.revenueOverTime'),
       src,
-      (c) => (hasSeries ? lineChart(c, { points: A.series.map((p) => ({ x: p.x, y: p.revenue })), label: t('analytics.revenueOverTime'), yFormat: formatMoney, yFormatAxis: formatMoneyCompact, xFormat: xFmt }) : emptyChart(c)),
+      (c) => (hasSeries ? lineChart(c, { points: A.series.map((p) => ({ x: p.x, y: p.revenue })), label: t('analytics.revenueOverTime'), yFormat: formatMoney, yFormatAxis: formatMoneyCompact, xFormat: xFmt, onPick: (p) => drillTo({ day: startOfDay(p.x) }), pickHint: t('analytics.clickDay') }) : emptyChart(c)),
       seriesTable('revenue', formatMoney),
     ),
     chartCard(
       'orders',
       t('analytics.ordersOverTime'),
       src,
-      (c) => (hasSeries ? lineChart(c, { points: A.series.map((p) => ({ x: p.x, y: p.orders })), label: t('analytics.ordersOverTime'), yFormat: (v) => formatNumber(v), xFormat: xFmt }) : emptyChart(c)),
+      (c) => (hasSeries ? lineChart(c, { points: A.series.map((p) => ({ x: p.x, y: p.orders })), label: t('analytics.ordersOverTime'), yFormat: (v) => formatNumber(v), xFormat: xFmt, onPick: (p) => drillTo({ day: startOfDay(p.x) }), pickHint: t('analytics.clickDay') }) : emptyChart(c)),
       seriesTable('orders', (v) => formatNumber(v)),
     ),
   );
 
-  const storeBars = (k) => A.perStore.map((p) => ({ label: storeName(p.store.id), color: p.store.color, value: k === 'revenue' ? p.revenue : ratio(p.returns, p.orders) }));
+  const storeBars = (k) => A.perStore.map((p) => ({ id: p.store.id, label: storeName(p.store.id), color: p.store.color, value: k === 'revenue' ? p.revenue : ratio(p.returns, p.orders) }));
+  // a click on a store's bar shows the whole dashboard for that store only
+  const pickStore = (b) => {
+    state.filters.shopId = state.filters.shopId === b.id ? 'all' : b.id;
+    renderAll();
+  };
   const bars = h(
     'div',
     { class: 'grid-2' },
@@ -1238,23 +1247,23 @@ function viewAnalytics() {
       'byStoreRevenue',
       t('analytics.revenueByStore'),
       null,
-      (c) => barChart(c, { bars: storeBars('revenue'), format: formatMoney, label: t('analytics.revenueByStore') }),
+      (c) => barChart(c, { bars: storeBars('revenue'), format: formatMoney, label: t('analytics.revenueByStore'), onPick: pickStore, pickHint: t('analytics.clickStore') }),
       { head: [t('table.store'), t('analytics.revenue')], rows: storeBars('revenue').map((b) => [b.label, formatMoney(b.value)]) },
     ),
     chartCard(
       'byStoreReturns',
       t('analytics.returnRateByStore'),
       null,
-      (c) => barChart(c, { bars: storeBars('returns'), format: (v) => formatPercent(v), label: t('analytics.returnRateByStore') }),
+      (c) => barChart(c, { bars: storeBars('returns'), format: (v) => formatPercent(v), label: t('analytics.returnRateByStore'), onPick: pickStore, pickHint: t('analytics.clickStore') }),
       { head: [t('table.store'), t('analytics.returnRate')], rows: storeBars('returns').map((b) => [b.label, formatPercent(b.value)]) },
     ),
   );
 
-  const profitBars = A.perStore.map((p) => ({ label: storeName(p.store.id), color: p.store.color, value: A.profit.per[p.store.id] ?? null }));
+  const profitBars = A.perStore.map((p) => ({ id: p.store.id, label: storeName(p.store.id), color: p.store.color, value: A.profit.per[p.store.id] ?? null }));
   const profitCard = h(
     'div',
     { class: 'grid-2' },
-    chartCard('byStoreProfit', t('analytics.profitByStore'), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA'), (c) => barChart(c, { bars: profitBars, format: formatMoney, label: t('analytics.profitByStore') }), {
+    chartCard('byStoreProfit', t('analytics.profitByStore'), A.profit.total ? t('analytics.profitCoverage', { complete: A.profit.complete, total: A.profit.total }) : t('analytics.profitNA'), (c) => barChart(c, { bars: profitBars, format: formatMoney, label: t('analytics.profitByStore'), onPick: pickStore, pickHint: t('analytics.clickStore') }), {
       head: [t('table.store'), t('analytics.profit')],
       rows: profitBars.map((b) => [b.label, formatMoney(b.value)]),
     }),
@@ -2464,6 +2473,58 @@ function allOrders() {
   return dataStores().flatMap((s) => (state.data.snapshots[s.id]?.sections?.orders?.items || []).map((it) => ({ ...it, shopId: s.id, ts: it.date ? new Date(it.date).getTime() : 0 })));
 }
 
+/* ---------- interactive dashboard: drill-down, count-up, sparklines ---------- */
+
+/**
+ * Open the orders list already filtered: by a day, the last N days, a store.
+ * Every number on Home and every point / bar of a chart leads to its orders.
+ */
+function drillTo({ day = null, days = null, shopId = null, tab = 'all' } = {}) {
+  const f = state.filters;
+  if (day) Object.assign(f, { preset: 'custom', from: dayKey(day), to: dayKey(day) });
+  else if (days) Object.assign(f, ['7', '30', '90'].includes(String(days)) ? { preset: String(days), from: '', to: '' } : { preset: 'custom', from: dayKey(Date.now() - (days - 1) * 86400000), to: dayKey(Date.now()) });
+  if (shopId) f.shopId = shopId;
+  Object.assign(state.tables.orders, { tab, q: '', page: 0 });
+  if (state.route === 'orders') renderAll();
+  else location.hash = 'orders';
+}
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Numbers «count up» when Home is first opened. The page re-renders right after opening
+ * (the first refresh), so the animation runs on one clock: a re-render inside the
+ * window continues it instead of restarting or cutting it off.
+ */
+const COUNT_MS = 700;
+function animateCounts(root, t0) {
+  if (reducedMotion() || performance.now() - t0 >= COUNT_MS) return;
+  root.querySelectorAll('[data-count-to]').forEach((el) => {
+    const to = Number(el.dataset.countTo);
+    const fmt = el.dataset.countFmt === 'money' ? formatMoney : (v) => formatNumber(v);
+    if (!(to > 0)) return;
+    const dur = COUNT_MS;
+    const step = (now) => {
+      const k = Math.min(1, Math.max(0, (now - t0) / dur));
+      el.textContent = fmt(Math.round(to * (1 - (1 - k) ** 3)));
+      if (k < 1 && el.isConnected) requestAnimationFrame(step);
+    };
+    step(performance.now()); // first frame now: no flash of the final number
+    requestAnimationFrame(step);
+  });
+}
+
+/** Tiny trend line of daily values (no axes): the shape of the week / month at a glance. */
+function sparkline(values, label) {
+  const W = 120;
+  const H = 30;
+  const max = Math.max(1, ...values);
+  const pts = values.map((v, i) => `${((i / Math.max(1, values.length - 1)) * W).toFixed(1)},${(H - 2 - (v / max) * (H - 4)).toFixed(1)}`);
+  return s('svg', { class: 'spark', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': label },
+    s('path', { d: `M0,${H} L${pts.join(' L')} L${W},${H} Z`, class: 'spark__area' }),
+    s('path', { d: `M${pts.join(' L')}`, class: 'spark__line' }));
+}
+
 function viewHome() {
   const orders = allOrders();
   const sn = settingsNow();
@@ -2511,7 +2572,24 @@ function viewHome() {
     ['home.week', period(6, 0)],
     ['home.month', period(29, 0)],
   ];
-  const tilesEl = h('div', { class: 'tiles' }, tiles.map(([k, v]) => h('div', { class: 'tile' }, h('div', { class: 'tile__label' }, t(k)), h('div', { class: 'tile__value' }, formatMoney(v.revenue)), h('div', { class: 'tile__sub' }, t('home.orders', { count: v.count })))));
+  // daily revenue for the sparklines of «7 дней» / «30 дней»
+  const daily = (n) => Array.from({ length: n }, (_, i) => {
+    const from = day0.getTime() - (n - 1 - i) * 86400000;
+    return sumBy(orders.filter((o) => o.ts >= from && o.ts < from + 86400000 && !REVENUE_EXCLUDED.has(o.status)), (o) => o.amount || 0);
+  });
+  const drill = {
+    'home.today': { day: Date.now() },
+    'home.yesterday': { day: Date.now() - 86400000 },
+    'home.week': { days: 7 },
+    'home.month': { days: 30 },
+  };
+  const tilesEl = h('div', { class: 'tiles' }, tiles.map(([k, v]) =>
+    h('button', { type: 'button', class: 'tile tile--link', dataset: { tile: k.split('.')[1] }, title: t('home.showOrders'), onclick: () => drillTo(drill[k]) },
+      h('div', { class: 'tile__label' }, t(k)),
+      h('div', { class: 'tile__value', dataset: { countTo: Math.round(v.revenue), countFmt: 'money' } }, formatMoney(v.revenue)),
+      h('div', { class: 'tile__sub' }, t('home.orders', { count: v.count })),
+      k === 'home.week' || k === 'home.month' ? sparkline(daily(k === 'home.week' ? 7 : 30), t(k)) : null,
+    )));
 
   // 3. stores at a glance
   const storesEl = dataStores().length
@@ -2528,8 +2606,8 @@ function viewHome() {
             const snap = state.data.snapshots[s.id];
             const ok = snap?.status === 'ok';
             return h(
-              'div',
-              { class: 'home-store' },
+              'button',
+              { type: 'button', class: 'home-store home-store--link', title: t('home.showOrders'), dataset: { store: s.id }, onclick: () => drillTo({ shopId: s.id, days: 30 }) },
               h('div', { class: 'home-store__head' }, storeChip(s.id), h('span', { class: ['badge', ok ? 'badge--ok' : 'badge--warn'] }, t(`store.${ok ? 'online' : snap?.status || 'noTab'}`))),
               h('div', { class: 'home-store__nums' },
                 h('div', null, h('b', null, formatMoney(sumBy(today, (o) => o.amount || 0))), h('span', null, t('home.today'))),
@@ -2763,6 +2841,7 @@ function renderView() {
     const needsStores = !['home', 'settings', 'account', 'catalog', 'help'].includes(state.route) && !dataStores().length;
     if (guideVisible(state.route)) view.append(guideCard(state.route));
     view.append(needsStores ? noStores() : VIEWS[state.route]());
+    if (state.route === 'home') animateCounts(view, (state.countStart ??= performance.now()));
   }
   renderSidebar();
 
@@ -2872,7 +2951,9 @@ function bindShell() {
     state.route = routeFromHash();
     state.guideOpen = false;
     if (state.route === 'catalog') catalogView.reload();
-    renderAll();
+    // a soft cross-fade between sections; instant where unsupported or motion is reduced
+    if (document.startViewTransition && !reducedMotion()) document.startViewTransition(() => renderAll());
+    else renderAll();
     manageChatPolling();
     $('view').focus({ preventScroll: true });
   });

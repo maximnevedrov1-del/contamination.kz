@@ -57,6 +57,7 @@ function tooltip(container) {
  * }} opts
  */
 export function lineChart(container, opts) {
+  let first = true; // draw-in animation only once, not on every resize
   const draw = () => {
     const { points, color = 'var(--series-1)', yFormat, xFormat, label } = opts;
     const yAxisFmt = opts.yFormatAxis || yFormat;
@@ -79,7 +80,8 @@ export function lineChart(container, opts) {
     const every = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(iw / 72))));
     points.forEach((p, i) => {
       const last = i === points.length - 1;
-      if ((i % every === 0 && points.length - 1 - i >= every * 0.6) || last)
+      // the last date is always shown; a regular label too close to it is skipped (they overlapped)
+      if ((i % every === 0 && points.length - 1 - i >= every) || last)
         svg.append(s('text', { x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle', class: 'chart-axis-label' }, xFormat(p.x)));
     });
 
@@ -91,18 +93,30 @@ export function lineChart(container, opts) {
     });
     if (d) {
       const area = points.every((p) => p.y != null) ? `${d}L${x(points.length - 1)},${y(0)}L${x(0)},${y(0)}Z` : '';
-      if (area) svg.append(s('path', { d: area, fill: color, opacity: 0.08 }));
-      svg.append(s('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+      if (area) svg.append(s('path', { d: area, fill: color, opacity: 0.08, class: first ? 'chart-area-in' : null }));
+      svg.append(s('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', pathLength: 1, class: first ? 'chart-line-in' : null }));
     }
 
     const cross = s('line', { y1: pad.t, y2: pad.t + ih, class: 'chart-crosshair', visibility: 'hidden' });
     const marker = s('circle', { r: 4, fill: color, stroke: 'var(--surface)', 'stroke-width': 2, visibility: 'hidden' });
     svg.append(cross, marker);
-    const hit = s('rect', { x: pad.l, y: pad.t, width: iw, height: ih, fill: 'transparent' });
+    const hit = s('rect', { x: pad.l, y: pad.t, width: iw, height: ih, fill: 'transparent', class: opts.onPick ? 'chart-hit--pick' : null });
     svg.append(hit);
 
     clear(container).append(svg);
+    first = false;
     const tip = tooltip(container);
+    const pointAt = (ev) => {
+      const rect = svg.getBoundingClientRect();
+      const mx = ((ev.clientX - rect.left) / rect.width) * W;
+      const i = Math.round(((mx - pad.l) / iw) * (points.length - 1));
+      return points[Math.min(points.length - 1, Math.max(0, i))];
+    };
+    // click on a day → its orders (the dashboard decides what that means)
+    if (opts.onPick) hit.addEventListener('click', (ev) => {
+      const p = pointAt(ev);
+      if (p) opts.onPick(p);
+    });
     const onMove = (ev) => {
       const rect = svg.getBoundingClientRect();
       const mx = ((ev.clientX - rect.left) / rect.width) * W;
@@ -118,7 +132,7 @@ export function lineChart(container, opts) {
         marker.setAttribute('cy', y(p.y));
         marker.setAttribute('visibility', 'visible');
       } else marker.setAttribute('visibility', 'hidden');
-      tip.show((x(idx) / W) * rect.width, (y(p.y ?? 0) / H) * rect.height, [[xFormat(p.x), p.y == null ? '—' : yFormat(p.y), color]]);
+      tip.show((x(idx) / W) * rect.width, (y(p.y ?? 0) / H) * rect.height, [[xFormat(p.x), p.y == null ? '—' : yFormat(p.y), color], ...(opts.pickHint ? [[opts.pickHint, '', null]] : [])]);
     };
     hit.addEventListener('pointermove', onMove);
     hit.addEventListener('pointerleave', () => {
@@ -137,6 +151,7 @@ export function lineChart(container, opts) {
  * @param {{ bars: {label:string, value:number|null, color:string}[], format:(v:number)=>string, label:string }} opts
  */
 export function barChart(container, opts) {
+  let first = true;
   const draw = () => {
     const { bars, format, label } = opts;
     const W = Math.max(280, container.clientWidth);
@@ -163,18 +178,22 @@ export function barChart(container, opts) {
           s('path', {
             d: `M${pad.l},${y0}H${pad.l + bw - r}Q${pad.l + bw},${y0} ${pad.l + bw},${y0 + r}V${y0 + 16 - r}Q${pad.l + bw},${y0 + 16} ${pad.l + bw - r},${y0 + 16}H${pad.l}Z`,
             fill: b.color,
+            class: first ? 'chart-bar-in' : null,
+            style: first ? `animation-delay:${i * 60}ms` : null,
           }),
         );
       }
       svg.append(s('text', { x: pad.l + bw + 8, y: cy + 4, class: 'chart-value-label' }, b.value == null ? '—' : format(b.value)));
-      const hit = s('rect', { x: 0, y: cy - row / 2, width: W, height: row, fill: 'transparent' });
+      const hit = s('rect', { x: 0, y: cy - row / 2, width: W, height: row, fill: 'transparent', class: opts.onPick ? 'chart-hit--pick' : null });
+      if (opts.onPick) hit.addEventListener('click', () => opts.onPick(b));
       hit.addEventListener('pointermove', (ev) => {
         const rect = svg.getBoundingClientRect();
-        tip.show(ev.clientX - rect.left, ((cy - 10) / H) * rect.height, [[b.label, b.value == null ? '—' : format(b.value), b.color]]);
+        tip.show(ev.clientX - rect.left, ((cy - 10) / H) * rect.height, [[b.label, b.value == null ? '—' : format(b.value), b.color], ...(opts.pickHint ? [[opts.pickHint, '', null]] : [])]);
       });
       hit.addEventListener('pointerleave', () => tip.hide());
       svg.append(hit);
     });
+    first = false;
   };
   return observe(container, draw);
 }
