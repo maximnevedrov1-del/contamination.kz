@@ -139,10 +139,13 @@ async function main() {
     await send('ui:openDashboard', { route: 'orders' });
     window.close();
   });
-  chrome.runtime.onMessage.addListener(async (msg) => {
+  // Not async: a returned promise would count as a reply to other pages' messages.
+  chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'bg:stateChanged' && msg.payload) {
-      state = await withSnapshots(msg.payload);
-      render();
+      withSnapshots(msg.payload).then((st) => {
+        state = st;
+        render();
+      });
     }
   });
 

@@ -35,13 +35,14 @@ const launch = async () => {
 
   // ---- export to Excel (CSV) ----
   await d.click('.tabs .tab:has-text("Все")'); await sleep(400);
-  const total = await d.locator('#view tbody tr').count();
+  // all matching orders (the table shows them 100 per page; export takes every one)
+  const total = Number((await d.locator('.toolbar__count').innerText()).replace(/\D/g, ''));
   const [csvDl] = await Promise.all([d.waitForEvent('download'), d.click('button[data-action=export]')]);
   const csvFile = path.join(__dirname, 'export-test.csv'); await csvDl.saveAs(csvFile);
   const raw = fs.readFileSync(csvFile);
   const csv = raw.toString('utf8');
   const lines = csv.trim().split('\r\n');
-  check('1b export: UTF-8 BOM, header, one line per row on screen', raw[0] === 0xef && raw[1] === 0xbb && lines[0].includes('Заказ') && lines.length === total + 1, `${lines.length - 1} of ${total}`);
+  check('1b export: UTF-8 BOM, header, one line per matching order (all pages)', raw[0] === 0xef && raw[1] === 0xbb && lines[0].includes('Заказ') && lines.length === total + 1, `${lines.length - 1} of ${total}`);
   check('1b export: store, status, amount as a number, products', lines.some((l) => l.startsWith('800002001;Автозапчасти;') && l.includes(';Новый;53371;Оплачен;') && /SKU-\d\] × \d/.test(l)), lines.find((l) => l.startsWith('800002001')));
   check('1b export: no buyer names in the file', !csv.includes('SECRET NAME'));
   // ---- data that lives only in the browser ----

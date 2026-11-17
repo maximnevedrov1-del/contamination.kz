@@ -2913,13 +2913,17 @@ function bindShell() {
   });
   $('refreshBtn').addEventListener('click', sync);
 
-  chrome.runtime.onMessage.addListener(async (msg) => {
+  // Not an async listener: a returned promise counts as a reply in Chrome and would
+  // answer other pages' messages to the worker (the popup got an empty state).
+  chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'bg:stateChanged' && msg.payload && !state.syncing) {
-      state.data = await withSnapshots(msg.payload);
-      renderTopbar();
-      renderBanners();
-      renderView();
-      maybePay();
+      withSnapshots(msg.payload).then((data) => {
+        state.data = data;
+        renderTopbar();
+        renderBanners();
+        renderView();
+        maybePay();
+      });
     }
     if (msg?.type === 'bg:progress' && state.job) {
       state.job.done = msg.payload.done;
