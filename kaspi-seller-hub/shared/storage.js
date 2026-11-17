@@ -68,6 +68,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   profit: { defaultCommission: null, byCategory: {} },
   // waybills: original | label (thermal printer, labelW×labelH mm) | a4 | a4x4 — dashboard/print-layout.js
   print: { paper: 'original', labelW: 100, labelH: 150 },
+  // «Только чтение»: nothing is changed in Kaspi (no accept / pack / card upload / price list)
+  readOnly: false,
   stores: {},
 });
 

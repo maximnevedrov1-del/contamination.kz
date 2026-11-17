@@ -1628,6 +1628,8 @@ function viewSettings() {
     { class: 'settings' },
     card(t('settings.stores'), t('settings.storesHint'), storesTable),
     apiCard(),
+    card(t('readOnly.title'), t('readOnly.hint'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', dataset: { setting: 'readOnly' }, checked: !!st.readOnly, onchange: (e) => updateSettings({ readOnly: e.target.checked }) }), t('readOnly.toggle'))),
     card(
       t('settings.appearance'),
       null,
@@ -1912,6 +1914,12 @@ const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
 
 function renderBanners() {
   const box = clear($('banners'));
+  // «Только чтение» is always visible: nothing the seller clicks changes Kaspi
+  if (state.data?.settings?.readOnly)
+    box.append(h('div', { class: 'banner banner--info', role: 'status', dataset: { banner: 'readonly' } },
+      h('span', { class: 'banner__icon' }, icon('info')),
+      h('span', { class: 'banner__text' }, h('b', null, t('readOnly.title')), ' — ', t('readOnly.banner')),
+      h('a', { class: 'btn btn--sm', href: '#settings' }, t('readOnly.change'))));
   // Firefox (and Chrome with "on click" site access) may not grant kaspi.kz at install time.
   if (state.kaspiAccess === false)
     box.append(

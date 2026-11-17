@@ -40,6 +40,7 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/photoprint.js` | product photos (order card, cost prices, pick list), waybills at their own paper size (A4 / 100×150 label) at 300 dpi |
 | `e2e/interactive.js` | Home tiles / store cards / KPIs / chart points and bars open the matching orders; count-up; «reduce motion» |
 | `load/load.js` | 5 stores × 5 000 orders: load time, requests, storage, every section under budget (see `load/README.md`) |
+| `e2e/readonly.js` | «Только чтение»: banner; reads work; accept / pack / publish refused in the UI, by the worker and by the API client; no POST reaches Kaspi |
 | `e2e/learn.js` | page guides, tour, help GIFs (desktop + phone) |
 | `e2e/apionly.js` | release build without cabinet mode: no chat, no content scripts, a Kaspi page never creates a store |
 | `e2e/devices.js` | layout on 10 screen sizes (320–1920 px) |

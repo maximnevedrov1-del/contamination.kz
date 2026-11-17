@@ -364,6 +364,17 @@ Effects:
 
 Plain CSS and SVG, no libraries. Everything is off under «reduce motion».
 
+## «Только чтение» (testing on live stores)
+
+«Настройки → Только чтение» lets a seller connect working stores without any risk. Orders,
+statuses, payments and waybills load as usual, but nothing is changed in Kaspi. The block works
+at three levels:
+- the worker refuses accept, pack, returns, chat replies, publishing and price-list changes;
+- `apiRequest` refuses any non-GET request;
+- scheduled price-list uploads stop.
+
+A banner on every page shows that the mode is on.
+
 ## Reliability
 
 - **Kazakhstan time.** «Сегодня», day filters, charts and every date shown use UTC+5 (all of

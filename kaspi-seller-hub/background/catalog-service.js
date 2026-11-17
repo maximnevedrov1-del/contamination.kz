@@ -71,6 +71,8 @@ export function isSuspiciousDrop(prev, next) {
 
 export async function syncFeeds(shopIds, { force = false, allowDrop = false } = {}) {
   if (!B.isConfigured()) return {};
+  // «Только чтение»: the price list Kaspi reads is not touched
+  if ((await getSettings()).readOnly) return Object.fromEntries(shopIds.map((id) => [id, { ok: false, error: 'readOnly' }]));
   const out = {};
   for (const shopId of shopIds) {
     out[shopId] = await lock(async () => {

@@ -52,6 +52,9 @@ function retryAfter(res, fallback) {
 export async function apiRequest(token, pathOrUrl, { method = 'GET', params, body, accept = 'application/vnd.api+json', contentType = 'application/vnd.api+json' } = {}) {
   const url = new URL(/^https?:/.test(pathOrUrl) ? pathOrUrl : A().base + pathOrUrl);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  // «Только чтение» (settings.readOnly, set by the worker): only reads ever leave the extension.
+  // Last line of defence: the worker also refuses the actions before they get here.
+  if (method !== 'GET' && globalThis.KSH_READONLY) throw new ApiError('readOnly', 0);
   const idempotent = method === 'GET';
   for (let attempt = 0; ; attempt++) {
     const last = attempt >= RETRY_DELAYS.length;

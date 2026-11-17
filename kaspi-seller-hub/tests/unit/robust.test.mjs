@@ -141,6 +141,21 @@ await test('card import sends text/plain JSON array once on 503', async () => {
   assert.equal(seen.body, '[{"sku":"A1"}]');
 });
 
+await test('read-only mode: writes refused before any request, reads still go', async () => {
+  const calls = fakeFetch([{ status: 200 }]);
+  globalThis.KSH_READONLY = true;
+  try {
+    await assert.rejects(K.acceptOrder('t', { id: 'x', code: '1' }), (e) => e.code === 'readOnly');
+    await assert.rejects(K.assembleOrder('t', { id: 'x' }), (e) => e.code === 'readOnly');
+    await assert.rejects(K.importProducts('t', [{ sku: 'A' }]), (e) => e.code === 'readOnly');
+    assert.equal(calls.length, 0);
+    await K.apiRequest('t', '/orders');
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.KSH_READONLY = false;
+  }
+});
+
 /* ---------------- price-list drop guard ---------------- */
 await test('drop guard: everything gone → held', () => assert.equal(C.isSuspiciousDrop(5, 0), true));
 await test('drop guard: 100 → 40 held, 100 → 60 allowed', () => {

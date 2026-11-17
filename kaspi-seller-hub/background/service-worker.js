@@ -1291,6 +1291,12 @@ const uiHandlers = {
 const billingCall = (fn) => fn().catch((e) => ({ ok: false, error: e.code || e.message }));
 
 /** Actions that need an active subscription (trial or paid). */
+/** Everything that changes something in Kaspi (or the price list Kaspi reads). */
+const WRITES = new Set(['ui:pack', 'ui:accept', 'ui:process', 'ui:chatSend', 'ui:catalogPublish', 'ui:feedSync', 'ui:feedSettings']);
+globalThis.KSH_READONLY = false;
+const refreshReadOnly = async () => (globalThis.KSH_READONLY = !!(await getSettings()).readOnly);
+refreshReadOnly();
+
 const NEEDS_LICENSE = new Set([
   'ui:pack', 'ui:accept', 'ui:fetchInvoices', 'ui:print', 'ui:process', 'ui:refreshPayments',
   'ui:chatList', 'ui:chatThread', 'ui:chatSend', 'ui:openChatTabs', 'ui:connectApi',
@@ -1310,6 +1316,7 @@ Object.assign(
  * @returns {Promise<object|null>} an error response, or null when allowed
  */
 async function licenseGate(type, payload) {
+  if (WRITES.has(type) && (await refreshReadOnly())) return { ok: false, error: 'readOnly' };
   if (!NEEDS_LICENSE.has(type)) return null;
   const lic = await currentLicense();
   if (!lic.canUse) return { ok: false, error: 'subscriptionRequired' };
@@ -1380,6 +1387,7 @@ chrome.notifications?.onClicked.addListener((id) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[KEYS.settings]) {
+    globalThis.KSH_READONLY = !!changes[KEYS.settings].newValue?.readOnly;
     const a = changes[KEYS.settings].oldValue?.chatPollSec;
     const b = changes[KEYS.settings].newValue?.chatPollSec;
     if (a !== b) scheduleAlarms();
