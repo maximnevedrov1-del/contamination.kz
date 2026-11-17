@@ -44,15 +44,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // profit: products page
   await d.bringToFront(); await d.evaluate(() => (location.hash = 'products')); await d.click('#rangeSeg button[data-preset="90"]'); await sleep(700);
   check('5 products page lists 3 products from order contents', (await d.locator('tbody tr').count()) === 3);
-  check('5 profit "?" before costs are set', (await d.locator('tbody tr').first().locator('td').nth(7).innerText()).trim() === '?');
+  // columns by header text, not by position (the table may gain columns, e.g. «Фото»)
+  const col = async (re) => (await d.$$eval('#view thead th', (ths) => ths.map((x) => x.innerText.trim()))).findIndex((x) => re.test(x));
+  const [cProduct, cUnits, cRevenue, cProfit] = [await col(/^Товар/), await col(/^Продано|^Штук|^Кол/), await col(/^Выручка/), await col(/^Прибыль/)];
+  check('5 product table columns found', [cProduct, cUnits, cRevenue, cProfit].every((i) => i >= 0), [cProduct, cUnits, cRevenue, cProfit].join(','));
+  check('5 profit "?" before costs are set', (await d.locator('tbody tr').first().locator('td').nth(cProfit).innerText()).trim() === '?');
   const pct = d.locator('label:has-text("Для всех категорий") input'); await pct.fill('10'); await pct.dispatchEvent('change'); await sleep(700);
   const costs = { 'SKU-0': 5000, 'SKU-1': 3000, 'SKU-2': 1000 };
   for (const [sku, c] of Object.entries(costs)) { const inp = d.locator(`tr:has-text("${sku}") input[type=number]`); await inp.fill(String(c)); await inp.dispatchEvent('change'); await sleep(500); }
   const prow = await d.$$eval('tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.innerText.trim())));
-  const r0 = prow[0]; const rev = Number(r0[4].replace(/\D/g, '')), units = Number(r0[3].replace(/\D/g, '')), sku = r0[0].split('\n')[1];
+  const r0 = prow[0]; const rev = Number(r0[cRevenue].replace(/\D/g, '')), units = Number(r0[cUnits].replace(/\D/g, '')), sku = r0[cProduct].split('\n')[1];
   const expect = rev - costs[sku] * units - rev * 0.1;
-  const got = Number(r0[7].replace(/[^\d-]/g, '').replace(/^-?/, (m) => m));
-  check('5 product profit = revenue − cost×units − 10%', Math.abs(Math.abs(got) - Math.abs(Math.round(expect))) <= 1, `${sku} rev=${rev} units=${units} expected=${Math.round(expect)} got=${r0[7]}`);
+  const got = Number(r0[cProfit].replace(/[^\d-]/g, '').replace(/^-?/, (m) => m));
+  check('5 product profit = revenue − cost×units − 10%', Math.abs(Math.abs(got) - Math.abs(Math.round(expect))) <= 1, `${sku} rev=${rev} units=${units} expected=${Math.round(expect)} got=${r0[cProfit]}`);
   await d.screenshot({ path: __dirname + '/feat-products.png' });
   // order-level profit
   await d.evaluate(() => (location.hash = 'orders')); await sleep(500);
