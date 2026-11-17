@@ -5,6 +5,7 @@
 import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative, formatMoney } from '../shared/i18n.js';
 import { h, clear, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 import { FEATURES } from '../shared/features.js';
+import { withSnapshots } from '../shared/storage.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
@@ -105,7 +106,7 @@ async function refresh() {
   syncing = true;
   render();
   try {
-    state = await send('ui:sync');
+    state = await withSnapshots(await send('ui:sync'));
   } finally {
     syncing = false;
     render();
@@ -114,7 +115,7 @@ async function refresh() {
 
 async function main() {
   await initI18n();
-  state = await send('ui:getState');
+  state = await withSnapshots(await send('ui:getState'));
   applyTheme(state.settings.theme);
   render();
 
@@ -138,9 +139,9 @@ async function main() {
     await send('ui:openDashboard', { route: 'orders' });
     window.close();
   });
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener(async (msg) => {
     if (msg?.type === 'bg:stateChanged' && msg.payload) {
-      state = msg.payload;
+      state = await withSnapshots(msg.payload);
       render();
     }
   });

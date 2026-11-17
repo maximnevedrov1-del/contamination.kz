@@ -26,7 +26,7 @@ import '../shared/selectors.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
-import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog } from '../shared/storage.js';
+import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
 import {
@@ -215,7 +215,7 @@ function sectionNotes(route) {
 const COLUMNS = {
   id: { label: 'table.orderId', value: (r) => r.id, render: (r) => (r.kind === 'order' || !r.kind ? h('button', { type: 'button', class: 'link mono', title: t('order.open'), onclick: (e) => (e.stopPropagation(), openOrder(r)) }, r.id) : h('span', { class: 'mono' }, r.id)) },
   store: { label: 'table.store', value: (r) => storeName(r.shopId), render: (r) => storeChip(r.shopId) },
-  date: { label: 'table.date', value: (r) => r.date, render: (r) => formatDate(r.date, 'datetime') },
+  date: { label: 'table.date', value: (r) => (r.date ? Date.parse(r.date) : null), render: (r) => formatDate(r.date, 'datetime') },
   customer: { label: 'table.customer', value: (r) => r.customer, render: (r) => r.customer || h('span', { class: 'muted' }, '—') },
   status: { label: 'table.status', value: (r) => t(`status.${r.status}`), render: statusBadge },
   reason: { label: 'table.reason', value: (r) => reasonText(r.reason), render: (r) => reasonText(r.reason) || h('span', { class: 'muted' }, '—'), wrap: true },
@@ -266,19 +266,31 @@ function filterAndSort(route, rows) {
       (ts.status === 'all' || r.status === ts.status) &&
       (route !== 'orders' || orderTabMatch(ts.tab, r)) &&
       (ts.payment === 'all' || r.paymentStatus === ts.payment) &&
-      (!ts.urgent || ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()))) &&
+      (!ts.urgent || isUrgent(r)) &&
       (!q || [r.id, r.customer, r.reason, storeName(r.shopId)].some((v) => v && String(v).toLowerCase().includes(q))),
   );
   if (route === 'payments') out = out.filter((r) => r.paymentStatus === state.paymentGroup);
   const col = COLUMNS[ts.sort.key];
-  if (col) out.sort((a, b) => compareValues(col.value(a), col.value(b)) * (ts.sort.dir === 'asc' ? 1 : -1));
+  if (col) {
+    // sort keys computed once per row, not twice per comparison
+    const dir = ts.sort.dir === 'asc' ? 1 : -1;
+    out = out.map((r) => [col.value(r), r]).sort((a, b) => compareValues(a[0], b[0]) * dir).map((x) => x[1]);
+  }
   return out;
 }
 
 /** Orders quick tabs: «Горящие / Новые / В работе / Все». */
 const ORDER_TABS = ['urgent', 'new', 'work', 'all'];
+// Deadline urgency per row object (rows are rebuilt on every render, so the cache is too):
+// with 25 000 orders the tab counters asked for it ~100 000 times per render.
+let urgentMemo = new WeakMap();
+function isUrgent(r) {
+  let u = urgentMemo.get(r);
+  if (u === undefined) urgentMemo.set(r, (u = ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()))));
+  return u;
+}
 function orderTabMatch(tab, r) {
-  if (tab === 'urgent') return ['soon', 'overdue'].includes(urgencyOf(deadlineOf(r, settingsNow()), settingsNow()));
+  if (tab === 'urgent') return isUrgent(r);
   if (tab === 'new') return r.status === 'new';
   if (tab === 'work') return ['accepted', 'packed', 'delivering'].includes(r.status);
   return true;
@@ -326,7 +338,8 @@ function renderTable(route, allRows) {
       'div',
       { class: 'tabs', role: 'tablist', 'aria-label': t('orders.tabsLabel') },
       ORDER_TABS.map((tab) => {
-        const n = tab === 'all' ? allRows.length : allRows.filter((r) => orderTabMatch(tab, r)).length;
+        // only active orders can be urgent / new / in work: archive rows are skipped quickly
+        const n = tab === 'all' ? allRows.length : allRows.reduce((k, r) => k + (orderTabMatch(tab, r) ? 1 : 0), 0);
         return h(
           'button',
           { type: 'button', role: 'tab', class: ['tab', tab === 'urgent' && n && 'tab--danger'], 'aria-selected': String(ts.tab === tab), onclick: () => ((ts.tab = tab), ts.selected.clear(), renderView()) },
@@ -430,11 +443,20 @@ function renderTable(route, allRows) {
     }),
   );
 
-  ts.focus = Math.min(ts.focus, rows.length - 1);
+  // Page of rows: a store with thousands of orders must not draw them all at once
+  // (8 000 rows took 6 s, 25 000 took 26 s). Filters, sort, search, «select all» and
+  // export still work on every matching row.
+  const sig = JSON.stringify([ts.q, ts.status, ts.payment, ts.tab, ts.urgent, ts.sort, state.paymentGroup, state.filters, rows.length]);
+  if (ts.pageSig !== sig) (ts.page = 0), (ts.pageSig = sig);
+  const pageCount = Math.max(1, Math.ceil(rows.length / TABLE_PAGE));
+  ts.page = Math.min(Math.max(0, ts.page || 0), pageCount - 1);
+  const first = ts.page * TABLE_PAGE;
+  const shown = rows.slice(first, first + TABLE_PAGE);
+  ts.focus = Math.min(ts.focus, shown.length - 1);
   const tbody = h(
     'tbody',
     null,
-    rows.map((r, i) =>
+    shown.map((r, i) =>
       h(
         'tr',
         { tabindex: i === ts.focus ? '0' : '-1', 'aria-selected': String(ts.selected.has(r.key)), dataset: { idx: i, fkey: `${route}-row-${r.key}` } },
@@ -443,7 +465,7 @@ function renderTable(route, allRows) {
       ),
     ),
   );
-  tbody.addEventListener('keydown', (e) => onTableKey(e, route, rows));
+  tbody.addEventListener('keydown', (e) => onTableKey(e, route, shown));
   tbody.addEventListener('focusin', (e) => {
     const tr = e.target.closest('tr');
     if (tr) ts.focus = Number(tr.dataset.idx);
@@ -457,7 +479,24 @@ function renderTable(route, allRows) {
     bulk,
     notes,
     h('div', { class: 'table-wrap' }, h('table', { class: 'data', 'aria-rowcount': rows.length }, h('thead', null, head), tbody)),
+    pageCount > 1 && pager(ts, pageCount, first, shown.length, rows.length),
     h('div', { class: 'kbd-hint' }, t('table.keyboardHint')),
+  );
+}
+
+const TABLE_PAGE = 100;
+
+/** «‹ Назад · 101–200 из 8 422 · Вперёд ›» under a long table. */
+function pager(ts, pageCount, first, shownCount, total) {
+  const go = (p) => {
+    ts.page = p;
+    renderView();
+    document.querySelector('#view .table-wrap')?.scrollIntoView({ block: 'start' });
+  };
+  return h('nav', { class: 'pager', 'aria-label': t('table.pages') },
+    h('button', { type: 'button', class: 'btn btn--sm', disabled: ts.page === 0, dataset: { page: 'prev' }, onclick: () => go(ts.page - 1) }, '‹ ', t('table.prev')),
+    h('span', { class: 'pager__info' }, t('table.range', { from: formatNumber(first + 1), to: formatNumber(first + shownCount), total: formatNumber(total) })),
+    h('button', { type: 'button', class: 'btn btn--sm', disabled: ts.page >= pageCount - 1, dataset: { page: 'next' }, onclick: () => go(ts.page + 1) }, t('table.next'), ' ›'),
   );
 }
 
@@ -2755,7 +2794,7 @@ function renderAll() {
 /* ===================================================================== */
 
 async function loadState() {
-  state.data = await send('ui:getState');
+  state.data = await withSnapshots(await send('ui:getState'));
   state.chat = await getChat();
   state.costs = await getCosts();
   [state.photos, state.catalog] = await Promise.all([getPhotos(), getCatalog()]);
@@ -2771,7 +2810,7 @@ async function sync() {
   renderView();
   try {
     const res = await send('ui:sync');
-    if (res?.settings) state.data = res;
+    if (res?.settings) state.data = await withSnapshots(res);
     else if (res?.ok === false) toast(errorText(res.error), 'error');
     state.chat = await getChat();
   } finally {
@@ -2874,9 +2913,9 @@ function bindShell() {
   });
   $('refreshBtn').addEventListener('click', sync);
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener(async (msg) => {
     if (msg?.type === 'bg:stateChanged' && msg.payload && !state.syncing) {
-      state.data = msg.payload;
+      state.data = await withSnapshots(msg.payload);
       renderTopbar();
       renderBanners();
       renderView();

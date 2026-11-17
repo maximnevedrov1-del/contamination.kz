@@ -473,3 +473,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .order__qty--many { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--text); font-size: 17px; font-weight: 700; }
 .photo-preview { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 160px; margin: 8px 0 12px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .photo-preview img { max-width: 100%; max-height: 220px; object-fit: contain; background: #fff; border-radius: 6px; }
+
+/* long tables: one page of rows at a time */
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 0 4px; }
+.pager__info { color: var(--text-2); font-variant-numeric: tabular-nums; }

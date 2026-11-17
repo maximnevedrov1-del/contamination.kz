@@ -107,6 +107,11 @@ export async function saveSettings(patch) {
 
 /** @returns {Promise<Record<string, Snapshot>>} */
 export const getSnapshots = () => read(local, KEYS.snapshots, {});
+/** Pages get the worker's state without the (large) snapshots and read them here. */
+export async function withSnapshots(st) {
+  if (st && st.settings && !st.snapshots) st.snapshots = await getSnapshots();
+  return st;
+}
 /** @param {Record<string, Snapshot>} v */
 export const setSnapshots = (v) => write(local, KEYS.snapshots, v);
 

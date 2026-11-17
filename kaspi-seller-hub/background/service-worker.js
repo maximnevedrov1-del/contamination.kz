@@ -421,7 +421,27 @@ function mergeStoreSnapshot(prev, fresh) {
  * Pull fresh data from every open store tab.
  * @returns {Promise<object>} state for the UI
  */
-async function sync() {
+/*
+ * One sync at a time. Connecting 5 stores in a row used to start 5 overlapping full
+ * syncs (the first store was downloaded 5 times). A call while a sync runs now waits
+ * for it and then runs ONE more (it may need a store added in the meantime); further
+ * calls share that queued run.
+ */
+let syncRunning = null;
+let syncQueued = null;
+function sync() {
+  if (!syncRunning) {
+    syncRunning = syncNow().finally(() => (syncRunning = null));
+    return syncRunning;
+  }
+  syncQueued ??= syncRunning.catch(() => {}).then(() => {
+    syncQueued = null;
+    return sync();
+  });
+  return syncQueued;
+}
+
+async function syncNow() {
   // No active subscription → no data is pulled; the UI shows the paywall.
   const lic = await billingMaintenance();
   if (!lic.canUse) {
@@ -538,13 +558,19 @@ async function onContentUpdate(snap) {
 }
 
 /** State consumed by popup and dashboard. */
-async function getState() {
-  const [settings, snapshots, lastSync, registry, tokens, catalog] = await Promise.all([getSettings(), getSnapshots(), getLastSync(), getRegistry(), getApiTokens(), getCatalog()]);
+/**
+ * State for extension pages. Without `full`, the per-store snapshots (all orders —
+ * 15–20 MB with 5 stores × 5 000 orders) are left out: pages read them straight from
+ * chrome.storage (shared/storage.js → withSnapshots) instead of receiving a copy in
+ * every message and every broadcast after a sync.
+ */
+async function getState({ full = false } = {}) {
+  const [settings, snapshots, lastSync, registry, tokens, catalog] = await Promise.all([getSettings(), full ? getSnapshots() : null, getLastSync(), getRegistry(), getApiTokens(), getCatalog()]);
   const tabs = Object.values(registry);
   const license = await currentLicense().catch(() => ({ status: 'offline', canUse: false, storeLimit: 0 }));
   return {
     settings,
-    snapshots,
+    ...(full ? { snapshots } : {}),
     lastSync,
     tabs,
     unauthTabs: tabs.filter((e) => !e.authenticated && e.isCabinet).length,
@@ -667,7 +693,9 @@ async function apiSnapshot(shopId, token, prevSnap, store) {
 
 /**
  * Order contents are one request per order, so they are cached forever (they do
- * not change) and fetched at most 60 per sync, newest and active orders first.
+ * not change) and fetched at most `entriesPerSync` per sync (3 in parallel), active
+ * and newest orders first. 5 000 orders of history fill in within ~17 syncs (≈ 1.5 h);
+ * with 60 per sync it took ~7 h, so profit and «Себестоимость» stayed incomplete.
  */
 async function apiTopProducts(shopId, token, items) {
   const cache = await getApiEntries();
@@ -675,16 +703,22 @@ async function apiTopProducts(shopId, token, items) {
   const todo = items
     .filter((i) => i.api?.entriesUrl && !cache[key(i.id)])
     .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
-    .slice(0, 60);
-  for (const it of todo) {
-    try {
-      cache[key(it.id)] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
-    } catch (e) {
-      if (e.code === 'apiUnauthorized') throw e;
-      break; // try the rest on the next sync
+    .slice(0, S.api.entriesPerSync || 60);
+  let stop = null;
+  const worker = async () => {
+    while (todo.length && !stop) {
+      const it = todo.shift();
+      try {
+        cache[key(it.id)] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
+      } catch (e) {
+        stop = e; // the rest waits for the next sync
+      }
     }
-  }
-  if (todo.length) await lock(() => setApiEntries(cache));
+  };
+  const fetched = todo.length;
+  await Promise.all(Array.from({ length: Math.min(S.api.concurrency || 3, todo.length) }, worker));
+  if (stop?.code === 'apiUnauthorized') throw stop;
+  if (fetched) await lock(() => setApiEntries(cache));
   const agg = new Map();
   for (const it of items) {
     for (const e of cache[key(it.id)] || []) {
@@ -1091,7 +1125,7 @@ const uiHandlers = {
     return { ok: true };
   },
 
-  'ui:getState': () => getState(),
+  'ui:getState': (p) => getState({ full: !!p?.full }),
   'ui:sync': () => sync(),
   'ui:pack': (p) => actions.pack(p),
   /** Cost price of a product (by SKU), shared by all stores. null removes it. */

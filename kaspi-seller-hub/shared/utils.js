@@ -156,12 +156,15 @@ export const ratio = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b > 
  * @param {any} a
  * @param {any} b
  */
+// one collator for all comparisons: localeCompare() with options builds one per call
+// (sorting 25 000 orders took ~1 s)
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 export function compareValues(a, b) {
   const na = a == null || a === '';
   const nb = b == null || b === '';
   if (na || nb) return na === nb ? 0 : na ? 1 : -1;
   if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+  return collator.compare(String(a), String(b));
 }
 
 /** Fill a URL template like "/mc/#/orders/{orderId}". Values are URI-encoded. */
