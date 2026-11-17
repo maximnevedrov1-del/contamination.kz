@@ -415,3 +415,21 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
   .tile__value { font-size: 18px; }
   .home-store__nums { gap: var(--space-3); }
 }
+
+/* ---------- order card ---------- */
+.link { border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.link:hover { text-decoration-color: currentColor; }
+.order { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.order__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.order__head .dialog__title { margin: 0 var(--space-2) 0 0; }
+.order__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2) var(--space-5); }
+.order__row { display: flex; justify-content: space-between; gap: var(--space-3); padding: 6px 0; border-bottom: 1px solid var(--border); }
+.order__sub { margin: 0; font-size: 14px; font-weight: 600; }
+.order .dialog__actions { margin-top: 0; flex-wrap: wrap; align-items: center; }
+
+/* ---------- help ---------- */
+.faq { display: grid; gap: 0; }
+.faq__item { border-top: 1px solid var(--border); padding: 10px 0; }
+.faq__item:first-child { border-top: 0; }
+.faq__item summary { cursor: pointer; font-weight: 500; }
+.faq__item p { margin: 8px 0 0; color: var(--text-2); white-space: pre-line; }

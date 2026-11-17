@@ -12,7 +12,7 @@
  */
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings } from '../shared/storage.js';
+import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts } from '../shared/storage.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
 
@@ -315,6 +315,83 @@ export function catalogHandlers({ allowedShopIds }) {
       const token = await tokenFor(shopId);
       return { ok: true, list: await cached(`vals:${category}:${attribute}`, DAY, () => K.getAttributeValues(token, category, attribute)) };
     },
+    /**
+     * Backup of what lives only in this browser: settings, cost prices, catalog, price-list
+     * settings. API tokens are NOT included (a file with tokens would give access to the stores).
+     */
+    'ui:backupExport': async () => {
+      const [settings, costs, catalog, feeds] = await Promise.all([getSettings(), getCosts(), getCatalog(), getFeeds()]);
+      return {
+        ok: true,
+        backup: {
+          app: 'kaspi-seller-hub',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          settings: { lang: settings.lang, theme: settings.theme, chatPollSec: settings.chatPollSec, notifications: settings.notifications, deadlines: settings.deadlines, profit: settings.profit },
+          stores: Object.fromEntries(storesOf(settings).map((s) => [s.id, { name: s.name, alias: s.alias || '', color: s.color }])),
+          costs,
+          catalog,
+          feeds: Object.fromEntries(Object.entries(feeds).map(([id, f]) => [id, { merchantId: f.merchantId || '', company: f.company || '', warehouses: f.warehouses || [] }])),
+        },
+      };
+    },
+
+    /** Restore a backup: merged into the current data (the file wins for the same product / cost). */
+    'ui:backupImport': async ({ backup }) => {
+      const b = backup;
+      if (!b || b.app !== 'kaspi-seller-hub' || b.version !== 1 || typeof b !== 'object') return { ok: false, error: 'backupInvalid' };
+      const settings = await getSettings();
+      // Store ids differ after a reinstall (API stores get a new id) → match stores by name.
+      const byName = new Map(storesOf(settings).map((s) => [String(s.name).trim().toLowerCase(), s.id]));
+      const idMap = {};
+      for (const [oldId, st] of Object.entries(b.stores || {})) {
+        const now = settings.stores[oldId] ? oldId : byName.get(String(st?.name || '').trim().toLowerCase());
+        if (now) idMap[oldId] = now;
+      }
+      const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null);
+      let products = 0;
+      let costsN = 0;
+      const touched = new Set();
+      await lock(async () => {
+        const costs = await getCosts();
+        for (const [k, v] of Object.entries(b.costs || {}).slice(0, 50000)) if (typeof k === 'string' && k.length <= 200 && num(v) != null) (costs[k] = num(v)), costsN++;
+        await setCosts(costs);
+        const catalog = await getCatalog();
+        for (const raw of Object.values(b.catalog || {}).slice(0, 50000)) {
+          const stores = Object.fromEntries(Object.entries(raw?.stores || {}).filter(([id]) => idMap[id]).map(([id, o]) => [idMap[id], o]));
+          const { product, errors } = validateProduct({ ...raw, stores, imported: true });
+          if (errors.length) continue;
+          product.imported = !!raw.imported;
+          catalog[product.sku] = { ...catalog[product.sku], ...product };
+          Object.entries(product.stores).forEach(([id, o]) => o.on && touched.add(id));
+          products++;
+        }
+        await setCatalog(catalog);
+        const feeds = await getFeeds();
+        for (const [oldId, f] of Object.entries(b.feeds || {})) {
+          const id = idMap[oldId];
+          if (!id || feeds[id]?.merchantId) continue; // keep what is already set up here
+          feeds[id] = { ...feeds[id], merchantId: String(f?.merchantId || '').slice(0, 64), company: String(f?.company || '').slice(0, 200), warehouses: (f?.warehouses || []).filter((w) => WAREHOUSE_RE.test(w)), confirmed: false };
+        }
+        await setFeeds(feeds);
+        const st = b.settings || {};
+        const patch = {};
+        if (['ru', 'kk'].includes(st.lang)) patch.lang = st.lang;
+        if (['system', 'light', 'dark'].includes(st.theme)) patch.theme = st.theme;
+        if (st.notifications && typeof st.notifications === 'object') patch.notifications = { ...settings.notifications, ...Object.fromEntries(Object.entries(st.notifications).filter(([k, v]) => k in settings.notifications && typeof v === 'boolean')) };
+        if (st.deadlines && num(st.deadlines.acceptHours) != null) patch.deadlines = { acceptHours: num(st.deadlines.acceptHours), warnHours: num(st.deadlines.warnHours) ?? settings.deadlines.warnHours };
+        if (st.profit && typeof st.profit === 'object') patch.profit = { defaultCommission: num(st.profit.defaultCommission), byCategory: Object.fromEntries(Object.entries(st.profit.byCategory || {}).filter(([, v]) => num(v) != null).map(([k, v]) => [String(k).slice(0, 200), num(v)])) };
+        const fresh = await getSettings();
+        for (const [oldId, stx] of Object.entries(b.stores || {})) {
+          const id = idMap[oldId];
+          if (id && fresh.stores[id]) fresh.stores[id] = { ...fresh.stores[id], alias: String(stx.alias || fresh.stores[id].alias || '').slice(0, 100), color: /^#[0-9a-f]{6}$/i.test(stx.color) ? stx.color : fresh.stores[id].color };
+        }
+        await saveSettings({ ...patch, stores: fresh.stores });
+      });
+      scheduleFeedSync([...touched]);
+      return { ok: true, products, costs: costsN, stores: Object.keys(idMap).length, storesSkipped: Object.keys(b.stores || {}).length - Object.keys(idMap).length };
+    },
+
     'ui:cardsRefresh': async () => {
       await pollImports();
       return { ok: true };

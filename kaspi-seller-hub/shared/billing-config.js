@@ -39,3 +39,15 @@ export function legalUrl(kind) {
   const own = kind === 'privacy' ? LEGAL.privacyUrl : LEGAL.offerUrl;
   return own || chrome.runtime.getURL(`legal/terms.html#${kind}`);
 }
+
+/**
+ * Support contacts shown on the «Помощь» page. Fill in what you use; empty ones are hidden.
+ *   whatsapp — number in international format, digits only: '77011234567'
+ *   telegram — user name without @
+ */
+export const SUPPORT = Object.freeze({
+  whatsapp: '',
+  telegram: '',
+  email: '',
+  hours: '', // e.g. 'пн–пт 10:00–19:00'
+});

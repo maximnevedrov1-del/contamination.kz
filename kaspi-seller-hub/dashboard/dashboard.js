@@ -23,7 +23,7 @@ import {
   formatDuration,
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
-import { legalUrl } from '../shared/billing-config.js';
+import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView } from './catalog-view.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
@@ -55,7 +55,7 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
+const ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account', 'help'];
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
 const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, tab: 'all', selected: new Set(), focus: 0 });
@@ -203,7 +203,7 @@ function sectionNotes(route) {
 /* ===================================================================== */
 
 const COLUMNS = {
-  id: { label: 'table.orderId', value: (r) => r.id, render: (r) => h('span', { class: 'mono' }, r.id) },
+  id: { label: 'table.orderId', value: (r) => r.id, render: (r) => (r.kind === 'order' || !r.kind ? h('button', { type: 'button', class: 'link mono', title: t('order.open'), onclick: (e) => (e.stopPropagation(), openOrder(r)) }, r.id) : h('span', { class: 'mono' }, r.id)) },
   store: { label: 'table.store', value: (r) => storeName(r.shopId), render: (r) => storeChip(r.shopId) },
   date: { label: 'table.date', value: (r) => r.date, render: (r) => formatDate(r.date, 'datetime') },
   customer: { label: 'table.customer', value: (r) => r.customer, render: (r) => r.customer || h('span', { class: 'muted' }, '—') },
@@ -356,6 +356,7 @@ function renderTable(route, allRows) {
 
     h('div', { class: 'toolbar__spacer' }),
     route === 'orders' && h('button', { type: 'button', class: 'btn btn--sm', onclick: () => openPickList(allRows) }, t('pick.button')),
+    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'export' }, disabled: !rows.length, title: t('export.hint'), onclick: () => exportRows(route, selectedRows.length ? selectedRows : rows) }, t('export.button')),
     h('span', { class: 'toolbar__count' }, t('table.rows', { count: rows.length })),
   );
 
@@ -567,6 +568,89 @@ async function runJob(kind, type, payload, okKey) {
     refreshInvoiceCount();
     renderView();
   }
+}
+
+/* ---------- export for the accountant: what is on screen (or the ticked rows) → Excel ---------- */
+function exportRows(route, list) {
+  // A cell starting with = + - @ would run as a formula in Excel → neutralised with a leading apostrophe.
+  const cell = (v) => {
+    let x = v == null ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(x)) x = `'${x}`;
+    return /[";\n\r]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
+  };
+  const head = [t('table.orderId'), t('table.store'), t('table.date'), t('table.status'), t('table.amount'), t('table.payment'), t('order.items'), t('order.qty'), t('table.profit'), t('table.reason')];
+  const lines = list.map((r) => {
+    const p = orderProfit(r, state.costs, settingsNow().profit);
+    return [
+      r.id,
+      storeName(r.shopId),
+      r.date ? new Date(r.date).toLocaleString(getLang() === 'kk' ? 'kk-KZ' : 'ru-RU') : '',
+      t(`status.${r.status}`),
+      r.amount ?? '',
+      t(`payment.${r.paymentStatus}`),
+      (r.entries || []).map((e) => `${e.name || e.category || ''}${e.sku ? ` [${e.sku}]` : ''} × ${e.quantity || 1}`).join(' | '),
+      (r.entries || []).reduce((n, e) => n + (e.quantity || 1), 0) || '',
+      p?.complete ? Math.round(p.profit) : '',
+      reasonText(r.reason),
+    ].map(cell).join(';');
+  });
+  // BOM + ";" = opens correctly in Excel with a Russian/Kazakh locale by double click
+  const blob = new Blob(['\ufeff' + [head.map(cell).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `seller-hub-${route}-${new Date().toISOString().slice(0, 10)}.csv` });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast(t('export.done', { count: list.length }), 'ok');
+}
+
+/* ---------- order card: contents, deadline, money, actions ---------- */
+function openOrder(r) {
+  let dlg = $('orderDialog');
+  if (!dlg) {
+    dlg = h('dialog', { id: 'orderDialog', class: 'dialog dialog--wide', 'aria-labelledby': 'orderTitle' });
+    document.body.append(dlg);
+  }
+  const item = [{ shopId: r.shopId, orderId: r.id, url: r.url }];
+  const p = orderProfit(r, state.costs, settingsNow().profit);
+  const row = (label, value) => h('div', { class: 'order__row' }, h('span', { class: 'muted' }, label), h('span', null, value));
+  const act = (label, fn, primary) => h('button', { type: 'button', class: ['btn', primary && 'btn--primary'], disabled: !!state.job, onclick: async () => (dlg.close(), await fn()) }, t(label));
+  const entries = r.entries || [];
+  clear(dlg).append(
+    h(
+      'div',
+      { class: 'order' },
+      h('div', { class: 'order__head' }, h('h2', { class: 'dialog__title', id: 'orderTitle' }, t('order.title', { id: r.id })), statusBadge(r), deadlineBadge(r)),
+      h('div', { class: 'order__grid' },
+        row(t('table.store'), storeChip(r.shopId)),
+        row(t('table.date'), formatDate(r.date, 'datetime')),
+        row(t('table.amount'), h('b', null, formatMoney(r.amount))),
+        row(t('table.payment'), paymentBadge(r)),
+        r.customer && row(t('table.customer'), r.customer),
+        p && row(t('table.profit'), p.complete ? h('b', { class: p.profit < 0 ? 'neg' : null }, formatMoney(p.profit)) : h('a', { href: '#products', class: 'muted', onclick: () => dlg.close() }, t('order.noCost'))),
+        r.reason && row(t('table.reason'), reasonText(r.reason)),
+      ),
+      h('h3', { class: 'order__sub' }, t('order.items')),
+      entries.length
+        ? h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+            h('thead', null, h('tr', null, h('th', null, t('order.product')), h('th', { class: 'num' }, t('order.qty')), h('th', { class: 'num' }, t('order.price')), h('th', { class: 'num' }, t('products.cost')))),
+            h('tbody', null, entries.map((e) => h('tr', null,
+              h('td', null, e.name || e.category || '—', e.sku && h('div', { class: 'muted mono small' }, e.sku)),
+              h('td', { class: 'num' }, formatNumber(e.quantity || 1)),
+              h('td', { class: 'num' }, formatMoney(e.total ?? (e.price || 0) * (e.quantity || 1))),
+              h('td', { class: 'num' }, state.costs[productKey(e)] != null ? formatMoney(state.costs[productKey(e)]) : h('span', { class: 'muted' }, '—')),
+            ))),
+          ))
+        : h('p', { class: 'muted' }, t('order.noItems')),
+      h('div', { class: 'dialog__actions' },
+        r.url && h('a', { class: 'btn btn--ghost', href: r.url, target: '_blank', rel: 'noopener' }, t('order.openKaspi')),
+        h('span', { class: 'grow' }),
+        h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, t('common.close')),
+        r.status === 'new' && act('order.accept', () => doAccept(item)),
+        ['new', 'accepted'].includes(r.status) && act('order.pack', () => doPack(item), true),
+        ['accepted', 'packed', 'delivering'].includes(r.status) && act('order.print', () => send('ui:print', { items: item })),
+      ),
+    ),
+  );
+  dlg.showModal();
 }
 
 const hasApi = (items) => items.some((i) => stores()[i.shopId]?.api?.connected);
@@ -1418,6 +1502,43 @@ function viewSettings() {
       ),
     ),
     card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
+    card(
+      t('backup.title'),
+      t('backup.text'),
+      h(
+        'div',
+        { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'backup-save' }, onclick: async () => {
+          const res = await send('ui:backupExport');
+          if (!res?.ok) return toast(errorText(res?.error), 'error');
+          const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(res.backup, null, 1)], { type: 'application/json' })), download: `seller-hub-backup-${new Date().toISOString().slice(0, 10)}.json` });
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          toast(t('backup.saved'), 'ok');
+        } }, t('backup.save')),
+        h('button', { type: 'button', class: 'btn', onclick: (e) => e.currentTarget.nextElementSibling.click() }, t('backup.restore')),
+        h('input', { type: 'file', accept: '.json,application/json', hidden: true, dataset: { action: 'backup-file' }, onchange: async (e) => {
+          const file = e.target.files[0];
+          e.target.value = '';
+          if (!file) return;
+          let backup;
+          try {
+            backup = JSON.parse(await file.text());
+          } catch {
+            return toast(errorText('backupInvalid'), 'error');
+          }
+          if (backup?.app !== 'kaspi-seller-hub') return toast(errorText('backupInvalid'), 'error');
+          if (!(await confirmDialog(t('backup.restoreTitle'), t('backup.restoreConfirm', { date: formatDate(backup.createdAt), products: Object.keys(backup.catalog || {}).length, costs: Object.keys(backup.costs || {}).length })))) return;
+          const res = await send('ui:backupImport', { backup });
+          if (!res?.ok) return toast(errorText(res?.error), 'error');
+          toast(t('backup.restored', { products: res.products, costs: res.costs }), 'ok', 9000);
+          if (res.storesSkipped) toast(t('backup.storesSkipped', { count: res.storesSkipped }), 'info', 12000);
+          state.costs = await getCosts();
+          await loadState();
+        } }),
+      ),
+      h('p', { class: 'muted small' }, t('backup.note')),
+    ),
     card(
       t('settings.data'),
       t('settings.invoicesStored', { count: state.invoiceCount }),
@@ -2286,7 +2407,31 @@ function viewHome() {
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
 const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog });
 
+/* ---------- help: how-to answers + support contacts ---------- */
+function viewHelp() {
+  const contacts = [
+    SUPPORT.whatsapp && h('a', { class: 'btn btn--primary', href: `https://wa.me/${SUPPORT.whatsapp.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+    SUPPORT.telegram && h('a', { class: 'btn', href: `https://t.me/${SUPPORT.telegram.replace(/^@/, '')}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
+    SUPPORT.email && h('a', { class: 'btn', href: `mailto:${SUPPORT.email}` }, SUPPORT.email),
+  ].filter(Boolean);
+  const faq = ['connect', 'token', 'accept', 'profit', 'upload', 'backup', 'pay', 'phone'];
+  return h(
+    'div',
+    { class: 'settings' },
+    h('section', { class: 'card' },
+      h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.contactTitle')), h('div', { class: 'card__sub' }, contacts.length ? SUPPORT.hours || t('help.contactText') : t('help.noContacts')))),
+      contacts.length ? h('div', { class: 'card__body', style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, contacts) : null,
+    ),
+    h('section', { class: 'card' },
+      h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('help.faqTitle'))),
+      h('div', { class: 'card__body faq' }, faq.map((k) => h('details', { class: 'faq__item' }, h('summary', null, t(`help.q.${k}`)), h('p', null, t(`help.a.${k}`))))),
+    ),
+    h('p', { class: 'muted small' }, h('a', { href: legalUrl('offer'), target: '_blank', rel: 'noopener' }, t('terms.offer')), ' · ', h('a', { href: legalUrl('privacy'), target: '_blank', rel: 'noopener' }, t('terms.privacy'))),
+  );
+}
+
 const VIEWS = {
+  help: viewHelp,
   home: viewHome,
   catalog: catalogView.view,
   orders: () => viewTable('orders'),
@@ -2313,7 +2458,7 @@ function renderView() {
   const lic = state.data.license;
   if (lic && !lic.canUse && state.route !== 'account') view.append(paywall());
   else {
-    const needsStores = !['home', 'settings', 'account', 'catalog'].includes(state.route) && !dataStores().length;
+    const needsStores = !['home', 'settings', 'account', 'catalog', 'help'].includes(state.route) && !dataStores().length;
     view.append(needsStores ? noStores() : VIEWS[state.route]());
   }
   renderSidebar();

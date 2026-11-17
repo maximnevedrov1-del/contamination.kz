@@ -1025,6 +1025,7 @@ const uiHandlers = {
   /** Cost price of a product (by SKU), shared by all stores. null removes it. */
   'ui:saveCost': async ({ sku, cost }) =>
     lock(async () => {
+      if (typeof sku !== 'string' || !sku.trim()) return { ok: false, error: 'catalogInvalid' };
       const costs = await getCosts();
       if (cost == null || cost === '' || !Number.isFinite(Number(cost)) || Number(cost) < 0) delete costs[sku];
       else costs[sku] = Number(cost);
