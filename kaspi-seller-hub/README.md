@@ -152,6 +152,16 @@ access token signed by Supabase Auth (ES256, `custom_access_token_hook`), verifi
 `BILLING.licenseKeys`; the free trial is bound to hashed Kaspi store ids. Details and
 limits: `billing/README.md` → «Защита от взлома».
 
+**Cabinet-tab mode and chat are off in the release build** (`shared/features.js`). They rely on
+the markup of the seller cabinet (TODO selectors), which has not been checked on a live store.
+Without `--with-cabinet` the release:
+- ships no content scripts and no `scripting` permission (nothing runs on kaspi.kz pages);
+- hides «Чат»;
+- never creates a store from an open cabinet tab (such a store would count toward the plan).
+
+Stores connect by API token only. Once the selectors are verified on a real cabinet, build with
+`node tools/build-release.mjs --with-cabinet`. Development builds and the tests keep the mode on.
+
 ## Demo mode (try it without Kaspi)
 
 `demo/` contains three fake seller-cabinet pages built on the placeholder selectors. They are **not** Kaspi pages; they exist so you can click through every feature before the real selectors are filled in.

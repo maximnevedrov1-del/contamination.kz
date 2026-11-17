@@ -38,6 +38,7 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/feat.js` | deadlines, profit, pick list |
 | `e2e/uxtest.js` | order card, backup/restore, Excel export |
 | `e2e/learn.js` | page guides, tour, help GIFs (desktop + phone) |
+| `e2e/apionly.js` | release build without cabinet mode: no chat, no content scripts, a Kaspi page never creates a store |
 | `e2e/devices.js` | layout on 10 screen sizes (320–1920 px) |
 
 The mock Kaspi API (`e2e/mockapi.js`) follows the formats in guide.kaspi.kz; it is not Kaspi.

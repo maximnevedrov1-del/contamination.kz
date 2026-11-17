@@ -4,6 +4,7 @@
  */
 import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative, formatMoney } from '../shared/i18n.js';
 import { h, clear, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
+import { FEATURES } from '../shared/features.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
@@ -65,7 +66,7 @@ function render() {
   $('urgent').textContent = urgent ? `🔥 ${t('deadline.popup', { count: urgent })}` : '';
 
   const list = clear($('storeList'));
-  if (!stores.length) list.append(h('li', { class: 'pp-empty' }, t('popup.noStores')));
+  if (!stores.length) list.append(h('li', { class: 'pp-empty' }, t(FEATURES.cabinet ? 'popup.noStores' : 'popup.noStoresApi')));
   stores.forEach((s, i) => {
     const snap = state.snapshots[s.id];
     const c = counts[i];

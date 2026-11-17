@@ -25,6 +25,7 @@ import {
 import '../shared/selectors.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
+import { FEATURES } from '../shared/features.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
   h,
@@ -55,7 +56,9 @@ import { lineChart, barChart } from './charts.js';
 /* State                                                                  */
 /* ===================================================================== */
 
-const ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account', 'help'];
+const ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account', 'help'].filter((r) => r !== 'chat' || FEATURES.cabinet);
+// API-only build: no chat (it lives in the cabinet tab, see shared/features.js)
+if (!FEATURES.cabinet) document.querySelector('a[data-route=chat]')?.remove();
 const TABLE_ROUTES = ['orders', 'returns', 'refusals', 'payments'];
 
 const tableState = () => ({ sort: { key: 'date', dir: 'desc' }, status: 'all', payment: 'all', q: '', urgent: false, tab: 'all', selected: new Set(), focus: 0 });
@@ -379,7 +382,7 @@ function renderTable(route, allRows) {
   const notes = h('div', { class: 'notes' }, sectionNotes(route).map((n) => h('div', null, n)));
 
   if (!rows.length) {
-    const body = state.syncing && !allRows.length ? skeletonTable(cols.length) : emptyState(t('table.emptyTitle'), allRows.length ? t('table.emptyFiltered') : t('table.emptyNoData'));
+    const body = state.syncing && !allRows.length ? skeletonTable(cols.length) : emptyState(t('table.emptyTitle'), allRows.length ? t('table.emptyFiltered') : t(FEATURES.cabinet ? 'table.emptyNoData' : 'table.emptyNoDataApi'));
     return h('section', { class: 'card' }, tabs, toolbar, notes, body);
   }
 
@@ -1449,7 +1452,7 @@ function viewSettings() {
           ),
         ),
       )
-    : h('p', { class: 'muted' }, t('store.noStoresText'));
+    : h('p', { class: 'muted' }, t(FEATURES.cabinet ? 'store.noStoresText' : 'store.noStoresTextApi'));
 
   const seg = (value, options, onPick) =>
     h(
@@ -1665,7 +1668,7 @@ async function removeStore(s) {
 /* ===================================================================== */
 
 function noStores() {
-  return h('section', { class: 'card' }, emptyState(t('store.noStoresTitle'), t('store.noStoresText'), h('button', { type: 'button', class: 'btn btn--primary', onclick: () => $('connectStoreBtn').click() }, t('connect.button'))));
+  return h('section', { class: 'card' }, emptyState(t('store.noStoresTitle'), t(FEATURES.cabinet ? 'store.noStoresText' : 'store.noStoresTextApi'), h('button', { type: 'button', class: 'btn btn--primary', onclick: () => $('connectStoreBtn').click() }, t('connect.button'))));
 }
 
 function applyTheme() {
@@ -1713,7 +1716,10 @@ function renderSidebar() {
   const counts = dataStores().map((s) => storeCounts(state.data.snapshots[s.id]));
   const sum = (k) => counts.reduce((n, c) => n + (c[k] || 0), 0);
   const unread = enabledStores().reduce((n, s) => n + sumBy(state.chat[s.id]?.conversations || [], (c) => c.unread), 0);
-  const setCount = (k, v) => (document.querySelector(`[data-count="${k}"]`).textContent = v ? formatNumber(v) : '');
+  const setCount = (k, v) => {
+    const el = document.querySelector(`[data-count="${k}"]`);
+    if (el) el.textContent = v ? formatNumber(v) : ''; // the chat item is absent in the API-only build
+  };
   setCount('orders', sum('newOrders'));
   const urgent = enabledStores().reduce(
     (n, s) => n + (state.data.snapshots[s.id]?.sections?.orders?.items || []).filter((it) => ['soon', 'overdue'].includes(urgencyOf(deadlineOf(it, settingsNow()), settingsNow()))).length,
@@ -1784,7 +1790,7 @@ function renderBanners() {
       ),
     );
   });
-  if (state.data.unauthTabs > 0) {
+  if (FEATURES.cabinet && state.data.unauthTabs > 0) {
     box.append(h('div', { class: 'banner banner--info', role: 'status' }, h('span', { class: 'banner__icon' }, icon('info')), h('span', { class: 'banner__text' }, t('store.unauthTabs', { count: state.data.unauthTabs }))));
   }
   // Stores above the plan's limit: not synced until the subscription covers them.
@@ -2419,7 +2425,7 @@ const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip,
  *  - startTour(): first-launch tour that points at the main controls;
  *  - the Help page lists every guide.
  * ===================================================================== */
-const GUIDE_ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
+const GUIDE_ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'].filter((r) => r !== 'chat' || FEATURES.cabinet);
 // Short screen recordings (help/*.gif, made on demo data by the project's recorder).
 const GUIDE_GIFS = { home: 'connect', orders: 'orders', products: 'products', catalog: 'catalog', settings: 'settings' };
 const gifUrl = (route) => (GUIDE_GIFS[route] ? chrome.runtime.getURL(`help/${GUIDE_GIFS[route]}.gif`) : null);

@@ -40,6 +40,7 @@ import * as B from './billing.js';
 import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catalog-service.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
+import { FEATURES } from '../shared/features.js';
 import { logError, getErrorLog, clearErrorLog, formatReport } from '../shared/errorlog.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
@@ -278,6 +279,7 @@ async function injectContent(tabId) {
  * @returns {Promise<Array<object>>} live registry entries
  */
 async function discoverTabs() {
+  if (!FEATURES.cabinet) return; // API-only build: cabinet tabs are not read
   const tabs = await chrome.tabs.query({ url: [...S.tabMatchPatterns] });
   const live = [];
   await Promise.all(
@@ -1049,7 +1051,8 @@ async function openStore({ shopId }) {
 async function scheduleAlarms() {
   const { chatPollSec } = await getSettings();
   // chrome.alarms minimum period is 30 s.
-  await chrome.alarms.create(ALARM_CHAT, { periodInMinutes: Math.max(30, chatPollSec) / 60 });
+  if (FEATURES.cabinet) await chrome.alarms.create(ALARM_CHAT, { periodInMinutes: Math.max(30, chatPollSec) / 60 });
+  else await chrome.alarms.clear(ALARM_CHAT); // chat lives in the cabinet tab only
   await chrome.alarms.create(ALARM_SYNC, { periodInMinutes: 5 });
 }
 
@@ -1288,6 +1291,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !msg?.type) return false;
   const fromExtensionPage = sender.url?.startsWith(chrome.runtime.getURL(''));
 
+  // API-only build: a cabinet page never registers a store (no content scripts ship, but an
+  // older install or a manual injection must not create stores either)
+  if (msg.type.startsWith('content:') && !FEATURES.cabinet) return false;
   if (msg.type.startsWith('content:') && sender.tab?.id != null && !fromExtensionPage) {
     const tabId = sender.tab.id;
     if (msg.type === 'content:hello') registerTab(tabId, msg.payload).then(() => broadcast('bg:registryChanged'));

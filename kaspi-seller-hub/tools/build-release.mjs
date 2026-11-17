@@ -4,6 +4,8 @@
  *
  *   node tools/build-release.mjs                    → dist/kaspi-seller-hub-<version>.zip   (Chrome, Yandex, Edge, Opera, Brave)
  *   node tools/build-release.mjs --target=firefox   → dist/kaspi-seller-hub-<version>-firefox.zip (Firefox desktop & Android, addons.mozilla.org)
+ *   --with-cabinet   keep the cabinet-tab mode and chat (off by default until checked on a live
+ *                    cabinet: shared/features.js). Without it no content scripts are shipped.
  *
  * Refuses to build a version that could be used for free or leak secrets:
  *   - subscription server not configured (= developer mode, no limits);
@@ -23,6 +25,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+const WITH_CABINET = process.argv.includes('--with-cabinet');
 const TARGET = (process.argv.find((a) => a.startsWith('--target=')) || '--target=chrome').split('=')[1];
 if (!['chrome', 'firefox'].includes(TARGET)) {
   console.error('Unknown --target (chrome | firefox)');
@@ -84,8 +87,24 @@ fs.writeFileSync(
   fs.readFileSync(selPath, 'utf8').replace(/tabMatchPatterns:\s*\[([^\]]*)\]/, (m, list) => `tabMatchPatterns: [${list.split(',').map((x) => x.trim()).filter((x) => x && !/localhost|file:/.test(x)).join(', ')}]`),
 );
 
+// Cabinet-tab mode and chat: off unless --with-cabinet (shared/features.js).
+const featPath = path.join(PKG, 'shared/features.js');
+const featSrc = fs.readFileSync(featPath, 'utf8');
+const featOut = featSrc.replace(/cabinet:\s*(true|false)/, `cabinet: ${WITH_CABINET}`);
+if (!/cabinet:\s*(true|false)/.test(featSrc)) {
+  console.error('✗ shared/features.js: cabinet flag not found');
+  process.exit(1);
+}
+fs.writeFileSync(featPath, featOut);
+
 // ---------- manifest ----------
 const manifest = JSON.parse(fs.readFileSync(path.join(PKG, 'manifest.json'), 'utf8'));
+if (!WITH_CABINET) {
+  // API-only: nothing runs on kaspi.kz pages, no script injection
+  delete manifest.content_scripts;
+  manifest.permissions = (manifest.permissions || []).filter((p) => p !== 'scripting');
+  fs.rmSync(path.join(PKG, 'content'), { recursive: true, force: true });
+}
 const prodOnly = (list) => list.filter((p) => !/localhost|^file:|127\.0\.0\.1/.test(p));
 manifest.host_permissions = prodOnly(manifest.host_permissions || []);
 for (const cs of manifest.content_scripts || []) cs.matches = prodOnly(cs.matches);
@@ -141,4 +160,4 @@ if (leaks.length) {
 const zip = path.join(OUT_DIR, `kaspi-seller-hub-${manifest.version}${TARGET === 'chrome' ? '' : '-' + TARGET}.zip`);
 fs.rmSync(zip, { force: true });
 execFileSync('zip', ['-qr', zip, '.'], { cwd: PKG });
-console.log(`✓ ${path.relative(ROOT, zip)}\n  hosts: ${manifest.host_permissions.join(', ')}\n  server: ${supa}`);
+console.log(`✓ ${path.relative(ROOT, zip)}\n  hosts: ${manifest.host_permissions.join(', ')}\n  server: ${supa}\n  cabinet mode + chat: ${WITH_CABINET ? 'ON' : 'off (API only, no content scripts)'}`);
