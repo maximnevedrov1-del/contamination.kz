@@ -291,6 +291,37 @@ Analytics never invents numbers:
 - The daily series comes from the store's Kaspi analytics page when it's visible. Otherwise it's calculated from the loaded order list, and the dashboard says which source it used.
 - Conversion is shown only when Kaspi shows views.
 
+## Reliability
+
+- **Kazakhstan time.** «Сегодня», day filters, charts and every date shown use UTC+5 (all of
+  Kazakhstan since March 2024), not the computer's time zone (`shared/utils.js` → `dayKey`,
+  `startOfDay`; `formatDate` in `shared/i18n.js`).
+- **Kaspi busy / briefly down.** `apiRequest` retries twice (1.5 s, 4 s; honours `Retry-After`,
+  max 10 s). 429 is retried for any call; 502/503/504 and network failures only for reads.
+  Writes (accept, assemble, card import) are never repeated automatically: Kaspi may already
+  have applied them.
+- **Price list cannot empty a store by accident.** If a store's price list would lose all its
+  products, or more than half of 10+, the upload is held (`isSuspiciousDrop` in
+  `background/catalog-service.js`). The seller gets a notification and a warning in
+  «Выгрузка товаров» with the counts, and uploads only after an explicit confirmation. Restoring
+  the products lifts the hold by itself.
+- **Updates keep the seller's data.** `shared/migrations.js`: stored data carries
+  `ksh.dataVersion`. A release that changes the stored format bumps `DATA_VERSION` and adds a
+  step. Steps run once, before the worker answers any page. A copy of all data is kept in
+  `ksh.preMigration`, and a failed step is resumed on the next start. Data from a newer build is
+  never touched.
+- **Error journal for support.** `shared/errorlog.js` keeps the last 50 errors of the worker and
+  pages on the computer (scrubbed of tokens, e-mails, phones and buyer data). In «Помощь →
+  Сообщить о проблеме» the seller copies a plain-text report for the support chat. Nothing is
+  sent automatically.
+- **CI.** `.github/workflows/kaspi-seller-hub.yml` runs on every push:
+  - syntax checks, unit tests and the ru/kk translation check;
+  - the eval check, and a check that the release build refuses an empty config;
+  - the SQL suite on PostgreSQL 16;
+  - the catalog tests in Chromium.
+
+  The full browser regression (`tests/e2e/regress.sh`) still runs locally (see `tests/README.md`).
+
 ## Development notes
 
 - No build step: plain ES2022 modules. The content script is a classic script because MV3 content scripts can't be modules.

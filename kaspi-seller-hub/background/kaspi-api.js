@@ -24,29 +24,62 @@ export class ApiError extends Error {
   }
 }
 
+/** Pauses between attempts when Kaspi is busy or briefly down. */
+export const RETRY_DELAYS = [1500, 4000];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let sleeper = sleep;
+/** Tests replace the wait so retries run instantly. */
+export const _setSleep = (fn) => (sleeper = fn || sleep);
+
+/** Seconds from a Retry-After header, capped so a UI action never hangs for long. */
+function retryAfter(res, fallback) {
+  const s = Number(res.headers.get('Retry-After'));
+  return Number.isFinite(s) && s > 0 ? Math.min(s * 1000, 10000) : fallback;
+}
+
 /**
  * Low-level request.
+ *
+ * Retries (2 more attempts, 1.5 s then 4 s apart):
+ *   - 429 "too many requests" — Kaspi did not process the request, safe for any method;
+ *   - 502/503/504 and network failures — only for GET. A write (accept, assemble,
+ *     cancel, card import) may already have been applied by Kaspi before the
+ *     connection broke, so it is never repeated automatically.
  * @param {string} token
  * @param {string} pathOrUrl path under the API base, or a full URL from a `links` field
- * @param {{ method?:string, params?:Record<string,string|number>, body?:any, accept?:string }} [opts]
+ * @param {{ method?:string, params?:Record<string,string|number>, body?:any, accept?:string, contentType?:string }} [opts]
  */
-export async function apiRequest(token, pathOrUrl, { method = 'GET', params, body, accept = 'application/vnd.api+json' } = {}) {
+export async function apiRequest(token, pathOrUrl, { method = 'GET', params, body, accept = 'application/vnd.api+json', contentType = 'application/vnd.api+json' } = {}) {
   const url = new URL(/^https?:/.test(pathOrUrl) ? pathOrUrl : A().base + pathOrUrl);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-  let res;
-  try {
-    res = await fetch(url.href, {
-      method,
-      headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': 'application/vnd.api+json' },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: 'omit', // the token is the only credential; never send cabinet cookies
-    });
-  } catch (e) {
-    throw new ApiError('apiNetwork', 0, e.message);
+  const idempotent = method === 'GET';
+  for (let attempt = 0; ; attempt++) {
+    const last = attempt >= RETRY_DELAYS.length;
+    let res;
+    try {
+      res = await fetch(url.href, {
+        method,
+        headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': contentType },
+        body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+        credentials: 'omit', // the token is the only credential; never send cabinet cookies
+      });
+    } catch (e) {
+      if (idempotent && !last) {
+        await sleeper(RETRY_DELAYS[attempt]);
+        continue;
+      }
+      throw new ApiError('apiNetwork', 0, e.message);
+    }
+    if (res.status === 401 || res.status === 403) throw new ApiError('apiUnauthorized', res.status);
+    const busy = res.status === 429 || (idempotent && [502, 503, 504].includes(res.status));
+    if (busy && !last) {
+      await sleeper(retryAfter(res, RETRY_DELAYS[attempt]));
+      continue;
+    }
+    if (res.status === 429) throw new ApiError('apiRateLimit', 429);
+    if (!res.ok) throw new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300));
+    return res;
   }
-  if (res.status === 401 || res.status === 403) throw new ApiError('apiUnauthorized', res.status);
-  if (!res.ok) throw new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300));
-  return res;
 }
 
 const json = async (res) => {
@@ -271,20 +304,8 @@ export async function getAttributeValues(token, category, attribute) {
  * @returns {Promise<{code:string,status:string}>} code = upload id for status/result
  */
 export async function importProducts(token, items) {
-  const url = P('/import');
-  let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'X-Auth-Token': token, Accept: 'application/json', 'Content-Type': 'text/plain' },
-      body: JSON.stringify(items),
-      credentials: 'omit',
-    });
-  } catch (e) {
-    throw new ApiError('apiNetwork', 0, e.message);
-  }
-  if (res.status === 401 || res.status === 403) throw new ApiError('apiUnauthorized', res.status);
-  if (!res.ok) throw new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300));
+  // through apiRequest: a 429 is retried; a network failure is not (Kaspi may have queued the upload)
+  const res = await apiRequest(token, P('/import'), { method: 'POST', body: JSON.stringify(items), accept: 'application/json', contentType: 'text/plain' });
   return json(res);
 }
 

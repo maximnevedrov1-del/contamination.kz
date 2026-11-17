@@ -16,7 +16,7 @@ import { validateProduct, readPriceListFile, SKU_RE } from '../shared/catalog.js
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
 
 /** Copy that also works where the async clipboard API is missing or blocked (older Safari/Firefox). */
-async function copyText(text) {
+export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -302,6 +302,18 @@ export function createCatalogView(ui) {
         h('label', { class: 'check feed__confirm' }, confirmBox, h('span', null, t('catalog.feed.confirm'))),
         f.url && h('div', { class: 'feed__url' }, h('code', null, f.url), h('button', { type: 'button', class: 'btn btn--sm', onclick: () => copyText(f.url).then(() => ui.toast(t('catalog.feed.copied'), 'ok')) }, t('catalog.feed.copy'))),
         f.url && h('p', { class: 'muted small' }, t('catalog.feed.howTo')),
+        f.error === 'feedDrop' && f.drop && h('div', { class: 'banner banner--danger feed__drop' },
+          h('span', { class: 'banner__text' }, t('catalog.feed.dropText', { from: f.drop.from, to: f.drop.to })),
+          h('button', { type: 'button', class: 'btn btn--sm btn--danger', dataset: { action: 'allow-drop' }, onclick: async () => {
+            const ok = await ui.confirmDialog(t('catalog.feed.dropTitle'), t('catalog.feed.dropConfirm', { from: f.drop.from, to: f.drop.to, store: ui.storeName(s.id) }));
+            if (!ok) return;
+            const res = await send('ui:feedSync', { shopIds: [s.id], allowDrop: true });
+            const r = res?.results?.[s.id];
+            if (!r?.ok) ui.toast(ui.errorText(r?.error || res?.error), 'error', 8000);
+            else ui.toast(t('catalog.feed.saved'), 'ok');
+            await load();
+          } }, t('catalog.feed.dropAllow')),
+        ),
         h('div', { class: 'feed__actions' },
           h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: async () => {
             const res = await send('ui:feedSettings', { shopId: s.id, merchantId: v.merchantId, company: v.company, warehouses: v.warehouses, confirmed: v.confirmed });

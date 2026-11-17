@@ -14,6 +14,7 @@
  */
 
 import { getSettings, saveSettings, KEYS, onKeyChange } from './storage.js';
+import { kzParts, dayKey, KZ_TIME_ZONE } from './utils.js';
 
 /** Supported languages and their Intl locales. */
 export const LANGS = Object.freeze({
@@ -149,9 +150,10 @@ export function formatDate(v, style = 'date') {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return '—';
   if (!native && (style === 'short' || style === 'weekday')) {
-    const month = lookupFmt('monthsShort')[d.getMonth()] ?? '';
-    const day = `${d.getDate()} ${month}`;
-    return style === 'weekday' ? `${lookupFmt('weekdaysShort')[d.getDay()]}, ${day}` : day;
+    const k = kzParts(d);
+    const month = lookupFmt('monthsShort')[k.month] ?? '';
+    const day = `${k.day} ${month}`;
+    return style === 'weekday' ? `${lookupFmt('weekdaysShort')[k.weekday]}, ${day}` : day;
   }
   const opts = {
     date: { day: '2-digit', month: '2-digit', year: 'numeric' },
@@ -160,7 +162,7 @@ export function formatDate(v, style = 'date') {
     short: { day: 'numeric', month: 'short' },
     weekday: { weekday: 'short', day: 'numeric', month: 'short' },
   }[style];
-  return new Intl.DateTimeFormat(intlLocale(), opts).format(d);
+  return new Intl.DateTimeFormat(intlLocale(), { ...opts, timeZone: KZ_TIME_ZONE }).format(d);
 }
 
 /** "5 мин назад" / "5 минут бұрын" */
@@ -198,7 +200,7 @@ export function formatDuration(ms) {
 export function formatChatTime(v) {
   if (!v) return '';
   const d = new Date(v);
-  return d.toDateString() === new Date().toDateString() ? formatDate(d, 'time') : formatDate(d, 'short');
+  return dayKey(d) === dayKey(Date.now()) ? formatDate(d, 'time') : formatDate(d, 'short');
 }
 
 /**

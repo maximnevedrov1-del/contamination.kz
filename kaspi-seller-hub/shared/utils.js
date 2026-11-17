@@ -66,26 +66,44 @@ export function toISO(v) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/** Local YYYY-MM-DD for a date (used as day bucket key and <input type=date> value). */
+/*
+ * Kazakhstan time. Kaspi deadlines, "today" and day buckets follow the seller's
+ * business day in Kazakhstan, not the computer clock's zone (a PC set to Moscow or
+ * UTC would otherwise shift "today" and every daily chart). Since 1 March 2024 the
+ * whole country is UTC+5 with no daylight saving, so a fixed offset is exact and
+ * does not depend on the browser's (possibly outdated) time-zone database.
+ */
+export const KZ_OFFSET = 5 * 3600000;
+/** IANA name for a fixed UTC+5 (the sign is inverted in Etc/ zones). */
+export const KZ_TIME_ZONE = 'Etc/GMT-5';
+const DAY_MS = 86400000;
+
+/** Calendar fields of a moment in Kazakhstan time. */
+export function kzParts(v) {
+  const d = new Date(new Date(v).getTime() + KZ_OFFSET);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate(), weekday: d.getUTCDay(), hours: d.getUTCHours(), minutes: d.getUTCMinutes() };
+}
+
+/** Kazakhstan YYYY-MM-DD for a date (used as day bucket key and <input type=date> value). */
 export function dayKey(v) {
   const d = v instanceof Date ? v : new Date(v);
   if (Number.isNaN(d.getTime())) return '';
+  const k = kzParts(d);
   const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${k.year}-${p(k.month + 1)}-${p(k.day)}`;
 }
 
-/** Start of local day. */
+/** Start of the Kazakhstan day. Accepts a moment or a "YYYY-MM-DD" day key. */
 export function startOfDay(v) {
-  const d = new Date(v);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) - KZ_OFFSET);
+  const t = new Date(v).getTime();
+  return new Date(Math.floor((t + KZ_OFFSET) / DAY_MS) * DAY_MS - KZ_OFFSET);
 }
 
-/** End of local day. */
+/** End of the Kazakhstan day. */
 export function endOfDay(v) {
-  const d = new Date(v);
-  d.setHours(23, 59, 59, 999);
-  return d;
+  return new Date(startOfDay(v).getTime() + DAY_MS - 1);
 }
 
 /** Date range for a "last N days" preset, inclusive of today. */

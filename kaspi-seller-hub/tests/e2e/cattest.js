@@ -145,6 +145,22 @@ const supaLog = async () => (await fetch('http://localhost:8098/__log')).json();
   const denied = (await supaLog()).filter((e) => e.uploadDenied).length;
   check('9 no upload was refused for the owner', denied === 0);
 
+  // 9b. guard: the whole assortment deleted by mistake → price list held, not emptied
+  const allSkus = (await msg('ui:catalogState')).products.map((p) => p.sku);
+  const before = (await (await fetch(urlA)).text()).match(/<offer /g)?.length || 0;
+  await msg('ui:catalogDelete', { skus: allSkus }); await sleep(4500);
+  const xmlHeld = await (await fetch(urlA)).text();
+  check('9b price list NOT emptied after deleting everything', (xmlHeld.match(/<offer /g)?.length || 0) === before && before > 0, `before ${before}`);
+  await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#catalog`); await sleep(1500);
+  check('9b store A shows the «not updated» warning with counts', (await feedRow(A).locator('.feed__drop').innerText().catch(() => '')).includes(`${before}`));
+  await clearToasts();
+  await feedRow(A).locator('button[data-action=allow-drop]').click();
+  await d.click('#confirmDialog button[value=ok]'); await sleep(2500);
+  const xmlEmpty = await (await fetch(urlA)).text();
+  check('9b after explicit confirmation the empty price list is uploaded', !/<offer /.test(xmlEmpty) && (await feedRow(A).locator('.feed__drop').count()) === 0);
+  const rep = await msg('ui:diagnostics');
+  check('9b support report: plain text, no tokens', rep?.ok && rep.text.includes('Kaspi Seller Hub') && !/GOOD-TOKEN/.test(rep.text), rep?.text?.slice(0, 200));
+
   // 10. subscription over → publishing refused by the worker
   await sql("update accounts set trial_ends_at = now() - interval '1 minute' where email = 'cat@example.kz'");
   await msg('ui:billingState', { force: true });

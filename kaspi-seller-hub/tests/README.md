@@ -16,19 +16,21 @@ cd tests/e2e && npm install          # pg driver; Playwright + Chromium must be 
 tests/e2e/regress.sh                 # all browser suites, each on a fresh DB and fresh mocks
 ```
 
-SQL only (each file on a fresh database):
+Without a browser (also run by CI, `.github/workflows/kaspi-seller-hub.yml`):
 
 ```bash
-createdb -h /tmp -p 5499 -U postgres t && psql -h /tmp -p 5499 -U postgres -d t -f tests/sql/stub.sql \
-  && psql -h /tmp -p 5499 -U postgres -d t -f billing/supabase/001_billing.sql \
-  && psql -h /tmp -p 5499 -U postgres -d t -f tests/sql/test.sql
+TZ=America/New_York node tests/unit/robust.test.mjs   # KZ time, retries, price-list guard, migrations, error journal
+node tests/unit/locales.test.mjs                      # ru/kk keys and {placeholders} match, no missing keys
+PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on its own fresh database
 ```
 
 | Suite | What it checks |
 |---|---|
+| `unit/robust.test.mjs` | Kazakhstan time, Kaspi API retries, price-list drop guard, data migrations, error journal |
+| `unit/locales.test.mjs` | Russian and Kazakh texts have the same keys and placeholders |
 | `sql/test.sql` … `test6.sql` | billing, consent, attacks on the database, admin paging, price-list storage rules |
 | `e2e/catunit.js` | catalog: XML price list, Excel/XML import, validation |
-| `e2e/cattest.js` | product upload: cards to chosen stores, price lists by URL |
+| `e2e/cattest.js` | product upload: cards to chosen stores, price lists by URL, «empty price list» guard, support report |
 | `e2e/billtest.js`, `billtest2.js` | login, consent, trial, invoices, QR window, admin page |
 | `e2e/hack.js` | attempts to get the subscription for free |
 | `e2e/apitest.js` | Kaspi API mode: orders, accept, pack, waybills |

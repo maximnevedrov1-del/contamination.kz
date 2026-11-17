@@ -455,3 +455,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .gif__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
 .gif__head .dialog__title { margin: 0; }
 .gif__img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
+
+/* price list held back: lost most of its products */
+.banner--danger { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.feed__drop { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }

@@ -41,15 +41,33 @@ export function scheduleFeedSync(shopIds) {
   syncTimer = setTimeout(() => {
     const ids = [...pendingShops];
     pendingShops.clear();
-    syncFeeds(ids).catch((e) => console.warn(LOG, 'feed sync', e.code || e.message));
+    syncFeeds(ids)
+      .then((results) => Object.entries(results).forEach(([shopId, r]) => r?.error === 'feedDrop' && feedDropListener?.(shopId, r.drop)))
+      .catch((e) => console.warn(LOG, 'feed sync', e.code || e.message));
   }, 3000);
 }
+
+let feedDropListener = null;
+/** The worker shows a notification when an automatic price-list update is held back. */
+export const onFeedDrop = (fn) => (feedDropListener = fn);
 
 /**
  * Build and upload the price list of each store (only confirmed, configured stores;
  * unchanged files are not re-sent). Returns per-store results.
  */
-export async function syncFeeds(shopIds, { force = false } = {}) {
+/**
+ * Kaspi takes every product missing from the price list off sale within an hour.
+ * A price list that suddenly lost most of its products (catalog wiped, mass
+ * "take off sale" by mistake, a restore gone wrong) is held back until the seller
+ * confirms it — instead of silently emptying the store.
+ */
+export function isSuspiciousDrop(prev, next) {
+  if (!(prev > 0)) return false;
+  if (next === 0) return true;
+  return prev >= 10 && next < prev * 0.5;
+}
+
+export async function syncFeeds(shopIds, { force = false, allowDrop = false } = {}) {
   if (!B.isConfigured()) return {};
   const out = {};
   for (const shopId of shopIds) {
@@ -60,12 +78,26 @@ export async function syncFeeds(shopIds, { force = false } = {}) {
       const products = Object.values(await getCatalog());
       const xml = buildPriceListXml(f, products, shopId);
       const hash = await hashOf(xml);
-      if (!force && hash === f.hash && f.url) return { ok: true, unchanged: true, url: f.url };
+      if (hash === f.hash && f.url && (!force || f.error === 'feedDrop')) {
+        // the catalog came back to what Kaspi already has: nothing to upload, lift a held drop
+        if (f.error) {
+          feeds[shopId] = { ...f, error: null, drop: null };
+          await setFeeds(feeds);
+        }
+        return { ok: true, unchanged: true, url: f.url };
+      }
+      const count = offerCount(products, shopId);
+      if (f.url && !allowDrop && isSuspiciousDrop(f.offers, count)) {
+        const drop = { from: f.offers, to: count };
+        feeds[shopId] = { ...f, error: 'feedDrop', drop };
+        await setFeeds(feeds);
+        return { ok: false, error: 'feedDrop', drop };
+      }
       try {
         const key = shopSlug(shopId);
         const feedId = f.feedId || (await B.ensureFeed(key)).feed_id;
         const url = await B.uploadFeed(feedId, key, xml);
-        feeds[shopId] = { ...f, feedId, url, hash, uploadedAt: Date.now(), offers: offerCount(products, shopId), error: null };
+        feeds[shopId] = { ...f, feedId, url, hash, uploadedAt: Date.now(), offers: count, error: null, drop: null };
         await setFeeds(feeds);
         return { ok: true, url };
       } catch (e) {
@@ -186,7 +218,7 @@ export function catalogHandlers({ allowedShopIds }) {
       const feedView = Object.fromEntries(
         stores.map((s) => {
           const f = feeds[s.id] || {};
-          return [s.id, { merchantId: f.merchantId || '', company: f.company || '', warehouses: f.warehouses || ['PP1'], confirmed: !!f.confirmed, url: f.url || null, uploadedAt: f.uploadedAt || null, offers: offerCount(Object.values(catalog), s.id), uploadedOffers: f.offers ?? null, error: f.error || null, ready: feedReady(f) }];
+          return [s.id, { merchantId: f.merchantId || '', company: f.company || '', warehouses: f.warehouses || ['PP1'], confirmed: !!f.confirmed, url: f.url || null, uploadedAt: f.uploadedAt || null, offers: offerCount(Object.values(catalog), s.id), uploadedOffers: f.offers ?? null, error: f.error || null, drop: f.drop || null, ready: feedReady(f) }];
         }),
       );
       return {
@@ -294,7 +326,7 @@ export function catalogHandlers({ allowedShopIds }) {
       return { ok: true };
     },
 
-    'ui:feedSync': async ({ shopIds }) => ({ ok: true, results: await syncFeeds(shopIds || [], { force: true }) }),
+    'ui:feedSync': async ({ shopIds, allowDrop }) => ({ ok: true, results: await syncFeeds(shopIds || [], { force: true, allowDrop: !!allowDrop }) }),
 
     /** XML text for "Скачать файл" (also works without the subscription server). */
     'ui:feedXml': async ({ shopId }) => {

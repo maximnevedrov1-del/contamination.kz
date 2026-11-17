@@ -37,8 +37,10 @@ import {
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { catalogHandlers, pollImports, ALARM_IMPORTS } from './catalog-service.js';
+import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catalog-service.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
+import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
+import { logError, getErrorLog, clearErrorLog, formatReport } from '../shared/errorlog.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
 
 const S = globalThis.KSH_SELECTORS;
@@ -47,6 +49,30 @@ const lock = createMutex();
 const ALARM_CHAT = 'ksh-chat-poll';
 const ALARM_SYNC = 'ksh-sync';
 const DASHBOARD_URL = chrome.runtime.getURL('dashboard/dashboard.html');
+
+/** Log to the console and to the local journal for support (shared/errorlog.js). */
+const report = (where, e) => {
+  console.warn(LOG, where, e?.code || e?.message || e);
+  logError(where, e);
+};
+
+/*
+ * Stored data is brought to the current format once per worker start, before any
+ * page gets an answer (shared/migrations.js). A failure is journaled; the data
+ * stays as it was and a copy is kept in ksh.preMigration.
+ */
+const dataReady = migrateStorage()
+  .then((r) => {
+    if (r.error) report('migrate', new Error(`v${r.from}→v${DATA_VERSION}: ${r.error}`));
+    else if (r.downgraded) report('migrate', new Error(`data v${r.from} is newer than this build (v${DATA_VERSION})`));
+  })
+  .catch((e) => report('migrate', e));
+
+self.addEventListener('error', (e) => logError('worker:error', e.error || e.message));
+self.addEventListener('unhandledrejection', (e) => logError('worker:unhandled', e.reason));
+
+/** Errors worth a journal line (not validation answers like «fill the price»). */
+const SYSTEM_ERROR = /^(api|feedUpload|feedForbidden|feedDrop|billingNetwork|billingServer|workerError|noResponse|import|card)/;
 
 /* ===================================================================== */
 /* Messaging helpers                                                      */
@@ -198,6 +224,20 @@ async function notifyPayment(lic) {
   }
   await showNotification(`ksh:pay:${inv.id}`, opts); // click → dashboard "#pay" (QR window)
 }
+
+/** A store's price list lost most of its products: held back, the seller decides. */
+onFeedDrop(async (shopId, drop) => {
+  await initI18n();
+  const name = (await getSettings()).stores?.[shopId]?.name || '';
+  await showNotification(`ksh:catalog:drop-${shopId}`, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+    title: t('notifications.feedDropTitle', { store: name }),
+    message: t('notifications.feedDropText', { from: drop?.from ?? 0, to: drop?.to ?? 0 }),
+    priority: 2,
+    requireInteraction: true,
+  });
+});
 
 /**
  * Notification that works in every browser: Chrome/Yandex/Edge/Opera show the QR image;
@@ -1019,6 +1059,35 @@ async function scheduleAlarms() {
 
 /** UI → worker message handlers. */
 const uiHandlers = {
+  /** Errors of extension pages go to the same journal. */
+  'ui:logError': async ({ where, message }) => {
+    await logError(`page:${String(where || '').slice(0, 30)}`, String(message || ''));
+    return { ok: true };
+  },
+
+  /** Text report for support: version, browser, counts and the last errors — no tokens, no buyers. */
+  'ui:diagnostics': async () => {
+    const [settings, tokens, errors] = await Promise.all([getSettings(), getApiTokens(), getErrorLog()]);
+    const lic = await currentLicense().catch(() => null);
+    const ua = navigator.userAgent.match(/(YaBrowser|Edg|OPR|Firefox|Chrome|Version)\/[\d.]+/g) || [];
+    const os = /Windows/.test(navigator.userAgent) ? 'Windows' : /Android/.test(navigator.userAgent) ? 'Android' : /Mac OS|iPhone|iPad/.test(navigator.userAgent) ? 'Apple' : /Linux/.test(navigator.userAgent) ? 'Linux' : '?';
+    const text = formatReport({
+      version: chrome.runtime.getManifest().version,
+      browser: `${ua.join(' ') || 'unknown'} · ${os}`,
+      dataVersion: DATA_VERSION,
+      stores: Object.keys(settings.stores || {}).length,
+      apiStores: Object.keys(tokens || {}).length,
+      licence: lic ? `${lic.status}${lic.daysLeft != null ? `, ${lic.daysLeft} дн.` : ''}` : 'unknown',
+      errors,
+    });
+    return { ok: true, text, count: errors.length };
+  },
+
+  'ui:clearErrors': async () => {
+    await clearErrorLog();
+    return { ok: true };
+  },
+
   'ui:getState': () => getState(),
   'ui:sync': () => sync(),
   'ui:pack': (p) => actions.pack(p),
@@ -1228,11 +1297,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   const fn = fromExtensionPage && uiHandlers[msg.type];
   if (!fn) return false;
-  Promise.resolve()
+  dataReady
     .then(async () => (await licenseGate(msg.type, msg.payload)) || fn(msg.payload || {}))
-    .then(sendResponse)
+    .then((res) => {
+      if (res?.ok === false && SYSTEM_ERROR.test(String(res.error || ''))) logError(`worker:${msg.type}`, { code: res.error, status: res.status, message: '' });
+      sendResponse(res);
+    })
     .catch((e) => {
       console.error(LOG, msg.type, e);
+      logError(`worker:${msg.type}`, e);
       sendResponse({ ok: false, error: e.message || 'workerError' });
     });
   return true;
@@ -1253,9 +1326,10 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => console.warn(LOG, 'chat poll', e));
-  if (alarm.name === ALARM_SYNC) sync().catch((e) => console.warn(LOG, 'sync', e));
-  if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => console.warn(LOG, 'card imports', e));
+  await dataReady;
+  if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => report('chat poll', e));
+  if (alarm.name === ALARM_SYNC) sync().catch((e) => report('sync', e));
+  if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
 });
 
 chrome.notifications?.onClicked.addListener((id) => {

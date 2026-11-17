@@ -24,7 +24,7 @@ import {
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
-import { createCatalogView } from './catalog-view.js';
+import { createCatalogView, copyText } from './catalog-view.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList } from '../shared/storage.js';
 import {
   h,
@@ -80,6 +80,11 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
+
+// page crashes go to the local journal for support (shared/errorlog.js)
+const logPageError = (message) => chrome.runtime.sendMessage({ type: 'ui:logError', payload: { where: 'dashboard', message } }).catch(() => {});
+window.addEventListener('error', (e) => logPageError(`${e.message || e.error} @${String(e.filename || '').split('/').pop()}:${e.lineno || ''}`));
+window.addEventListener('unhandledrejection', (e) => logPageError(e.reason?.message || String(e.reason)));
 
 /* ===================================================================== */
 /* Generic helpers                                                        */
@@ -2524,6 +2529,28 @@ function startTour() {
 }
 
 /* ---------- help: how-to answers + support contacts ---------- */
+/** «Сообщить о проблеме»: copy a report (version, browser, last errors) for the support chat. */
+function reportCard() {
+  const status = h('div', { class: 'card__sub' }, t('help.report.text'));
+  return h('section', { class: 'card', dataset: { card: 'report' } },
+    h('div', { class: 'card__header' },
+      h('div', null, h('h2', { class: 'card__title' }, t('help.report.title')), status),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'copy-report' }, onclick: async () => {
+          const res = await send('ui:diagnostics');
+          if (!res?.ok) return toast(errorText(res?.error), 'error');
+          await copyText(res.text);
+          toast(t('help.report.copied', { count: res.count }), 'ok', 6000);
+        } }, t('help.report.copy')),
+        h('button', { type: 'button', class: 'btn', dataset: { action: 'clear-report' }, onclick: async () => {
+          await send('ui:clearErrors');
+          toast(t('help.report.cleared'), 'ok');
+        } }, t('help.report.clear')),
+      ),
+    ),
+  );
+}
+
 function viewHelp() {
   const contacts = [
     SUPPORT.whatsapp && h('a', { class: 'btn btn--primary', href: `https://wa.me/${SUPPORT.whatsapp.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
@@ -2542,6 +2569,7 @@ function viewHelp() {
       h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour' }, onclick: startTour }, t('help.startTour'))),
       h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, gifUrl(r) && h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'gif' }, onclick: () => openGif(r) }, '▶ ', t('guide.watch')), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection')))))),
     ),
+    reportCard(),
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('help.faqTitle'))),
       h('div', { class: 'card__body faq' }, faq.map((k) => h('details', { class: 'faq__item' }, h('summary', null, t(`help.q.${k}`)), h('p', null, t(`help.a.${k}`))))),
