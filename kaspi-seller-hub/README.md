@@ -237,10 +237,32 @@ A missing selector never crashes anything: it's logged to the console with a `[K
 - A link is fetched with the page's own session, and only from the tab's origin or `invoice.allowedOrigins`.
 - Invoices are saved to `chrome.storage.local` as `{ orderId, shopId, kind: 'pdf'|'html', data, ts }`. PDFs are stored as data URLs, which is why the extension asks for `unlimitedStorage`.
 - **Generate invoices** collects invoices for orders that are already packed.
-- **Print invoices** opens `dashboard/print.html`, which puts every invoice on its own A4 page and calls `window.print()`.
+- **Print invoices** opens `dashboard/print.html` and calls `window.print()`.
 - HTML invoices are sanitized (no scripts, event handlers or remote resources) and isolated in a Shadow DOM.
 
 **PDF invoices** (Kaspi waybills are PDFs) are rendered page by page with pdf.js, which is bundled in `vendor/pdfjs/` (pdfjs-dist 4.10.38, Apache-2.0), so many waybills print as one job.
+
+**Every seller has a different printer.** «Настройки → Печать накладных» is chosen once per computer
+(`dashboard/print-layout.js`):
+
+| Mode | Printer | Layout |
+|---|---|---|
+| Как в накладной Kaspi | any | each waybill on its own page size (A4 or label), via named `@page` rules |
+| Термопринтер | Xprinter, Godex, TSC… | fitted on a label of the chosen size (100×150, 100×100, 75×120, 58×100 or custom), turned 90° if needed |
+| A4 — 1 на лист | office | one waybill per A4 sheet, 8 mm margins |
+| A4 — 4 на лист | office | 2×2 per A4, dashed cut lines, for label-size waybills |
+
+The waybill is never redrawn. Kaspi's PDF page is rasterized at 300 dpi and scaled as a whole, so
+the number and the barcode stay Kaspi's own.
+
+**Пробная печать** prints a frame of the chosen paper. It has corner marks (nothing cut off), a
+50 mm ruler (scale 100 %) and 0.33 mm stripes (barcode sharpness). A link to each original PDF stays
+on screen.
+
+**Product photos** (`shared/photos.js`) appear in the order card, «Себестоимость» and the pick list.
+The photo for a SKU is the one the seller set (a Kaspi image link or a file resized to ≤ 400 px
+JPEG), else the first image from «Выгрузка товаров». Only Kaspi image hosts and local files are
+accepted (checked in the worker), and the release CSP allows exactly those hosts.
 
 ## Charts (and bundling Chart.js instead)
 

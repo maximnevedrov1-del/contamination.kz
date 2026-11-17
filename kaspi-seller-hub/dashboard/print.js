@@ -15,6 +15,7 @@ import { initI18n, t, applyI18n } from '../shared/i18n.js';
 import { getInvoices, getPrintQueue, getSettings, getPickList } from '../shared/storage.js';
 import { formatNumber, formatDate } from '../shared/i18n.js';
 import { h, clear } from '../shared/utils.js';
+import { layoutFor, normalizePrint, testSheet } from './print-layout.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -66,18 +67,22 @@ const PT_TO_MM = 25.4 / 72;
 const MAX_CANVAS_SIDE = 7000; // browsers refuse bigger canvases
 
 /**
- * Render every page of a PDF waybill into an image at PRINT_DPI, keeping the page's
- * own size (Kaspi may give an A4 sheet or a label, e.g. 100×150 mm).
- * @returns {Promise<Array<{ src:string, wMm:number, hMm:number }>>}
+ * Render every page of a PDF waybill into an image at PRINT_DPI. The page keeps its
+ * proportions; `layoutOf` (print-layout.js) says on which paper it goes and whether
+ * it is turned 90° to fit a label / cell of the other orientation.
+ * @returns {Promise<Array<{ src:string, wMm:number, hMm:number, layout:ReturnType<typeof layoutFor> }>>}
  */
-async function renderPdf(pdfjs, bytes) {
+async function renderPdf(pdfjs, bytes, layoutOf) {
   const pdf = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
   const images = [];
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n);
-    const base = page.getViewport({ scale: 1 }); // 1 unit = 1 pt
+    const base = page.getViewport({ scale: 1 }); // 1 unit = 1 pt, page rotation applied
+    const wMm = Math.round(base.width * PT_TO_MM * 10) / 10;
+    const hMm = Math.round(base.height * PT_TO_MM * 10) / 10;
+    const layout = layoutOf({ w: wMm, h: hMm });
     const scale = Math.min(PRINT_DPI / 72, MAX_CANVAS_SIDE / Math.max(base.width, base.height));
-    const viewport = page.getViewport({ scale });
+    const viewport = page.getViewport({ scale, rotation: (page.rotate + layout.rotate) % 360 });
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
@@ -85,7 +90,7 @@ async function renderPdf(pdfjs, bytes) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
-    images.push({ src: canvas.toDataURL('image/png'), wMm: Math.round(base.width * PT_TO_MM * 10) / 10, hMm: Math.round(base.height * PT_TO_MM * 10) / 10 });
+    images.push({ src: canvas.toDataURL('image/png'), wMm, hMm, layout });
     canvas.width = canvas.height = 0; // free memory before the next page
   }
   return images;
@@ -109,6 +114,73 @@ function sheetPage(wMm, hMm) {
 
 function pageEl(label) {
   return h('section', { class: 'page' }, h('span', { class: 'page__label' }, label));
+}
+
+/** An empty sheet of the layout's paper: no margins of its own, a grid of cells. */
+function sheetEl(layout, extraClass) {
+  const { sheet, padding, cols, rows } = layout;
+  const el = h('section', { class: ['page', 'page--sheet', extraClass] });
+  Object.assign(el.style, {
+    width: `${sheet.w}mm`,
+    height: `${sheet.h}mm`,
+    minHeight: '0',
+    padding: `${padding}mm`,
+    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+    gridTemplateRows: `repeat(${rows}, 1fr)`,
+  });
+  el.style.setProperty('page', sheetPage(sheet.w, sheet.h));
+  return el;
+}
+
+/**
+ * Waybill images → sheets. One waybill per sheet, or four per A4 in «A4 — 4 на лист».
+ * @param {Array<{src:string, label:string, layout:ReturnType<typeof layoutFor>}>} items
+ */
+function buildSheets(items) {
+  const out = [];
+  let sheet = null;
+  let free = 0;
+  for (const it of items) {
+    const perSheet = it.layout.cols * it.layout.rows;
+    if (!sheet || free === 0) {
+      sheet = sheetEl(it.layout, perSheet > 1 && 'page--grid');
+      free = perSheet;
+      out.push(sheet);
+    }
+    sheet.append(h('div', { class: 'cell' }, h('img', { class: 'pdf-page', src: it.src, alt: it.label }), h('span', { class: 'cell__label' }, it.label)));
+    free--;
+  }
+  return out;
+}
+
+/**
+ * Test print: a frame of the chosen paper with a 50 mm ruler and fine stripes, so the
+ * seller checks once that nothing is cut off, the scale is 100 % and barcodes come out sharp.
+ */
+async function renderTestPage(settings) {
+  const print = normalizePrint(settings.print);
+  const size = testSheet(print);
+  document.querySelector('.bar h1').textContent = t('printTest.title');
+  document.title = t('printTest.title');
+  $('count').textContent = `${size.w} × ${size.h} ${t('printTest.mm')}`;
+  $('printBtn').addEventListener('click', () => window.print());
+  const page = sheetEl({ sheet: size, padding: 0, cols: 1, rows: 1 }, 'page--test');
+  const ticks = Array.from({ length: 11 }, (_, i) => h('span', { class: 'ruler__tick', style: { left: `${i * 5}mm` } }, i % 2 === 0 ? String(i / 2) : ''));
+  page.append(
+    h('div', { class: 'test' },
+      h('div', { class: 'test__corner test__corner--tl' }), h('div', { class: 'test__corner test__corner--tr' }),
+      h('div', { class: 'test__corner test__corner--bl' }), h('div', { class: 'test__corner test__corner--br' }),
+      h('b', null, t('printTest.title')),
+      h('div', null, `${size.w} × ${size.h} ${t('printTest.mm')} · ${t(`settings.paper.${print.paper}`)}`),
+      h('div', { class: 'ruler' }, ticks),
+      h('div', { class: 'small' }, t('printTest.ruler')),
+      h('div', { class: 'stripes' }),
+      h('div', { class: 'small' }, t('printTest.stripes')),
+      h('div', { class: 'small' }, t('printTest.frame')),
+    ),
+  );
+  clear($('pages')).append(page);
+  window.print();
 }
 
 /**
@@ -156,7 +228,9 @@ async function main() {
   if (settings.theme === 'light' || settings.theme === 'dark') document.documentElement.dataset.theme = settings.theme;
   applyI18n();
   document.title = t('print.title');
-  if (new URLSearchParams(location.search).get('mode') === 'pick') return renderPickList();
+  const mode = new URLSearchParams(location.search).get('mode');
+  if (mode === 'pick') return renderPickList();
+  if (mode === 'test') return renderTestPage(settings);
 
   const [queue, invoices] = await Promise.all([getPrintQueue(), getInvoices()]);
   const byKey = new Map(invoices.map((i) => [`${i.shopId}::${i.orderId}`, i]));
@@ -177,12 +251,14 @@ async function main() {
   }
   pages.append(h('div', { class: 'empty no-print' }, t('print.rendering')));
 
-  const original = (settings.print?.paper || 'original') === 'original';
+  const print = normalizePrint(settings.print);
+  const originals = h('div', { class: 'notice notice--links' }, h('span', null, t('print.originalsTitle')));
   const hasPdf = found.some((i) => i.kind === 'pdf');
   const pdfjs = hasPdf ? await loadPdfJs() : null;
   if (hasPdf && !pdfjs) notices.append(h('div', { class: 'notice' }, t('print.pdfFallback')));
 
   const fragment = document.createDocumentFragment();
+  const waybills = []; // rendered PDF pages, laid out on sheets after the loop
   for (const inv of found) {
     const label = t('print.orderLabel', { id: inv.orderId, store: storeName(inv.shopId) });
     if (inv.kind === 'html') {
@@ -193,19 +269,9 @@ async function main() {
       fragment.append(page);
     } else if (pdfjs) {
       try {
-        const imgs = await renderPdf(pdfjs, dataUrlToBytes(inv.data));
-        imgs.forEach(({ src, wMm, hMm }) => {
-          const page = pageEl(label);
-          if (original) {
-            // exactly the waybill's paper size, no margins, nothing scaled
-            page.classList.add('page--sheet');
-            Object.assign(page.style, { width: `${wMm}mm`, height: `${hMm}mm`, minHeight: '0' });
-            page.style.setProperty('page', sheetPage(wMm, hMm));
-          }
-          page.append(h('img', { class: 'pdf-page', src, alt: label }));
-          fragment.append(page);
-        });
-        fragment.append(h('p', { class: 'no-print orig-link' }, h('a', { href: URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' })), target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId }))));
+        const imgs = await renderPdf(pdfjs, dataUrlToBytes(inv.data), (pageMm) => layoutFor(pageMm, print));
+        imgs.forEach(({ src, layout }) => waybills.push({ src, layout, label }));
+        originals.append(h('a', { href: URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' })), target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId })));
       } catch (e) {
         console.error('[KSH/print] pdf render failed', inv.orderId, e);
       }
@@ -219,7 +285,9 @@ async function main() {
       fragment.append(page);
     }
   }
+  buildSheets(waybills).forEach((sheet) => fragment.append(sheet));
   clear(pages).append(fragment);
+  if (originals.childElementCount) notices.append(originals);
 
   $('printBtn').addEventListener('click', () => window.print());
   await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => (img.onload = img.onerror = r)))));

@@ -28,6 +28,7 @@ import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
+import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
 import {
   h,
   clear,
@@ -1483,6 +1484,34 @@ async function updateStore(shopId, patch) {
   renderAll();
 }
 
+/** «Печать накладных»: every seller has a different printer — chosen once per computer. */
+function printCard(st) {
+  const pr = normalizePrint(st.print);
+  const save = (patch) => updateSettings({ print: normalizePrint({ ...pr, ...patch }) }, { silent: true });
+  const seg = h('div', { class: 'seg seg--wrap', role: 'group', 'aria-label': t('settings.printTitle') },
+    PAPER_MODES.map((m) => h('button', { type: 'button', 'aria-pressed': String(pr.paper === m), dataset: { paper: m }, onclick: () => save({ paper: m }) }, t(`settings.paper.${m}`))));
+  const num = (key, max, label) => h('label', { class: 'check' }, t(label), h('input', { class: 'input', type: 'number', min: LABEL_LIMITS.min, max, step: 1, style: { width: '80px' }, value: pr[key], dataset: { label: key }, onchange: (e) => save({ [key]: e.target.value }) }));
+  const labelBox = pr.paper === 'label' &&
+    h('div', { class: 'field' },
+      h('span', { class: 'field__label' }, t('settings.labelSize')),
+      h('div', { class: 'seg seg--wrap', role: 'group' },
+        LABEL_PRESETS.map(([w, hh]) => h('button', { type: 'button', 'aria-pressed': String(w === pr.labelW && hh === pr.labelH), dataset: { label: `${w}x${hh}` }, onclick: () => save({ labelW: w, labelH: hh }) }, `${w}×${hh}`))),
+
+      h('div', { style: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' } }, num('labelW', LABEL_LIMITS.maxW, 'settings.labelW'), num('labelH', LABEL_LIMITS.maxH, 'settings.labelH')),
+    );
+  return h('section', { class: 'card', dataset: { card: 'print' } },
+    h('div', { class: 'card__header' },
+      h('div', null, h('h2', { class: 'card__title' }, t('settings.printTitle')), h('div', { class: 'card__sub' }, t('settings.printHint'))),
+      h('button', { type: 'button', class: 'btn', dataset: { action: 'print-test' }, onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL('dashboard/print.html?mode=test') }) }, t('settings.printTest')),
+    ),
+    h('div', { class: 'card__body' },
+      seg,
+      labelBox,
+      h('p', { class: 'muted small', style: { marginTop: '10px' } }, t(`settings.printTips.${pr.paper}`)),
+    ),
+  );
+}
+
 function viewSettings() {
   const st = state.data.settings;
   const card = (title, hint, ...body) => h('section', { class: 'card' }, h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, title), hint && h('div', { class: 'card__sub' }, hint))), h('div', { class: 'card__body' }, ...body));
@@ -1588,12 +1617,7 @@ function viewSettings() {
         h('input', { id: 'warnHours', type: 'number', min: 0, step: 0.5, class: 'input', style: { width: '100px' }, value: st.deadlines.warnHours ?? 2, onchange: (e) => updateSettings({ deadlines: { ...st.deadlines, warnHours: Math.max(0, Number(e.target.value) || 0) } }) }),
       ),
     ),
-    card(
-      t('settings.printTitle'),
-      t('settings.printHint'),
-      h('div', { class: 'field' }, h('span', { class: 'field__label' }, t('settings.printPaper')),
-        seg(st.print?.paper || 'original', [['original', t('settings.paperOriginal')], ['a4', t('settings.paperA4')]], (v) => updateSettings({ print: { ...st.print, paper: v } }, { silent: true }))),
-    ),
+    printCard(st),
     card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
     card(
       t('backup.title'),
@@ -2648,7 +2672,7 @@ function viewHelp() {
     SUPPORT.telegram && h('a', { class: 'btn', href: `https://t.me/${SUPPORT.telegram.replace(/^@/, '')}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
     SUPPORT.email && h('a', { class: 'btn', href: `mailto:${SUPPORT.email}` }, SUPPORT.email),
   ].filter(Boolean);
-  const faq = ['connect', 'token', 'accept', 'profit', 'upload', 'backup', 'pay', 'phone'];
+  const faq = ['connect', 'token', 'accept', 'printer', 'profit', 'upload', 'backup', 'pay', 'phone'];
   return h(
     'div',
     { class: 'settings' },

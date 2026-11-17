@@ -26,9 +26,22 @@
       .page__label { position: absolute; top: 3mm; right: 5mm; font: 9px var(--font-sans); color: #888; }
       .page img.pdf-page { display: block; width: 100%; height: auto; }
       .page iframe { width: 100%; height: 270mm; border: 0; }
-      .page--sheet { padding: 0; }
+      .page--sheet { display: grid; box-sizing: border-box; }
+      .page--sheet .cell { position: relative; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; }
       .page--sheet img.pdf-page { width: 100%; height: 100%; object-fit: contain; }
-      .orig-link { margin: -8px 0 0; font-size: 13px; }
+      .page--grid .cell { outline: 0.2mm dashed #999; outline-offset: -0.1mm; }
+      .cell__label { position: absolute; top: 1mm; right: 2mm; font: 9px var(--font-sans); color: #888; }
+      .notice--links { display: flex; flex-wrap: wrap; gap: 6px 14px; background: var(--surface); font-size: 13px; }
+      .test { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2mm; padding: 6mm; font: 3.2mm/1.3 var(--font-sans); text-align: center; color: #000; border: 0.4mm solid #000; box-sizing: border-box; }
+      .test .small { font-size: 2.6mm; max-width: 90%; }
+      .test__corner { position: absolute; width: 6mm; height: 6mm; border: 0 solid #000; }
+      .test__corner--tl { top: 1.5mm; left: 1.5mm; border-top-width: 0.6mm; border-left-width: 0.6mm; }
+      .test__corner--tr { top: 1.5mm; right: 1.5mm; border-top-width: 0.6mm; border-right-width: 0.6mm; }
+      .test__corner--bl { bottom: 1.5mm; left: 1.5mm; border-bottom-width: 0.6mm; border-left-width: 0.6mm; }
+      .test__corner--br { bottom: 1.5mm; right: 1.5mm; border-bottom-width: 0.6mm; border-right-width: 0.6mm; }
+      .ruler { position: relative; width: 50mm; height: 6mm; border-bottom: 0.4mm solid #000; margin-top: 2mm; }
+      .ruler__tick { position: absolute; bottom: 0; width: 0; height: 3mm; border-left: 0.3mm solid #000; font-size: 2.4mm; line-height: 1; text-indent: 0.6mm; }
+      .stripes { width: 40mm; height: 10mm; background: repeating-linear-gradient(90deg, #000 0 0.33mm, #fff 0.33mm 0.66mm); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .pick-photo { width: 52px; padding: 3px !important; }
       .pick-photo img { display: block; width: 46px; height: 46px; object-fit: contain; }
       .empty { padding: 80px; text-align: center; color: var(--text-3); }
@@ -46,11 +59,14 @@
       .pick-unknown { margin-top: 12px; padding: 8px; border: 1px dashed #999; }
       @media print {
         body { background: #fff; }
-        .bar, .notice, .page__label, .no-print { display: none !important; }
+        /* #notices too: even empty, its box would start an extra default (A4) page before named sheets */
+        .bar, #notices, .notice, .page__label, .no-print { display: none !important; }
         .pages { padding: 0; gap: 0; display: block; }
         .page { width: auto; min-height: 0; padding: 0; box-shadow: none; border-radius: 0; break-after: page; page-break-after: always; }
         .page:last-child { break-after: auto; page-break-after: auto; }
         .page--sheet { overflow: hidden; }
+        .page--grid .cell { outline-color: #bbb; }
+        .cell__label { display: none; }
         img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
     </style>

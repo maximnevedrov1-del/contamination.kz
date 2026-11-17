@@ -14,6 +14,7 @@ import * as K from './kaspi-api.js';
 import * as B from './billing.js';
 import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos } from '../shared/storage.js';
 import { isAllowedPhoto } from '../shared/photos.js';
+import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
 
@@ -428,7 +429,7 @@ export function catalogHandlers({ allowedShopIds }) {
         const patch = {};
         if (['ru', 'kk'].includes(st.lang)) patch.lang = st.lang;
         if (['system', 'light', 'dark'].includes(st.theme)) patch.theme = st.theme;
-        if (['original', 'a4'].includes(st.print?.paper)) patch.print = { paper: st.print.paper };
+        if (st.print && typeof st.print === 'object') patch.print = normalizePrint(st.print);
         if (st.notifications && typeof st.notifications === 'object') patch.notifications = { ...settings.notifications, ...Object.fromEntries(Object.entries(st.notifications).filter(([k, v]) => k in settings.notifications && typeof v === 'boolean')) };
         if (st.deadlines && num(st.deadlines.acceptHours) != null) patch.deadlines = { acceptHours: num(st.deadlines.acceptHours), warnHours: num(st.deadlines.warnHours) ?? settings.deadlines.warnHours };
         if (st.profit && typeof st.profit === 'object') patch.profit = { defaultCommission: num(st.profit.defaultCommission), byCategory: Object.fromEntries(Object.entries(st.profit.byCategory || {}).filter(([, v]) => num(v) != null).map(([k, v]) => [String(k).slice(0, 200), num(v)])) };

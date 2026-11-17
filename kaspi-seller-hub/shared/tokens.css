@@ -211,3 +211,4 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .spin, .skeleton { animation: none; }
 }
+.seg--wrap { flex-wrap: wrap; height: auto; }

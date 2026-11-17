@@ -46,6 +46,7 @@ const L = await import('../../shared/errorlog.js');
 const C = await import('../../background/catalog-service.js');
 const I = await import('../../shared/i18n.js');
 const P = await import('../../shared/photos.js');
+const PL = await import('../../dashboard/print-layout.js');
 
 /* ---------------- Kazakhstan time (UTC+5) ---------------- */
 await test('dayKey: 19:30 UTC is already the next day in Kazakhstan', () => {
@@ -229,6 +230,35 @@ await test('photo: seller photo wins, then catalog, else none', () => {
   assert.equal(P.photoFor('A1', {}, cat), 'https://resources.cdn-kaspi.kz/a.jpg');
   assert.equal(P.photoFor('A1', { A1: 'https://resources.cdn-kaspi.kz/own.jpg' }, cat), 'https://resources.cdn-kaspi.kz/own.jpg');
   assert.equal(P.photoFor('B2', {}, cat), null);
+});
+
+/* ---------------- waybill layout on different printers ---------------- */
+const A4P = { w: 210, h: 297 }, LBL = { w: 100, h: 150 }, LAND = { w: 150, h: 100 };
+await test('print: original keeps Kaspi page size', () => {
+  const l = PL.layoutFor(LBL, { paper: 'original' });
+  assert.deepEqual([l.sheet, l.rotate, l.padding], [LBL, 0, 0]);
+});
+await test('print: label printer — A4 waybill fitted on 100×150, no rotation', () => {
+  const l = PL.layoutFor(A4P, { paper: 'label', labelW: 100, labelH: 150 });
+  assert.deepEqual([l.sheet, l.rotate, l.padding], [{ w: 100, h: 150 }, 0, 0]);
+});
+await test('print: label printer — landscape waybill turned 90° on a portrait label', () => {
+  assert.equal(PL.layoutFor(LAND, { paper: 'label', labelW: 100, labelH: 150 }).rotate, 90);
+  assert.equal(PL.layoutFor(LAND, { paper: 'label', labelW: 100, labelH: 100 }).rotate, 0); // square label: no turn
+});
+await test('print: A4 — one per sheet with printer margins; 4 per sheet as 2×2', () => {
+  const one = PL.layoutFor(LBL, { paper: 'a4' });
+  assert.deepEqual([one.sheet, one.cols * one.rows, one.padding > 0], [{ w: 210, h: 297 }, 1, true]);
+  const four = PL.layoutFor(LBL, { paper: 'a4x4' });
+  assert.deepEqual([four.cols, four.rows, four.rotate], [2, 2, 0]);
+  assert.ok(four.cell.w >= 95 && four.cell.h >= 135, JSON.stringify(four.cell));
+  assert.equal(PL.layoutFor(LAND, { paper: 'a4x4' }).rotate, 90);
+});
+await test('print: bad settings fall back to safe values', () => {
+  assert.deepEqual(PL.normalizePrint({ paper: 'zzz', labelW: 5, labelH: 'x' }), { paper: 'original', labelW: 100, labelH: 150 });
+  assert.deepEqual(PL.normalizePrint({ paper: 'label', labelW: '58', labelH: 100 }), { paper: 'label', labelW: 58, labelH: 100 });
+  assert.deepEqual(PL.testSheet({ paper: 'label', labelW: 75, labelH: 120 }), { w: 75, h: 120 });
+  assert.deepEqual(PL.testSheet({ paper: 'a4x4' }), { w: 210, h: 297 });
 });
 
 console.log(failures.length ? `${failures.length} FAILED (${passed} passed)` : `ALL ${passed} PASSED`);

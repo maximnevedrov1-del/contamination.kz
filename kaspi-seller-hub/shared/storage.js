@@ -66,8 +66,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   deadlines: { acceptHours: 2, warnHours: 2 },
   // Kaspi commission in % — by product category, else the default. null = not set.
   profit: { defaultCommission: null, byCategory: {} },
-  // waybills: 'original' = page size of Kaspi's PDF (label printer or A4), 'a4' = fitted on an A4 sheet
-  print: { paper: 'original' },
+  // waybills: original | label (thermal printer, labelW×labelH mm) | a4 | a4x4 — dashboard/print-layout.js
+  print: { paper: 'original', labelW: 100, labelH: 150 },
   stores: {},
 });
 

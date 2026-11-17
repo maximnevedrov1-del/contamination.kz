@@ -75,42 +75,85 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR
   check('3 pick list shows the product photo', (await pick.locator('.pick-photo img').count()) >= 1, String(await pick.locator('.pick tbody tr').count()));
   await pick.close();
 
-  // 4. waybills: an A4 sheet and a 100×150 mm label, printed at their own size, 300 dpi
+  // 4. waybills: an A4 sheet and a 100×150 mm label (Kaspi may give either), 300 dpi
   const shopId = await sw.evaluate(async () => Object.keys((await chrome.storage.local.get('ksh.settings'))['ksh.settings'].stores)[0]);
   const a4 = `data:application/pdf;base64,${pdf(595.28, 841.89, 'A4 WAYBILL').toString('base64')}`;
   const label = `data:application/pdf;base64,${pdf(283.46, 425.2, 'LABEL').toString('base64')}`;
-  await sw.evaluate(async ([shopId, a4, label]) => {
-    await chrome.storage.local.set({ 'ksh.invoices': [{ orderId: 'A4-1', shopId, kind: 'pdf', data: a4, ts: Date.now() }, { orderId: 'LB-2', shopId, kind: 'pdf', data: label, ts: Date.now() }] });
-    await chrome.storage.session.set({ 'ksh.printQueue': [{ shopId, orderId: 'A4-1' }, { shopId, orderId: 'LB-2' }] });
-  }, [shopId, a4, label]);
-  const pp = await ctx.newPage();
-  await pp.addInitScript(() => (window.print = () => (window.__printed = 1)));
-  await pp.goto(`chrome-extension://${id}/dashboard/print.html`); await pp.waitForTimeout(3000);
-  const sheets = await pp.$$eval('.page--sheet', (els) => els.map((e) => ({ w: e.style.width, h: e.style.height, page: e.style.getPropertyValue('page'), nat: e.querySelector('img').naturalWidth })));
-  check('4 two waybills, each on its own sheet size', sheets.length === 2 && sheets[0].w === '210mm' && sheets[0].h === '297mm' && sheets[1].w === '100mm' && sheets[1].h === '150mm', JSON.stringify(sheets));
-  const css = await pp.locator('#sheetSizes').textContent().catch(() => '');
-  check('4 print CSS sets the paper: A4 and 100×150 mm, no margins', css.includes('size: 210mm 297mm; margin: 0') && css.includes('size: 100mm 150mm; margin: 0'), css);
-  check('4 rendered at 300 dpi (100 mm label ≈ 1181 px wide)', Math.abs((sheets[1]?.nat || 0) - 1181) <= 2 && Math.abs((sheets[0]?.nat || 0) - 2480) <= 2, JSON.stringify(sheets.map((s) => s.nat)));
-  check('4 «open original PDF» link for each waybill (screen only)', (await pp.locator('.orig-link a').count()) === 2);
-  check('4 printing started automatically', await pp.evaluate(() => window.__printed === 1));
-  await pp.screenshot({ path: path.join(__dirname, 'print-sheets.png'), fullPage: true });
-  await pp.emulateMedia({ media: 'print' });
-  const pdfOut = await pp.pdf({ preferCSSPageSize: true }).catch((e) => e.message);
-  if (Buffer.isBuffer(pdfOut)) {
-    const boxes = [...pdfOut.toString('latin1').matchAll(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/g)].map((m) => `${Math.round(m[1])}x${Math.round(m[2])}`);
-    check('4 printed PDF pages: A4 then the label size', boxes.includes('595x842') && boxes.includes('283x425'), boxes.join(' '));
-  }
-  await pp.close();
+  const land = `data:application/pdf;base64,${pdf(425.2, 283.46, 'LANDSCAPE').toString('base64')}`;
+  await sw.evaluate(async ([shopId, a4, label, land]) => {
+    const inv = [['A4-1', a4], ['LB-2', label], ['LB-3', label], ['LS-4', land], ['LB-5', label]].map(([orderId, data]) => ({ orderId, shopId, kind: 'pdf', data, ts: Date.now() }));
+    await chrome.storage.local.set({ 'ksh.invoices': inv });
+    await chrome.storage.session.set({ 'ksh.printQueue': inv.map((i) => ({ shopId, orderId: i.orderId })) });
+  }, [shopId, a4, label, land]);
+  const setPaper = (print) => d.evaluate((p) => chrome.runtime.sendMessage({ type: 'ui:saveSettings', payload: { patch: { print: p } } }), print);
+  /** Open the print page; sheets with their size, cells, and the printed PDF's page sizes. */
+  const printRun = async (shot) => {
+    const pp = await ctx.newPage();
+    await pp.addInitScript(() => (window.print = () => (window.__printed = 1)));
+    await pp.goto(`chrome-extension://${id}/dashboard/print.html`); await pp.waitForTimeout(3500);
+    const sheets = await pp.$$eval('.page--sheet', (els) => els.map((e) => ({ w: e.style.width, h: e.style.height, cells: e.querySelectorAll('.cell').length, imgs: [...e.querySelectorAll('img')].map((i) => [i.naturalWidth, i.naturalHeight]) })));
+    const printed = await pp.evaluate(() => window.__printed === 1);
+    const links = await pp.locator('.notice--links a').count();
+    if (shot) await pp.screenshot({ path: path.join(__dirname, shot), fullPage: true });
+    await pp.emulateMedia({ media: 'print' });
+    const out = await pp.pdf({ preferCSSPageSize: true });
+    const boxes = [...out.toString('latin1').matchAll(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/g)].map((m) => `${Math.round(m[1])}x${Math.round(m[2])}`);
+    await pp.close();
+    return { sheets, printed, links, boxes };
+  };
 
-  // 5. «Вписать в лист A4» setting → no sheet sizing
-  await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:saveSettings', payload: { patch: { print: { paper: 'a4' } } } }));
-  const p2 = await ctx.newPage();
-  await p2.addInitScript(() => (window.print = () => {}));
-  await p2.goto(`chrome-extension://${id}/dashboard/print.html`); await p2.waitForTimeout(3000);
-  check('5 A4 mode: waybills fitted on A4 pages', (await p2.locator('.page--sheet').count()) === 0 && (await p2.locator('img.pdf-page').count()) === 2);
-  await p2.close();
+  // 4a. «Как в накладной Kaspi»: each on its own size
+  await setPaper({ paper: 'original' });
+  let r = await printRun('print-sheets.png');
+  check('4a original: 5 sheets, A4 first then labels', r.sheets.length === 5 && r.sheets[0].w === '210mm' && r.sheets[1].w === '100mm' && r.sheets[1].h === '150mm' && r.sheets[3].w === '150mm', JSON.stringify(r.sheets.map((x) => x.w + 'x' + x.h)));
+  check('4a rendered at 300 dpi (100 mm ≈ 1181 px, A4 ≈ 2480 px)', Math.abs(r.sheets[1].imgs[0][0] - 1181) <= 2 && Math.abs(r.sheets[0].imgs[0][0] - 2480) <= 2, JSON.stringify(r.sheets.map((x) => x.imgs[0])));
+  check('4a printed PDF pages: A4 and 100×150', r.boxes.includes('595x842') && r.boxes.includes('283x425') && r.boxes.includes('425x283'), r.boxes.join(' '));
+  check('4a links to Kaspi originals (screen only), printing started', r.links === 5 && r.printed, `links=${r.links} printed=${r.printed}`);
+
+  // 4b. thermal printer 100×150: every waybill on a 100×150 label, landscape one turned
+  await setPaper({ paper: 'label', labelW: 100, labelH: 150 });
+  r = await printRun('print-label.png');
+  check('4b label printer: 5 labels of 100×150', r.sheets.length === 5 && r.sheets.every((x) => x.w === '100mm' && x.h === '150mm'), JSON.stringify(r.sheets.map((x) => x.w + 'x' + x.h)));
+  check('4b landscape waybill turned to portrait', r.sheets[3].imgs[0][1] > r.sheets[3].imgs[0][0], JSON.stringify(r.sheets[3].imgs));
+  check('4b printed PDF: every page 100×150', r.boxes.length === 5 && r.boxes.every((b) => b === '283x425'), r.boxes.join(' '));
+
+  // 4c. small thermal label 58×100
+  await setPaper({ paper: 'label', labelW: 58, labelH: 100 });
+  r = await printRun();
+  check('4c 58×100 labels', r.boxes.length === 5 && r.boxes.every((b) => b === '164x283'), r.boxes.join(' '));
+
+  // 4d. office printer, 1 per A4
+  await setPaper({ paper: 'a4' });
+  r = await printRun();
+  check('4d A4: 5 sheets of A4, one waybill each', r.sheets.length === 5 && r.sheets.every((x) => x.w === '210mm' && x.cells === 1) && r.boxes.every((b) => b === '595x842'), r.boxes.join(' '));
+
+  // 4e. office printer, 4 per A4 (2×2)
+  await setPaper({ paper: 'a4x4' });
+  r = await printRun('print-a4x4.png');
+  check('4e A4 ×4: 5 waybills on 2 sheets (4 + 1)', r.sheets.length === 2 && r.sheets[0].cells === 4 && r.sheets[1].cells === 1 && r.boxes.length === 2 && r.boxes.every((b) => b === '595x842'), JSON.stringify(r.sheets.map((x) => x.cells)) + ' ' + r.boxes.join(' '));
+
+  // 5. settings: four modes, label sizes, test print
+  await setPaper({ paper: 'original' });
   await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#settings`); await sleep(1200);
-  check('5 settings show the paper choice', (await d.locator('#view').innerText()).includes('Как в накладной Kaspi'));
+  const card = d.locator('[data-card=print]');
+  check('5 four printer modes offered', (await card.locator('button[data-paper]').count()) === 4);
+  await card.locator('button[data-paper=label]').click(); await sleep(700);
+  await d.locator('[data-card=print] button[data-label="75x120"]').click(); await sleep(700);
+  const saved = await sw.evaluate(async () => (await chrome.storage.local.get('ksh.settings'))['ksh.settings'].print);
+  check('5 label printer 75×120 saved', saved?.paper === 'label' && saved.labelW === 75 && saved.labelH === 120, JSON.stringify(saved));
+  await d.locator('[data-card=print] input[data-label=labelW]').fill('80'); await d.locator('[data-card=print] input[data-label=labelW]').dispatchEvent('change'); await sleep(700);
+  const saved2 = await sw.evaluate(async () => (await chrome.storage.local.get('ksh.settings'))['ksh.settings'].print);
+  check('5 custom label width saved', saved2?.labelW === 80, JSON.stringify(saved2));
+  check('5 tips for thermal printers shown', (await d.locator('[data-card=print]').innerText()).includes('поля — «Нет»'));
+  await d.locator('[data-card=print] input[data-label=labelW]').fill('75'); await d.locator('[data-card=print] input[data-label=labelW]').dispatchEvent('change'); await sleep(700);
+  const [tp] = await Promise.all([ctx.waitForEvent('page'), d.locator('[data-card=print] button[data-action=print-test]').click()]);
+  await tp.addInitScript(() => (window.print = () => {}));
+  await tp.reload(); await tp.waitForTimeout(1200);
+  const tsheet = await tp.$eval('.page--test', (e) => [e.style.width, e.style.height]);
+  check('5 test print on the chosen label (75×120) with ruler and stripes', tsheet[0] === '75mm' && tsheet[1] === '120mm' && (await tp.locator('.ruler').count()) === 1 && (await tp.locator('.stripes').count()) === 1, tsheet.join('x'));
+  await tp.screenshot({ path: path.join(__dirname, 'print-test.png') });
+  await tp.close();
+  await d.locator('[data-card=print]').screenshot({ path: path.join(__dirname, 'print-settings.png') });
 
   check('no page errors', errs.length === 0, errs.join(' | '));
   console.log(fails ? `${fails} FAILED` : 'ALL PASS');
