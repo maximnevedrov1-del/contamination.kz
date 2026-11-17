@@ -2415,6 +2415,28 @@ const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip,
  *  - the Help page lists every guide.
  * ===================================================================== */
 const GUIDE_ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'];
+// Short screen recordings (help/*.gif, made on demo data by the project's recorder).
+const GUIDE_GIFS = { home: 'connect', orders: 'orders', products: 'products', catalog: 'catalog', settings: 'settings' };
+const gifUrl = (route) => (GUIDE_GIFS[route] ? chrome.runtime.getURL(`help/${GUIDE_GIFS[route]}.gif`) : null);
+
+/** The recording in a window; the GIF is loaded only when asked for. */
+function openGif(route) {
+  let dlg = $('gifDialog');
+  if (!dlg) {
+    dlg = h('dialog', { id: 'gifDialog', class: 'dialog dialog--gif', 'aria-labelledby': 'gifTitle' });
+    dlg.addEventListener('click', (e) => e.target === dlg && dlg.close());
+    document.body.append(dlg);
+  }
+  clear(dlg).append(
+    h('div', { class: 'gif' },
+      h('div', { class: 'gif__head' }, h('h2', { class: 'dialog__title', id: 'gifTitle' }, t(`guide.gif.${GUIDE_GIFS[route]}`)), h('button', { type: 'button', class: 'btn btn--sm', onclick: () => dlg.close() }, t('common.close'))),
+      h('img', { class: 'gif__img', src: gifUrl(route), alt: t(`guide.gif.${GUIDE_GIFS[route]}`), width: 840, height: 525 }),
+      h('ol', { class: 'guide__steps' }, guideSteps(route).map((x) => h('li', null, x))),
+    ),
+  );
+  dlg.showModal();
+}
+
 const guideSteps = (route) => [1, 2, 3, 4, 5].map((n) => `guide.${route}.s${n}`).filter(hasKey).map((k) => t(k));
 
 function guideCard(route, { dismissible = true } = {}) {
@@ -2426,6 +2448,7 @@ function guideCard(route, { dismissible = true } = {}) {
     dismissible &&
       h('div', { class: 'guide__actions' },
         h('button', { type: 'button', class: 'btn btn--sm btn--primary', onclick: () => (memo.set(`ksh.guide.${route}`, '1'), (state.guideOpen = false), renderView()) }, t('guide.gotIt')),
+        gifUrl(route) && h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'gif' }, onclick: () => openGif(route) }, '▶ ', t('guide.watch')),
         h('a', { class: 'btn btn--sm btn--ghost', href: '#help' }, t('guide.all')),
       ),
   );
@@ -2517,7 +2540,7 @@ function viewHelp() {
     ),
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour' }, onclick: startTour }, t('help.startTour'))),
-      h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection'))))),
+      h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, gifUrl(r) && h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'gif' }, onclick: () => openGif(r) }, '▶ ', t('guide.watch')), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection')))))),
     ),
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('help.faqTitle'))),
