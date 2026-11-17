@@ -151,7 +151,7 @@ const supaLog = async () => (await fetch('http://localhost:8098/__log')).json();
   await msg('ui:catalogDelete', { skus: allSkus }); await sleep(4500);
   const xmlHeld = await (await fetch(urlA)).text();
   check('9b price list NOT emptied after deleting everything', (xmlHeld.match(/<offer /g)?.length || 0) === before && before > 0, `before ${before}`);
-  await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#catalog`); await sleep(1500);
+  await d.reload(); await sleep(1500); // same #catalog address: reload, not goto (goto would keep the old page)
   check('9b store A shows the «not updated» warning with counts', (await feedRow(A).locator('.feed__drop').innerText().catch(() => '')).includes(`${before}`));
   await clearToasts();
   await feedRow(A).locator('button[data-action=allow-drop]').click();
