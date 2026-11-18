@@ -51,7 +51,8 @@ async function http(path, { method = 'POST', body, token } = {}) {
   if (!res.ok) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
-    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'subscription_required', 'store_limit', 'invalid_shop', 'not_authenticated', 'forbidden'];
+    const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'subscription_required', 'store_limit', 'invalid_shop', 'not_authenticated', 'forbidden',
+      'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -90,6 +91,40 @@ export async function verifyCode(email, code) {
   await set(LICENSE_KEY, null);
   return { ok: true };
 }
+
+/* ---------- staff (packers): a second, separate session on the owner's computer ----------
+ * The packer signs in with their own e-mail code. Their session never replaces the owner's
+ * (SESSION_KEY): background/staff.js keeps it apart and checks it every few minutes.
+ */
+
+/** Exchange an e-mail code for a session without saving it as the owner's. */
+export async function verifyCodeRaw(email, code) {
+  const token = String(code || '').replace(/\s/g, '');
+  if (!/^\d{6,10}$/.test(token)) throw new BillingError('billingBadCode');
+  const s = await http('/auth/v1/verify', { body: { type: 'email', email: String(email).trim().toLowerCase(), token } });
+  if (!s?.access_token) throw new BillingError('billingBadCode');
+  return { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: Date.now() + (s.expires_in || 3600) * 1000, email: s.user?.email || email, user_id: s.user?.id || null };
+}
+
+/** Fresh tokens for a stored (staff) session. */
+export async function refreshRaw(session) {
+  if (session.expires_at - 60000 > Date.now()) return session;
+  const fresh = await http('/auth/v1/token?grant_type=refresh_token', { body: { refresh_token: session.refresh_token } });
+  return { ...session, access_token: fresh.access_token, refresh_token: fresh.refresh_token, expires_at: Date.now() + (fresh.expires_in || 3600) * 1000 };
+}
+
+/** RPC with an explicit token (the staff session). */
+export const rpcWith = (token, fn, args = {}) => http(`/rest/v1/rpc/${fn}`, { body: args, token });
+
+/** The owner signed in to the extension on this computer (null when nobody is). */
+export const ownerUserId = async () => (await get(SESSION_KEY))?.user_id || null;
+
+/** Owner's team (002_team.sql). */
+export const teamList = () => rpc('team_list');
+export const teamInvite = ({ email, name, shopIds, canAccept }) => rpc('team_invite', { p_email: email, p_name: name, p_shop_ids: shopIds || [], p_can_accept: !!canAccept });
+export const teamUpdate = ({ id, name, shopIds, canAccept }) => rpc('team_update', { p_id: id, p_name: name, p_shop_ids: shopIds || [], p_can_accept: !!canAccept });
+export const teamSetEnabled = ({ id, enabled }) => rpc('team_set_enabled', { p_id: id, p_enabled: !!enabled });
+export const teamRemove = ({ id }) => rpc('team_remove', { p_id: id });
 
 /** The client ticked «I accept the offer and the privacy policy» → logged on the server. */
 export async function acceptTerms() {

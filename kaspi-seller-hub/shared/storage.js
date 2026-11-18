@@ -70,6 +70,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   print: { paper: 'original', labelW: 100, labelH: 150 },
   // «Только чтение»: nothing is changed in Kaspi (no accept / pack / card upload / price list)
   readOnly: false,
+  // «Компьютер склада»: the owner's view is locked with a PIN, packers sign in (background/staff.js)
+  warehouse: { enabled: false },
   stores: {},
 });
 

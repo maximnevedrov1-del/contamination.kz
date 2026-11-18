@@ -27,6 +27,7 @@ import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
 import { svgIcon } from '../shared/icons.js';
+import { renderLockScreen, renderPacker, teamCard, warehouseCard, journalCard } from './staff-view.js';
 import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
@@ -1679,6 +1680,9 @@ function viewSettings() {
       ),
     ),
     printCard(st),
+    teamCard(staffCtx()),
+    warehouseCard(staffCtx()),
+    journalCard(staffCtx()),
     card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
     card(
       t('backup.title'),
@@ -2573,6 +2577,7 @@ function viewHome() {
     urgent.length && { tone: 'danger', icon: 'fire', text: t('home.todo.urgent', { count: urgent.length }), action: t('home.open'), go: goOrders('urgent') },
     fresh.length && { tone: 'info', icon: 'sparkle', text: t('home.todo.new', { count: fresh.length }), action: t('home.open'), go: goOrders('new') },
     unread && { tone: 'info', icon: 'chat', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
+    state.packProblems?.length && { tone: 'danger', icon: 'warn', text: t('home.todo.packProblems', { count: state.packProblems.length }), action: t('home.open'), go: () => ((location.hash = 'settings'), setTimeout(() => document.querySelector('[data-card=journal]')?.scrollIntoView({ block: 'start' }), 300)) },
     lic.pendingInvoice && { tone: 'warn', icon: 'card', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
     lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: 'hourglass', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
     unpaid.length && { tone: 'muted', icon: 'wallet', text: t('home.todo.unpaid', { count: unpaid.length }), action: t('home.open'), go: () => ((state.paymentGroup = 'pending'), (location.hash = 'payments')) },
@@ -2888,7 +2893,78 @@ function renderView() {
   }
 }
 
+/* ---------- «Компьютер склада»: who uses this computer now ---------- */
+function staffMode() {
+  const s = state.staffInfo;
+  if (!s?.warehouse || s.ownerUnlocked) return null;
+  return s.active ? 'packer' : 'lock';
+}
+
+/** Reason for «Проблема с заказом» (no stock, damaged…), null = cancelled. */
+function promptReason() {
+  return new Promise((resolve) => {
+    let dlg = $('reasonDialog');
+    if (!dlg) {
+      dlg = h('dialog', { id: 'reasonDialog', class: 'dialog' });
+      document.body.append(dlg);
+    }
+    const reasons = ['noStock', 'damaged', 'wrongItem', 'other'];
+    let pick = reasons[0];
+    const note = h('textarea', { class: 'input', rows: 2, maxlength: 150, placeholder: t('pack.reasonNote') });
+    clear(dlg).append(
+      h('h2', { class: 'dialog__title' }, t('pack.problem')),
+      h('div', { class: 'reason-list' }, reasons.map((r) => h('label', { class: 'check' }, h('input', { type: 'radio', name: 'reason', checked: r === pick, onchange: () => (pick = r) }), t(`pack.reason.${r}`)))),
+      note,
+      h('div', { class: 'dialog__actions' },
+        h('button', { type: 'button', class: 'btn', onclick: () => (dlg.close(), resolve(null)) }, t('common.cancel')),
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'reason-send' }, onclick: () => (dlg.close(), resolve(`${t(`pack.reason.${pick}`)}${note.value.trim() ? `: ${note.value.trim()}` : ''}`)) }, t('pack.send'))),
+    );
+    dlg.showModal();
+  });
+}
+
+/** What the staff screens need from the dashboard. */
+function staffCtx() {
+  return {
+    state,
+    errorText,
+    toast,
+    confirmDialog,
+    storeChip,
+    thumb,
+    promptReason,
+    settingsNow,
+    allOrders,
+    formatRelative,
+    stores: enabledStores,
+    refresh: () => sync(),
+    onChange: refreshStaff,
+  };
+}
+
+async function refreshStaff() {
+  state.staffInfo = await send('ui:staffState').catch(() => null);
+  state.pack = null;
+  // the sign-in screen keeps its message («владелец отключил ваш доступ»…); it only goes back to
+  // the «choose your name» step when that list changed
+  if (state.lock) state.lock.step = state.lock.step === 'code' ? 'code' : 'pick';
+  renderAll();
+}
+
+function renderStaffRoot() {
+  const mode = staffMode();
+  const root = $('staffRoot');
+  document.body.classList.toggle('staff-mode', !!mode);
+  root.hidden = !mode;
+  if (mode === 'lock') renderLockScreen(root, staffCtx());
+  else if (mode === 'packer') renderPacker(root, staffCtx());
+  else clear(root);
+  return !!mode;
+}
+
 function renderAll() {
+  // a locked warehouse computer / a packer: nothing of the owner's dashboard is drawn
+  if (renderStaffRoot()) return;
   applyTheme();
   applyI18n();
   renderTopbar();
@@ -2902,6 +2978,8 @@ function renderAll() {
 
 async function loadState() {
   state.data = await withSnapshots(await send('ui:getState'));
+  state.staffInfo = await send('ui:staffState').catch(() => null);
+  state.packProblems = ((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
   state.chat = await getChat();
   state.costs = await getCosts();
   [state.photos, state.catalog] = await Promise.all([getPhotos(), getCatalog()]);
@@ -3029,6 +3107,7 @@ function bindShell() {
   // Not an async listener: a returned promise counts as a reply in Chrome and would
   // answer other pages' messages to the worker (the popup got an empty state).
   chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === 'bg:staffChanged') refreshStaff(); // signed out / switched off by the owner
     if (msg?.type === 'bg:stateChanged' && msg.payload && !state.syncing) {
       withSnapshots(msg.payload).then((data) => {
         state.data = data;

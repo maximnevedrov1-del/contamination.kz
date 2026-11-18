@@ -38,6 +38,8 @@ import {
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
 import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catalog-service.js';
+import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF } from './staff.js';
+import { packingHandlers } from './packing.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
 import { FEATURES } from '../shared/features.js';
@@ -1308,6 +1310,8 @@ const NEEDS_LICENSE = new Set([
 Object.assign(
   uiHandlers,
   catalogHandlers({ allowedShopIds: async (settings) => allowedStoreIds(settings, await currentLicense()) }),
+  staffHandlers(),
+  packingHandlers(),
 );
 
 /**
@@ -1345,7 +1349,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const fn = fromExtensionPage && uiHandlers[msg.type];
   if (!fn) return false;
   dataReady
-    .then(async () => (await licenseGate(msg.type, msg.payload)) || fn(msg.payload || {}))
+    // «Компьютер склада»: packers get packing only, nobody else gets anything until signed in
+    .then(async () => (await staffGate(msg.type, msg.payload)) || (await licenseGate(msg.type, msg.payload)) || fn(msg.payload || {}))
     .then((res) => {
       if (res?.ok === false && SYSTEM_ERROR.test(String(res.error || ''))) logError(`worker:${msg.type}`, { code: res.error, status: res.status, message: '' });
       sendResponse(res);
@@ -1377,6 +1382,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => report('chat poll', e));
   if (alarm.name === ALARM_SYNC) sync().catch((e) => report('sync', e));
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
+  if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
 });
 
 chrome.notifications?.onClicked.addListener((id) => {
@@ -1400,5 +1406,6 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.runtime.onStartup.addListener(() => {
   scheduleAlarms();
+  scheduleStaffCheck().catch(() => {});
   discoverTabs().catch(() => {});
 });

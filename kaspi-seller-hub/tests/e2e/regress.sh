@@ -12,7 +12,7 @@ fresh() {
   $S/e2e/mkbillcopy.sh >/dev/null
   rm -rf billprof bill2prof profile2 apiprof featprof
 }
-for t in cattest billtest hack billtest2; do
+for t in cattest billtest hack billtest2 team; do
   fresh
   echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
 done

@@ -370,6 +370,34 @@ Effects:
 
 Plain CSS and SVG, no libraries. Everything is off under «reduce motion».
 
+## Склад: сотрудники-сборщики (stage 1)
+
+Settings → «Сотрудники» and «Режим склада».
+
+- **Invite.** The owner invites a packer by e-mail and picks:
+  - the stores the packer may see;
+  - whether the packer may press «Принять».
+
+  Server side: `billing/supabase/002_team.sql`, at most 20 people.
+- **First sign-in on the warehouse computer.** «Первый вход» → e-mail → code from the letter → the packer sets a 4–8-digit PIN.
+  - The PIN is stored only on this computer (PBKDF2, 150 000 iterations).
+  - After 5 wrong PINs the sign-in is locked for 15 minutes.
+- **Режим склада.** Once the owner turns it on with their own PIN, the extension opens the lock screen.
+  - A packer sees only the «Панель сборщика»: the queue of orders to pack for their stores, a scan field, and the «Проблема» button.
+  - The worker (`background/staff.js`, `staffGate`) refuses every other action. Hiding buttons is not the protection.
+  - The owner unlocks with their PIN for 8 hours.
+- **Scan-to-verify.**
+  - Scanning the waybill opens the order.
+  - Scanning item barcodes ticks the lines; the wrong item gives a red flash and a sound. An unknown code is bound to a product once.
+  - When everything is ticked: «Упаковать» → print.
+  - Every step goes to the journal (`ksh.packLog`, Settings → «Журнал упаковки»).
+- **Switching off.** «Отключить» works at once on the server.
+  - The warehouse computer checks every 2 minutes and signs the packer out.
+  - With no internet, the packer keeps working for at most 15 minutes.
+  - When the owner's subscription ends, packers stop too.
+
+Tests: `tests/sql/test7.sql`, `tests/e2e/team.js`.
+
 ## «Только чтение» (testing on live stores)
 
 «Настройки → Только чтение» lets a seller connect working stores without any risk. Orders,
