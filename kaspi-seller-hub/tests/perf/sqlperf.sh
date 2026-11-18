@@ -7,7 +7,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
 DB=ksh_perf
 dropdb --if-exists $DB >/dev/null 2>&1; createdb $DB
 psql -q -d $DB -f "$ROOT/tests/sql/stub.sql" >/dev/null 2>&1
-for f in 001_billing 002_team 003_support 004_insights; do psql -q -v ON_ERROR_STOP=1 -d $DB -f "$ROOT/billing/supabase/$f.sql" >/dev/null || exit 2; done
+for f in 001_billing 002_team 003_support 004_insights 005_growth; do psql -q -v ON_ERROR_STOP=1 -d $DB -f "$ROOT/billing/supabase/$f.sql" >/dev/null || exit 2; done
 psql -q -d $DB -c "insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000aa', 'admin@example.kz'); insert into admins values ('00000000-0000-0000-0000-0000000000aa'); update ops_settings set key_hash = encode(sha256(convert_to('perf-key-0123456789abcdef0123456789abcdef', 'utf8')), 'hex');" >/dev/null
 t0=$(date +%s); psql -q -d $DB -f "$HERE/seed.sql" >/dev/null; echo "seeded in $(( $(date +%s) - t0 )) s: $(psql -Atd $DB -c "select (select count(*) from accounts) || ' accounts, ' || (select count(*) from usage_daily) || ' usage days, ' || (select count(*) from api_health) || ' health rows, ' || (select count(*) from support_tickets) || ' tickets, ' || (select count(*) from invoices) || ' invoices'")"
 SELLER=$(psql -Atd $DB -c "select user_id from accounts where email = 'p1@example.kz'")

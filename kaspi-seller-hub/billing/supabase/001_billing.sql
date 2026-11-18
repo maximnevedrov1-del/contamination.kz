@@ -36,6 +36,12 @@ create table if not exists public.billing_config (
 insert into public.billing_config (id) values (1) on conflict (id) do nothing;
 -- upgrades of an existing database
 alter table public.billing_config add column if not exists remind_days int not null default 5;
+-- tariffs (2026-11-18): «Старт» 1 store = start_price; «Мульти» up to base_stores = base_price;
+-- every store above base_stores + extra_store_price. start_price 0 = no «Старт» (1 store pays base_price).
+alter table public.billing_config add column if not exists start_price int not null default 12000 check (start_price >= 0);
+alter table public.billing_config add column if not exists grace_days  int not null default 4  check (grace_days between 0 and 14);
+alter table public.billing_config add column if not exists freeze_days int not null default 30 check (freeze_days between 1 and 90);
+alter table public.billing_config add column if not exists boost_hours int not null default 24 check (boost_hours between 1 and 168);
 
 -- ---------- accounts ----------
 create table if not exists public.accounts (
@@ -49,6 +55,16 @@ create table if not exists public.accounts (
   last_seen_at     timestamptz,
   created_at       timestamptz not null default now()
 );
+
+alter table public.accounts add column if not exists boost_until    timestamptz;   -- «3 магазина бесплатно 24 часа» on «Старт»
+alter table public.accounts add column if not exists boost_used_at  timestamptz;   -- once per account
+alter table public.accounts add column if not exists frozen_until   timestamptz;   -- «заморозка»: no access, paid days kept
+alter table public.accounts add column if not exists cancel_at      timestamptz;   -- «отменить подписку»: no renewal, no grace
+alter table public.accounts add column if not exists cancel_reason  text;
+alter table public.accounts add column if not exists downgrade_next boolean not null default false; -- next period on «Старт»
+alter table public.accounts add column if not exists discount_pct   int not null default 0 check (discount_pct between 0 and 90);
+alter table public.accounts add column if not exists discount_left  int not null default 0 check (discount_left between 0 and 12); -- invoices it applies to
+alter table public.accounts add column if not exists discount_until timestamptz;   -- offer valid until (win-back)
 
 -- ---------- invoices ----------
 create table if not exists public.invoices (
@@ -72,6 +88,7 @@ create table if not exists public.invoices (
 );
 -- upgrades of an existing database
 alter table public.invoices add column if not exists kind text not null default 'manual';
+alter table public.invoices add column if not exists discount_pct int not null default 0;
 alter table public.invoices alter column phone drop not null;
 alter table public.invoices drop constraint if exists invoices_months_check;
 alter table public.invoices add constraint invoices_months_check check (months between 0 and 24);
@@ -140,8 +157,34 @@ grant select on public.accounts, public.invoices to authenticated;
 -- ---------- helpers ----------
 create or replace function public.billing_price(p_stores int, p_months int)
 returns int language sql stable security definer set search_path = public as $$
-  select ((c.base_price + greatest(0, p_stores - c.base_stores) * c.extra_store_price) * p_months)::int
+  select ((case when p_stores <= 1 and c.start_price > 0 then c.start_price
+                else c.base_price + greatest(0, p_stores - c.base_stores) * c.extra_store_price end) * p_months)::int
   from public.billing_config c where c.id = 1;
+$$;
+
+-- Stores an invoice covers: «Старт» = 1; anything more is «Мульти» (at least base_stores).
+create or replace function public.plan_stores(p_stores int)
+returns int language sql stable security definer set search_path = public as $$
+  select case when coalesce(p_stores, 1) <= 1 and c.start_price > 0 then 1 else greatest(coalesce(p_stores, 1), c.base_stores) end
+  from public.billing_config c where c.id = 1;
+$$;
+
+-- Personal discount (cancellation offer, win-back) on the next invoice(s); rounded up to 100 ₸.
+create or replace function public.discounted(p_amount int, acc public.accounts)
+returns int language sql stable as $$
+  select case when acc.discount_left > 0 and acc.discount_pct > 0 and (acc.discount_until is null or acc.discount_until > now())
+              then greatest(100, (ceil(p_amount * (100 - acc.discount_pct) / 100.0 / 100.0) * 100)::int) else p_amount end;
+$$;
+create or replace function public.discount_now(acc public.accounts)
+returns int language sql stable as $$
+  select case when acc.discount_left > 0 and (acc.discount_until is null or acc.discount_until > now()) then acc.discount_pct else 0 end;
+$$;
+
+-- Paid period over, not cancelled → grace_days more with full access (renewal is unpaid, not refused).
+create or replace function public.grace_until(acc public.accounts)
+returns timestamptz language sql stable as $$
+  select case when acc.paid_until is not null and acc.cancel_at is null
+              then acc.paid_until + make_interval(days => (select grace_days from public.billing_config where id = 1)) end;
 $$;
 
 create or replace function public.is_admin()
@@ -215,10 +258,15 @@ begin
       update public.accounts set trial_ends_at = now(), trial_blocked = true where user_id = acc.user_id returning * into acc;
     end if;
   end if;
-  st := case when acc.paid_until > now() then 'active' when acc.trial_ends_at > now() then 'trial' else 'expired' end;
-  lim := case when st = 'active' then acc.store_limit
+  st := case when acc.frozen_until > now() then 'frozen'
+             when acc.paid_until > now() then 'active'
+             when acc.trial_ends_at > now() then 'trial'
+             when public.grace_until(acc) > now() then 'grace'
+             else 'expired' end;
+  lim := case when st in ('active', 'grace') then acc.store_limit
               when st = 'trial' then greatest(c.trial_store_limit, acc.store_limit)
               else 0 end;
+  if st in ('active', 'grace') and acc.boost_until > now() then lim := greatest(lim, c.base_stores); end if;
   return jsonb_build_object(
     'status', st,
     'email', acc.email,
@@ -234,8 +282,17 @@ begin
     'store_limit', lim,
     'paid_store_limit', acc.store_limit,
     'server_time', now(),
-    'pricing', jsonb_build_object('base_price', c.base_price, 'base_stores', c.base_stores,
-                                  'extra_store_price', c.extra_store_price, 'max_months', c.max_months, 'max_stores', c.max_stores),
+    'plan', case when acc.store_limit <= 1 then 'start' else 'multi' end,
+    'boost_until', acc.boost_until,
+    'can_boost', st = 'active' and acc.store_limit < c.base_stores and acc.boost_used_at is null,
+    'grace_until', public.grace_until(acc),
+    'frozen_until', acc.frozen_until,
+    'cancel_at', acc.cancel_at,
+    'downgrade_next', acc.downgrade_next,
+    'discount', jsonb_build_object('pct', public.discount_now(acc), 'left', acc.discount_left, 'until', acc.discount_until),
+    'pricing', jsonb_build_object('base_price', c.base_price, 'base_stores', c.base_stores, 'start_price', c.start_price,
+                                  'extra_store_price', c.extra_store_price, 'max_months', c.max_months, 'max_stores', c.max_stores,
+                                  'grace_days', c.grace_days, 'freeze_days', c.freeze_days, 'boost_hours', c.boost_hours),
     'payment', jsonb_build_object('qr_url', c.kaspi_qr_url, 'instructions', c.payment_instructions),
     'pending_invoice', (select to_jsonb(i) - 'confirmed_by' - 'admin_note' from public.invoices i
                         where i.user_id = acc.user_id and i.status = 'pending'),
@@ -275,12 +332,12 @@ begin
   if p_months is null or p_months < 1 or p_months > c.max_months then raise exception 'invalid_months' using errcode = '22023'; end if;
   if p_stores is null or p_stores < 1 or p_stores > c.max_stores then raise exception 'invalid_stores' using errcode = '22023'; end if;
   ph := public.phone_or_account(p_phone, acc);
-  n_stores := greatest(p_stores, c.base_stores);   -- the base price already covers base_stores
+  n_stores := public.plan_stores(p_stores);        -- 1 = «Старт»; more = «Мульти» (base price covers base_stores)
   perform public.check_invoice_rate(acc.user_id);
   update public.invoices set status = 'cancelled', admin_note = coalesce(admin_note, 'replaced by client')
     where user_id = acc.user_id and status = 'pending';
-  insert into public.invoices (user_id, kind, stores, months, amount, phone)
-    values (acc.user_id, 'manual', n_stores, p_months, public.billing_price(n_stores, p_months), ph)
+  insert into public.invoices (user_id, kind, stores, months, amount, phone, discount_pct)
+    values (acc.user_id, 'manual', n_stores, p_months, public.discounted(public.billing_price(n_stores, p_months), acc), ph, public.discount_now(acc))
     returning * into inv;
   if ph is not null then update public.accounts set phone = ph where user_id = acc.user_id; end if;
   return to_jsonb(inv) - 'confirmed_by' - 'admin_note';
@@ -296,29 +353,33 @@ begin
   acc := public.ensure_account();
   select * into c from public.billing_config where id = 1;
   if public.coverage_end(acc) > now() + make_interval(days => c.remind_days) then return null; end if;
-  n := least(c.max_stores, greatest(c.base_stores, coalesce(p_stores, 0), acc.store_limit));
-  amt := public.billing_price(n, 1);
+  if acc.cancel_at is not null or acc.frozen_until > now() then return null; end if;   -- cancelled / frozen: no reminders
+  -- all connected stores; a paying client keeps at least the plan they paid for (unless «перейти на Старт»)
+  n := least(c.max_stores, public.plan_stores(case when acc.downgrade_next then 1
+            else greatest(coalesce(p_stores, 0), case when acc.paid_until is not null then acc.store_limit else 1 end, 1) end));
+  amt := public.discounted(public.billing_price(n, 1), acc);
   select * into pend from public.invoices where user_id = acc.user_id and status = 'pending' for update;
   if found and pend.kind in ('manual') then
     return to_jsonb(pend) - 'confirmed_by' - 'admin_note';            -- the client already chose a plan
   end if;
   if found and pend.kind = 'renewal' then
-    if pend.stores <> n then                                           -- stores added/removed → same invoice, new total
-      update public.invoices set stores = n, amount = amt where id = pend.id returning * into pend;
+    if pend.stores <> n or pend.amount <> amt then                     -- stores added/removed → same invoice, new total
+      update public.invoices set stores = n, amount = amt, discount_pct = public.discount_now(acc) where id = pend.id returning * into pend;
     end if;
     return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
   end if;
   if found then                                                        -- an add-on is folded into the renewal
     update public.invoices set status = 'cancelled', admin_note = 'merged into renewal' where id = pend.id;
   end if;
-  insert into public.invoices (user_id, kind, stores, months, amount, phone)
-    values (acc.user_id, 'renewal', n, 1, amt, acc.phone) returning * into pend;
+  insert into public.invoices (user_id, kind, stores, months, amount, phone, discount_pct)
+    values (acc.user_id, 'renewal', n, 1, amt, acc.phone, public.discount_now(acc)) returning * into pend;
   return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
 end $$;
 
--- Extra stores connected mid-period: pay only for the days left in the current
--- period (extra_store_price per 30 days, rounded up to 100 ₸), so every store renews
--- on the same date. Near the end (renewal window) or after expiry the stores go into
+-- Extra stores connected mid-period: pay only the price difference for the days left in the
+-- current period, rounded up to 100 ₸, so every store renews on the same date:
+--   upgrade_cost = (price(new stores) − price(covered stores)) / 30 × remaining_days
+-- «Старт» → 2nd store = (20 000 − 12 000) / 30 × days; 3 → 4 stores = 5 000 / 30 × days. Near the end (renewal window) or after expiry the stores go into
 -- the renewal invoice instead. Returns the open invoice, or null if nothing to pay.
 create or replace function public.request_store_addon(p_total_stores int)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -332,12 +393,13 @@ begin
   end if;
   covered := case when acc.paid_until > now() then acc.store_limit else greatest(c.trial_store_limit, acc.store_limit) end;
   extra := n - covered;
+  n := public.plan_stores(n);
   select * into pend from public.invoices where user_id = acc.user_id and status = 'pending' for update;
   if extra <= 0 then
     return case when found then to_jsonb(pend) - 'confirmed_by' - 'admin_note' end;
   end if;
   days := greatest(1, ceil(extract(epoch from (public.coverage_end(acc) - now())) / 86400.0)::int);
-  amt := greatest(100, (ceil(extra * c.extra_store_price * days / 30.0 / 100.0) * 100)::int);
+  amt := greatest(100, (ceil((public.billing_price(n, 1) - public.billing_price(covered, 1)) * days / 30.0 / 100.0) * 100)::int);
   if found and pend.kind = 'addon' then
     update public.invoices set stores = n, amount = amt where id = pend.id returning * into pend;
     return to_jsonb(pend) - 'confirmed_by' - 'admin_note';
@@ -442,7 +504,12 @@ begin
   else
     start_at := greatest(now(), coalesce(acc.paid_until, now()), acc.trial_ends_at);
     end_at := start_at + make_interval(months => inv.months);
-    update public.accounts set paid_until = end_at, store_limit = inv.stores where user_id = inv.user_id;
+    -- paying again = staying: a cancellation or «перейти на Старт» is done; a discount is used up
+    update public.accounts set paid_until = end_at, store_limit = inv.stores, cancel_at = null, cancel_reason = null, downgrade_next = false,
+           boost_until = null where user_id = inv.user_id;
+  end if;
+  if inv.discount_pct > 0 then
+    update public.accounts set discount_left = greatest(0, discount_left - 1) where user_id = inv.user_id;
   end if;
   update public.invoices set status = 'paid', paid_at = now(), period_from = start_at, period_to = end_at,
          confirmed_by = auth.uid(), admin_note = p_note
@@ -527,6 +594,9 @@ begin
     trial_store_limit    = coalesce((p->>'trial_store_limit')::int, trial_store_limit),
     max_months           = coalesce((p->>'max_months')::int, max_months),
     remind_days          = coalesce((p->>'remind_days')::int, remind_days),
+    start_price          = coalesce((p->>'start_price')::int, start_price),
+    grace_days           = coalesce((p->>'grace_days')::int, grace_days),
+    freeze_days          = coalesce((p->>'freeze_days')::int, freeze_days),
     terms_version        = coalesce(nullif(btrim(p->>'terms_version'), ''), terms_version),
     kaspi_qr_url         = case when p ? 'kaspi_qr_url' then nullif(p->>'kaspi_qr_url', '') else kaspi_qr_url end,
     payment_instructions = case when p ? 'payment_instructions' then nullif(p->>'payment_instructions', '') else payment_instructions end,
@@ -553,7 +623,11 @@ begin
       'sl',  acc.store_limit,                                 -- paid store limit
       'tsl', c.trial_store_limit,                             -- stores during the trial
       'tv',  acc.terms_version,                               -- accepted offer version
-      'tr',  c.terms_version                                  -- required offer version
+      'tr',  c.terms_version,                                 -- required offer version
+      'bu',  floor(extract(epoch from acc.boost_until)),      -- «3 магазина на 24 часа» until
+      'bs',  c.base_stores,                                   -- stores of «Мульти» (the boost)
+      'gu',  floor(extract(epoch from public.grace_until(acc))), -- grace after the paid period (null = none)
+      'fu',  floor(extract(epoch from acc.frozen_until))      -- frozen until
     ));
   end if;
   return jsonb_build_object('claims', claims);

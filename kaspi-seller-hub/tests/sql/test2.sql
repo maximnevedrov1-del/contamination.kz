@@ -49,6 +49,9 @@ select pg_temp.ok('1 extra store, 10 days left → 5 000 × 10/30 = 1 667 → ro
 reset role; update invoices set status = 'cancelled' where status = 'pending';
 update accounts set paid_until = now() - interval '1 day', trial_ends_at = now() - interval '40 days', store_limit = 47 where email = 'big@example.kz';
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select pg_temp.ok('paid period ended 1 day ago → grace: still works with 47 stores', (select l->>'status' = 'grace' and (l->>'store_limit')::int = 47 from (select get_license(47) l) x));
+reset role; update accounts set paid_until = now() - interval '5 days' where email = 'big@example.kz';
+set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('expired: status expired', (select l->>'status' = 'expired' and (l->>'store_limit')::int = 0 from (select get_license(47) l) x));
 select pg_temp.ok('expired: add-on request becomes the renewal for all 47 stores', (select i->>'kind' = 'renewal' and (i->>'amount')::int = 240000 from (select request_store_addon(47) i) x));
 set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
