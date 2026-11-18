@@ -9,6 +9,9 @@
 import { BILLING } from '../shared/billing-config.js';
 
 const SESSION_KEY = 'ksh.session';
+const LAST_USER_KEY = 'ksh.lastUser';
+/** Per-account data on this computer (support questions, «ответ помог?» marks, unsent usage counts). */
+const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage'];
 const LICENSE_KEY = 'ksh.license';
 const DAY = 86400000;
 
@@ -89,6 +92,11 @@ export async function verifyCode(email, code) {
   if (!s?.access_token) throw new BillingError('billingBadCode');
   await saveSession(s);
   await set(LICENSE_KEY, null);
+  // another account on this computer: its questions, ratings and unsent counts are not ours
+  const last = await get(LAST_USER_KEY);
+  if (last && s.user?.id && last !== s.user.id) await chrome.storage.local.remove(ACCOUNT_KEYS);
+  if (s.user?.id) await set(LAST_USER_KEY, s.user.id);
+  await chrome.storage.session.remove('ksh.feedbackDue').catch(() => {});
   return { ok: true };
 }
 
@@ -139,8 +147,23 @@ export async function logout() {
   return { ok: true };
 }
 
-/** Valid access token, refreshed when about to expire (or now, with force); null when logged out. */
-async function accessToken(force = false) {
+/**
+ * Valid access token, refreshed when about to expire (or now, with force); null when logged out.
+ * Single flight: sync, the 15-minute counts, the ticket check and the licence check may all need a
+ * fresh token at the same moment — one refresh request serves them all (two parallel refreshes
+ * with the same refresh token could make the server revoke the session and log the seller out).
+ */
+let refreshing = null;
+function accessToken(force = false) {
+  if (refreshing) return refreshing;
+  const p = accessTokenOnce(force).finally(() => {
+    if (refreshing === p) refreshing = null;
+  });
+  // only a real refresh is shared; a still-valid token returns at once
+  refreshing = p;
+  return p;
+}
+async function accessTokenOnce(force) {
   const s = await get(SESSION_KEY);
   if (!s) return null;
   if (!force && s.expires_at - 60000 > Date.now()) return s.access_token;

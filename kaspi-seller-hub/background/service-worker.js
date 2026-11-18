@@ -1412,6 +1412,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+/**
+ * Every time the worker wakes: make sure the periodic jobs exist (Chrome may drop alarms after an
+ * update, a crash or a long sleep). Existing alarms are left alone, so their timing is not reset.
+ */
+async function ensureAlarms() {
+  const have = new Set((await chrome.alarms.getAll()).map((a) => a.name));
+  if (!have.has(ALARM_SYNC)) await scheduleAlarms();
+  if (!have.has(ALARM_HEALTH)) await scheduleHealth();
+  if (!have.has(ALARM_STAFF)) await scheduleStaffCheck();
+}
+ensureAlarms().catch(() => {});
+
 chrome.runtime.onInstalled.addListener(() => {
   scheduleAlarms();
   scheduleHealth();

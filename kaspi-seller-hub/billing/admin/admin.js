@@ -100,10 +100,16 @@
     return data;
   }
 
+  // one refresh for all parallel requests (a refresh token works once)
+  let refreshing = null;
   async function token() {
     const s = store.get(LS.session);
     if (!s) return null;
     if (s.expires_at - 60000 > Date.now()) return s.access_token;
+    refreshing ??= refreshToken(s).finally(() => (refreshing = null));
+    return refreshing;
+  }
+  async function refreshToken(s) {
     try {
       const f = await http('/auth/v1/token?grant_type=refresh_token', { refresh_token: s.refresh_token });
       store.set(LS.session, { ...s, access_token: f.access_token, refresh_token: f.refresh_token, expires_at: Date.now() + f.expires_in * 1000 });
@@ -153,10 +159,9 @@
     document.querySelectorAll('.tabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     const panel = $('panel');
     panel.replaceChildren(el('p', { class: 'muted' }, 'Загрузка…'));
-    const pending = await rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 20, p_offset: 0 });
-    $('pendingCount').textContent = pending.total || '';
-    const open = await rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).catch(() => null);
-    $('ticketCount').textContent = open?.open || '';
+    // tab counters in parallel with the tab itself (each request is a round trip to the server)
+    rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 1, p_offset: 0 }).then((p) => ($('pendingCount').textContent = p.total || '')).catch(() => {});
+    rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).then((o) => ($('ticketCount').textContent = o?.open || '')).catch(() => {});
     if (tab === 'tickets') return renderTickets(panel);
     if (tab === 'insights') return renderInsights(panel);
     if (tab === 'status') return renderStatus(panel);

@@ -36,6 +36,11 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/team.js` | staff: owner invites a packer, first sign-in by code + PIN, scan-to-verify packing, wrong item, switch off, PIN lock, owner unlock |
 | `e2e/support.js` | notice for every client, question with the report → answer with a template → notification and badge, API health counts (Kaspi 502), Telegram digest via `tools/ops-alert.mjs` |
 | `e2e/insights.js` | «Пульт»: section and action counts + first steps reach the server once, NPS card → answer, «Ответ помог?», «Почему не продлеваете?» inside the blocking payment window, admin panel (tiles, funnel bottleneck, unused sections, quotes, risk list, phone width) |
+| `e2e/orchestra.js` | everything together: an expired session + every background job and page request at once (one token refresh, nobody logged out), worker stopped and woken, lost alarms recreated, Kaspi outage and recovery, warehouse lock, another account on the same computer |
+| `perf/sqlperf.sh` | server timing at scale (10 000 sellers, ~900 000 usage days, 300 000 health rows, 20 000 tickets, 50 000 invoices): every function the extension and the admin page call |
+| `perf/open.js` | opening speed with a 250 ms network delay: dashboard first paint, sections, popup, worker wake-up, admin page |
+| `perf/site.js` | landing page on a phone over 4G and slow 3G: FCP, LCP, CLS, bytes |
+| `perf/print.js` | printing a batch of N waybills at 300 dpi (`N=200 node tests/perf/print.js`) |
 | `e2e/apitest.js` | Kaspi API mode: orders, accept, pack, waybills |
 | `e2e/run2.js`, `demofile.js` | cabinet-tab (demo) mode, printing |
 | `e2e/feat.js` | deadlines, profit, pick list |

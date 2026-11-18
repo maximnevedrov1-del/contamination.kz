@@ -72,7 +72,10 @@ async function rpc(uid, fn, args, headers = {}) {
   }
 }
 
+// LATENCY=250 → every answer waits 250 ms (Kazakhstan → a Supabase region in Europe), for timing tests
+const LATENCY = Number(process.env.LATENCY || 0);
 http.createServer((req, res) => {
+  if (LATENCY) { const end = res.end.bind(res); res.end = (...a) => setTimeout(() => end(...a), LATENCY); }
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
   const chunks = [];
   req.on('data', (d) => chunks.push(d));

@@ -96,7 +96,9 @@ revoke all on sequence public.feedback_id_seq from public, anon, authenticated;
 create or replace function public.feedback_due()
 returns text language sql stable security definer set search_path = public as $$
   with a as (select * from public.accounts where user_id = auth.uid()),
-       e as (select greatest(a.trial_ends_at, coalesce(a.paid_until, a.trial_ends_at)) ended from a)
+       -- only someone who actually had a period (a refused repeat trial is not «не продлеваете»)
+       e as (select greatest(a.trial_ends_at, coalesce(a.paid_until, a.trial_ends_at)) ended from a
+             where greatest(a.trial_ends_at, coalesce(a.paid_until, a.trial_ends_at)) > a.created_at + interval '1 day')
   select case
     when exists (select 1 from e where e.ended < now() and e.ended > now() - interval '30 days')
          and not exists (select 1 from public.feedback f, e where f.user_id = auth.uid() and f.kind = 'exit' and f.created_at > e.ended) then 'exit'
@@ -122,6 +124,23 @@ begin
 end $$;
 
 -- ---------- the owner's panel ----------
+-- «Чем пользуются»: one pass over the usage table with one column per known key, folded per seller.
+-- (Unpacking every {key: count} pair took ~5 s for 10 000 sellers × a year; this takes < 1 s.)
+-- The query text is built only from insight_keys() — fixed names, no user input.
+create or replace function public.usage_summary(p_since date, out sections jsonb, out actions jsonb)
+language plpgsql stable security definer set search_path = public as $$
+declare s text[] := public.insight_keys('sections'); a text[] := public.insight_keys('actions'); cols text; outs text;
+begin
+  cols := concat_ws(', ',
+    (select string_agg(format('sum((sections->>%L)::int) s%s', s[i], i), ', ') from generate_series(1, cardinality(s)) i),
+    (select string_agg(format('sum((actions->>%L)::int) a%s', a[i], i), ', ') from generate_series(1, cardinality(a)) i));
+  outs := format('jsonb_strip_nulls(jsonb_build_object(%s)), jsonb_strip_nulls(jsonb_build_object(%s))',
+    (select string_agg(format('%L, case when count(s%s) > 0 then jsonb_build_object(''users'', count(s%s), ''times'', sum(s%s)) end', s[i], i, i, i), ', ') from generate_series(1, cardinality(s)) i),
+    (select string_agg(format('%L, case when count(a%s) > 0 then jsonb_build_object(''users'', count(a%s), ''times'', sum(a%s)) end', a[i], i, i, i), ', ') from generate_series(1, cardinality(a)) i));
+  execute format('select %s from (select user_id, %s from public.usage_daily where day >= $1 group by user_id) x', outs, cols)
+    into sections, actions using p_since;
+end $$;
+
 create or replace function public.admin_insights(p_days int default 30)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare since timestamptz := now() - make_interval(days => least(greatest(p_days, 1), 365)); r jsonb;
@@ -153,12 +172,8 @@ begin
         select k, round((percentile_cont(0.5) within group (order by extract(epoch from ((steps->>k)::timestamptz - created_at)) / 3600))::numeric, 1) h
         from acc, unnest(public.insight_keys('steps')) k where steps ? k group by k) x),
     -- 2. sections and actions: how many sellers used each, how many times
-    'sections', (select coalesce(jsonb_object_agg(k, jsonb_build_object('users', users, 'times', times)), '{}'::jsonb) from (
-        select k, count(distinct user_id) users, sum((sections->>k)::int) times
-        from public.usage_daily, jsonb_object_keys(sections) k where day >= since::date group by k) x),
-    'actions', (select coalesce(jsonb_object_agg(k, jsonb_build_object('users', users, 'times', times)), '{}'::jsonb) from (
-        select k, count(distinct user_id) users, sum((actions->>k)::int) times
-        from public.usage_daily, jsonb_object_keys(actions) k where day >= since::date group by k) x),
+    'sections', u.sections,
+    'actions', u.actions,
     'activeUsers', (select count(distinct user_id) from public.usage_daily where day >= since::date),
     'activeWeek', (select count(distinct user_id) from public.usage_daily where day >= current_date - 6),
     -- 3. retention: weekly sign-up cohorts, share active in week 0..4 after sign-up
@@ -201,13 +216,14 @@ begin
         ) r
         where not exists (select 1 from public.admins ad where ad.user_id = a.user_id)
         limit 300) y)
-  ) into r;
+  ) into r
+  from public.usage_summary(since::date) u;
   return r;
 end $$;
 
 -- ---------- who may call what ----------
 revoke execute on function
-  public.insight_keys(text), public.add_counts(jsonb, jsonb, text), public.usage_report(jsonb, jsonb, text),
+  public.insight_keys(text), public.add_counts(jsonb, jsonb, text), public.usage_report(jsonb, jsonb, text), public.usage_summary(date),
   public.feedback_due(), public.feedback_submit(text, int, text, text, bigint), public.admin_insights(int)
 from public, anon, authenticated;
 grant execute on function

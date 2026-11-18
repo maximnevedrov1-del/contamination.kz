@@ -47,6 +47,13 @@ select pg_temp.as_user('a1000000-0000-0000-0000-00000000000c');
 select pg_temp.ok('new seller (3 days) → nothing yet', (select feedback_due() is null));
 select pg_temp.as_user('a1000000-0000-0000-0000-00000000000d');
 select pg_temp.ok('trial ended → «почему не продлеваете» due', (select feedback_due() = 'exit'));
+reset role;
+insert into auth.users (id, email) values ('a1000000-0000-0000-0000-00000000000e', 'refused@example.kz');
+update public.accounts set trial_ends_at = created_at where email = 'refused@example.kz';
+set role authenticated;
+select pg_temp.as_user('a1000000-0000-0000-0000-00000000000e');
+select pg_temp.ok('repeat trial refused at sign-up → not asked «почему не продлеваете»', (select feedback_due() is null));
+select pg_temp.as_user('a1000000-0000-0000-0000-00000000000d');
 select feedback_submit('exit', null, 'price', 'Дорого для одного магазина');
 select pg_temp.ok('exit answered → not asked again', (select feedback_due() is distinct from 'exit'));
 select pg_temp.as_user('a1000000-0000-0000-0000-00000000000b');
@@ -71,7 +78,7 @@ do $$ begin perform 1 from public.usage_daily; raise notice 'FAIL usage readable
 -- 3. the panel
 do $$ begin perform admin_insights(); raise notice 'FAIL seller opened the panel'; exception when others then raise notice 'PASS seller cannot open the panel (%)', sqlerrm; end $$;
 select pg_temp.as_user('a1000000-0000-0000-0000-00000000000a');
-select pg_temp.ok('funnel: 3 sellers (admin not counted), 1 with a store, 1 printed', (select (r->'funnel'->>'accounts')::int = 3 and (r->'funnel'->>'store')::int = 1 and (r->'funnel'->>'print')::int = 1 and (r->'funnel'->>'costs')::int = 0 from (select admin_insights(30) r) x));
+select pg_temp.ok('funnel: 4 sellers (admin not counted), 1 with a store, 1 printed', (select (r->'funnel'->>'accounts')::int = 4 and (r->'funnel'->>'store')::int = 1 and (r->'funnel'->>'print')::int = 1 and (r->'funnel'->>'costs')::int = 0 from (select admin_insights(30) r) x));
 select pg_temp.ok('sections: orders used by 1 seller, 25 times', (select r->'sections'->'orders' = '{"users": 1, "times": 25}'::jsonb from (select admin_insights(30) r) x));
 select pg_temp.ok('NPS: one detractor → −100, comment with e-mail', (select (r->'nps'->>'score')::int = -100 and r->'nps'->'comments'->0->>'email' = 'active@example.kz' and r->'nps'->'comments'->0->>'comment' = 'Не хватает демпинг-бота' from (select admin_insights(30) r) x));
 select pg_temp.ok('exit reasons counted', (select r->'exit'->'reasons' = '{"price": 1}'::jsonb from (select admin_insights(30) r) x));

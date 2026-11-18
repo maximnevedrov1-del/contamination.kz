@@ -97,20 +97,36 @@ async function renderPdf(pdfjs, bytes, layoutOf, { trim = false } = {}) {
     const hMm = mm(canvas.height);
     const layout = layoutOf({ w: wMm, h: hMm });
     if (layout.rotate) canvas = rotate90(canvas);
-    images.push({ src: canvas.toDataURL('image/png'), wMm, hMm, layout });
+    // PNG (lossless: barcodes stay sharp) encoded off the main thread; a blob URL instead of a
+    // multi-megabyte data: string (toDataURL blocked the page ~0.1 s per waybill)
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    images.push({ src: URL.createObjectURL(blob), wMm, hMm, layout });
     canvas.width = canvas.height = 0; // free memory before the next page
+    page.cleanup();
   }
+  await pdf.destroy();
   return images;
 }
 
 /** Canvas cut to its non-white content plus a margin (px). An empty page is returned as is. */
 export function cropToContent(canvas, margin = 0) {
   const { width: w, height: h } = canvas;
-  const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
-  let top = h, left = w, right = -1, bottom = -1;
-  for (let y = 0; y < h; y += 2) {
-    const row = y * w * 4;
-    for (let x = 0; x < w; x += 2) {
+  // The edges are found on a copy 4× smaller (reading back a 300-dpi page took most of the time);
+  // the crop itself is cut from the full-size page, with one small pixel (4 px) of extra room.
+  const F = 4;
+  const sw = Math.max(1, Math.ceil(w / F));
+  const sh = Math.max(1, Math.ceil(h / F));
+  const small = document.createElement('canvas');
+  small.width = sw;
+  small.height = sh;
+  const sctx = small.getContext('2d', { willReadFrequently: true });
+  sctx.drawImage(canvas, 0, 0, sw, sh); // averaging keeps thin lines visible (darker than 235)
+  const data = sctx.getImageData(0, 0, sw, sh).data;
+  small.width = small.height = 0;
+  let top = sh, left = sw, right = -1, bottom = -1;
+  for (let y = 0; y < sh; y++) {
+    const row = y * sw * 4;
+    for (let x = 0; x < sw; x++) {
       const i = row + x * 4;
       if (data[i] < 235 || data[i + 1] < 235 || data[i + 2] < 235) {
         if (x < left) left = x;
@@ -121,6 +137,10 @@ export function cropToContent(canvas, margin = 0) {
     }
   }
   if (right < 0) return canvas;
+  left *= F;
+  top *= F;
+  right = right * F + F - 1;
+  bottom = bottom * F + F - 1;
   left = Math.max(0, left - margin);
   top = Math.max(0, top - margin);
   right = Math.min(w - 1, right + margin + 1);
@@ -316,6 +336,17 @@ async function main() {
 
   const fragment = document.createDocumentFragment();
   const waybills = []; // rendered PDF pages, laid out on sheets after the loop
+  // PDFs render two at a time (one is parsed in the pdf.js worker while the other is drawn);
+  // the waybills keep the queue's order
+  const rendered = new Map();
+  const jobs = found.filter((inv) => inv.kind === 'pdf' && pdfjs);
+  let next = 0;
+  await Promise.all([0, 1].map(async () => {
+    while (next < jobs.length) {
+      const inv = jobs[next++];
+      rendered.set(inv, await renderPdf(pdfjs, dataUrlToBytes(inv.data), (pageMm) => layoutFor(pageMm, print), { trim: TRIM_MODES.has(print.paper) }).catch((e) => e));
+    }
+  }));
   for (const inv of found) {
     const label = t('print.orderLabel', { id: inv.orderId, store: storeName(inv.shopId) });
     if (inv.kind === 'html') {
@@ -326,7 +357,8 @@ async function main() {
       fragment.append(page);
     } else if (pdfjs) {
       try {
-        const imgs = await renderPdf(pdfjs, dataUrlToBytes(inv.data), (pageMm) => layoutFor(pageMm, print), { trim: TRIM_MODES.has(print.paper) });
+        const imgs = rendered.get(inv);
+        if (imgs instanceof Error) throw imgs;
         imgs.forEach(({ src, layout }) => waybills.push({ src, layout, label }));
         originals.append(h('a', { href: URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' })), target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId })));
       } catch (e) {

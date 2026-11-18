@@ -3058,19 +3058,38 @@ function renderAll() {
 /* ===================================================================== */
 
 async function loadState() {
-  state.data = await withSnapshots(await send('ui:getState'));
-  state.staffInfo = await send('ui:staffState').catch(() => null);
-  state.serviceStatus = (await send('ui:serviceStatus').catch(() => null))?.status || null;
-  state.tickets = (await chrome.storage.local.get('ksh.tickets'))['ksh.tickets'] || null;
-  state.onboard = await getOnboarding();
-  state.csat = await getCsat();
-  state.feedbackDue = (await send('ui:feedbackDue').catch(() => null))?.due || null;
-  state.packProblems =((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
-  state.chat = await getChat();
-  state.costs = await getCosts();
-  [state.photos, state.catalog] = await Promise.all([getPhotos(), getCatalog()]);
+  // everything local in parallel; the first paint never waits for the network
+  const [data, staffInfo, local, chat, costs, photos, catalog, onboard, csat] = await Promise.all([
+    send('ui:getState').then(withSnapshots),
+    send('ui:staffState').catch(() => null),
+    chrome.storage.local.get(['ksh.tickets', 'ksh.packLog']),
+    getChat(),
+    getCosts(),
+    getPhotos(),
+    getCatalog(),
+    getOnboarding(),
+    getCsat(),
+  ]);
+  Object.assign(state, { data, staffInfo, chat, costs, photos, catalog, onboard, csat });
+  state.tickets = local['ksh.tickets'] || null;
+  state.packProblems = (local['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
   renderAll();
   maybePay();
+  loadExtras();
+}
+
+/** Owner's notice and the survey due: from the server (cached in the worker) — drawn when they arrive. */
+async function loadExtras() {
+  const [status, due] = await Promise.all([send('ui:serviceStatus').catch(() => null), send('ui:feedbackDue').catch(() => null)]);
+  const serviceStatus = status?.status || null;
+  const feedbackDue = due?.due || null;
+  const changed = JSON.stringify(serviceStatus) !== JSON.stringify(state.serviceStatus) || feedbackDue !== state.feedbackDue;
+  state.serviceStatus = serviceStatus;
+  state.feedbackDue = feedbackDue;
+  if (!changed || staffMode()) return;
+  renderBanners();
+  renderView();
+  if (pay.open) renderPay();
 }
 
 /** Ask every store tab for a fresh snapshot. */
