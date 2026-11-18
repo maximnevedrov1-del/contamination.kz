@@ -15,6 +15,12 @@
 
 export const PAPER_MODES = ['original', 'label', 'a4', 'a4x4'];
 export const A4 = Object.freeze({ w: 210, h: 297 });
+/**
+ * Modes where the empty paper around the waybill is cut off before fitting: Kaspi's
+ * waybill is a ~100×150 mm label in the corner of an A4 page (checked on a real one,
+ * 2026-11-18), so fitting the whole A4 page into a label would shrink it by half.
+ */
+export const TRIM_MODES = new Set(['label', 'a4x4']);
 /** Common thermal label sizes in Kazakhstan, mm (width × height). */
 export const LABEL_PRESETS = [
   [100, 150],

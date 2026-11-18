@@ -15,7 +15,7 @@ import { initI18n, t, applyI18n } from '../shared/i18n.js';
 import { getInvoices, getPrintQueue, getSettings, getPickList } from '../shared/storage.js';
 import { formatNumber, formatDate } from '../shared/i18n.js';
 import { h, clear } from '../shared/utils.js';
-import { layoutFor, normalizePrint, testSheet } from './print-layout.js';
+import { layoutFor, normalizePrint, testSheet, TRIM_MODES } from './print-layout.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,28 +72,80 @@ const MAX_CANVAS_SIDE = 7000; // browsers refuse bigger canvases
  * it is turned 90° to fit a label / cell of the other orientation.
  * @returns {Promise<Array<{ src:string, wMm:number, hMm:number, layout:ReturnType<typeof layoutFor> }>>}
  */
-async function renderPdf(pdfjs, bytes, layoutOf) {
+async function renderPdf(pdfjs, bytes, layoutOf, { trim = false } = {}) {
   const pdf = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
   const images = [];
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n);
     const base = page.getViewport({ scale: 1 }); // 1 unit = 1 pt, page rotation applied
-    const wMm = Math.round(base.width * PT_TO_MM * 10) / 10;
-    const hMm = Math.round(base.height * PT_TO_MM * 10) / 10;
-    const layout = layoutOf({ w: wMm, h: hMm });
     const scale = Math.min(PRINT_DPI / 72, MAX_CANVAS_SIDE / Math.max(base.width, base.height));
-    const viewport = page.getViewport({ scale, rotation: (page.rotate + layout.rotate) % 360 });
-    const canvas = document.createElement('canvas');
+    const viewport = page.getViewport({ scale });
+    let canvas = document.createElement('canvas');
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
+    // Kaspi puts its ~100×150 mm label in the corner of an A4 page: for a label printer
+    // (and 4 per A4) the empty paper is cut off, so the label prints at its real size
+    // instead of A4 shrunk into a label (barcodes too small to scan).
+    if (trim) canvas = cropToContent(canvas, Math.round((2 / 25.4) * PRINT_DPI));
+    const mm = (px) => Math.round(((px / scale) * PT_TO_MM) * 10) / 10;
+    const wMm = mm(canvas.width);
+    const hMm = mm(canvas.height);
+    const layout = layoutOf({ w: wMm, h: hMm });
+    if (layout.rotate) canvas = rotate90(canvas);
     images.push({ src: canvas.toDataURL('image/png'), wMm, hMm, layout });
     canvas.width = canvas.height = 0; // free memory before the next page
   }
   return images;
+}
+
+/** Canvas cut to its non-white content plus a margin (px). An empty page is returned as is. */
+export function cropToContent(canvas, margin = 0) {
+  const { width: w, height: h } = canvas;
+  const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  let top = h, left = w, right = -1, bottom = -1;
+  for (let y = 0; y < h; y += 2) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x += 2) {
+      const i = row + x * 4;
+      if (data[i] < 235 || data[i + 1] < 235 || data[i + 2] < 235) {
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+      }
+    }
+  }
+  if (right < 0) return canvas;
+  left = Math.max(0, left - margin);
+  top = Math.max(0, top - margin);
+  right = Math.min(w - 1, right + margin + 1);
+  bottom = Math.min(h - 1, bottom + margin + 1);
+  const out = document.createElement('canvas');
+  out.width = right - left + 1;
+  out.height = bottom - top + 1;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false; // 1:1 copy, barcodes stay sharp
+  octx.drawImage(canvas, left, top, out.width, out.height, 0, 0, out.width, out.height);
+  canvas.width = canvas.height = 0;
+  return out;
+}
+
+/** Turn a canvas 90° clockwise (a landscape waybill on a portrait label). */
+function rotate90(canvas) {
+  const out = document.createElement('canvas');
+  out.width = canvas.height;
+  out.height = canvas.width;
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(out.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(canvas, 0, 0);
+  canvas.width = canvas.height = 0;
+  return out;
 }
 
 /**
@@ -269,7 +321,7 @@ async function main() {
       fragment.append(page);
     } else if (pdfjs) {
       try {
-        const imgs = await renderPdf(pdfjs, dataUrlToBytes(inv.data), (pageMm) => layoutFor(pageMm, print));
+        const imgs = await renderPdf(pdfjs, dataUrlToBytes(inv.data), (pageMm) => layoutFor(pageMm, print), { trim: TRIM_MODES.has(print.paper) });
         imgs.forEach(({ src, layout }) => waybills.push({ src, layout, label }));
         originals.append(h('a', { href: URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' })), target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId })));
       } catch (e) {

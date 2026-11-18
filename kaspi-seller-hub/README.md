@@ -252,6 +252,12 @@ A missing selector never crashes anything: it's logged to the console with a `[K
 | A4 — 1 на лист | office | one waybill per A4 sheet, 8 mm margins |
 | A4 — 4 на лист | office | 2×2 per A4, dashed cut lines, for label-size waybills |
 
+**Kaspi's real waybill** (Kaspi Logistics, checked on a real one on 2026-11-18) is a ~100×150 mm
+label in the top-left corner of an A4 page. Its barcodes (2× Code 128 and a QR code) are small
+1-bit images. In «Термопринтер» and «A4 — 4 на лист» the empty paper is cut off first
+(`cropToContent`), so the label prints at its real size. After our processing all three codes
+decode at 203 and 300 dpi, identical to Kaspi's original.
+
 The waybill is never redrawn. Kaspi's PDF page is rasterized at 300 dpi and scaled as a whole, so
 the number and the barcode stay Kaspi's own.
 

@@ -132,6 +132,23 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR
   r = await printRun('print-a4x4.png');
   check('4e A4 ×4: 5 waybills on 2 sheets (4 + 1)', r.sheets.length === 2 && r.sheets[0].cells === 4 && r.sheets[1].cells === 1 && r.boxes.length === 2 && r.boxes.every((b) => b === '595x842'), JSON.stringify(r.sheets.map((x) => x.cells)) + ' ' + r.boxes.join(' '));
 
+  // 4f. Kaspi's real layout (checked on a real waybill): a ~100×150 mm label in the top-left
+  // corner of an A4 page. On a label printer the empty paper is cut off → label at full size.
+  const cornerContent = '0 0 0 rg 20 420 260 30 re f 20 800 120 30 re f 200 640 60 60 re f BT /F1 18 Tf 30 760 Td (KASPI LABEL) Tj ET';
+  const corner = Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n4 0 obj << /Length ${cornerContent.length} >> stream\n${cornerContent}\nendstream endobj\n5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF`, 'latin1');
+  await sw.evaluate(async ([shopId, data]) => {
+    await chrome.storage.local.set({ 'ksh.invoices': [{ orderId: 'KZ-1', shopId, kind: 'pdf', data, ts: Date.now() }] });
+    await chrome.storage.session.set({ 'ksh.printQueue': [{ shopId, orderId: 'KZ-1' }] });
+  }, [shopId, `data:application/pdf;base64,${corner.toString('base64')}`]);
+  await setPaper({ paper: 'label', labelW: 100, labelH: 150 });
+  r = await printRun();
+  const [cw, ch] = r.sheets[0]?.imgs[0] || [0, 0];
+  // content ≈ 260×410 pt (+2 mm margins) → ≈ 1110×1730 px at 300 dpi; the whole A4 page would be 2480×3508
+  check('4f label in the corner of A4: empty paper cut off, label printed at full size', cw > 1000 && cw < 1300 && ch > 1600 && ch < 1900 && r.boxes.every((b) => b === '283x425'), `${cw}×${ch} ${r.boxes.join(' ')}`);
+  await setPaper({ paper: 'original' });
+  r = await printRun();
+  check('4f «Как в накладной Kaspi» keeps the whole A4 page', r.sheets[0]?.imgs[0]?.[0] === 2480 && r.boxes.includes('595x842'), JSON.stringify(r.sheets[0]?.imgs));
+
   // 5. settings: four modes, label sizes, test print
   await setPaper({ paper: 'original' });
   await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#settings`); await sleep(1200);
