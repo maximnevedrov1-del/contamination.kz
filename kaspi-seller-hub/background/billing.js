@@ -52,7 +52,7 @@ async function http(path, { method = 'POST', body, token } = {}) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
     const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'subscription_required', 'store_limit', 'invalid_shop', 'not_authenticated', 'forbidden',
-      'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found'];
+      'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found', 'ticket_limit'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -412,3 +412,23 @@ export async function uploadFeed(feedId, shopKey, xml) {
   }
   return feedUrl(feedId, shopKey);
 }
+
+/* ---------------- support: service status, tickets, API health ---------------- */
+
+/** Owner's notice for every client («Kaspi не отвечает, чиним»). Works before login (anon key). */
+export async function serviceStatus() {
+  if (!isConfigured()) return { level: 'ok' };
+  return (await http('/rest/v1/rpc/get_service_status', { body: {} })) || { level: 'ok' };
+}
+
+export const signedIn = async () => !!(await get(SESSION_KEY));
+
+export async function ticketCreate({ topic, message, report, version }) {
+  return rpc('ticket_create', { p_topic: String(topic || 'other'), p_message: String(message || '').slice(0, 2000), p_report: report ? String(report).slice(0, 8000) : null, p_version: version ? String(version).slice(0, 40) : null });
+}
+export const myTickets = () => rpc('my_tickets', {});
+export const ticketSeen = ({ id }) => rpc('ticket_seen', { p_id: Number(id) });
+export const ticketClose = ({ id }) => rpc('ticket_close', { p_id: Number(id) });
+
+/** Counts of marketplace API calls (no data): [{market, ok, fail, kinds}] */
+export const healthReport = (list) => rpc('health_report', { p: list });

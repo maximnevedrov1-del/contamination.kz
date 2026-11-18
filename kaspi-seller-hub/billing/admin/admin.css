@@ -47,3 +47,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .toast--error { border-color: var(--danger); color: var(--danger); }
 .grid2 { display: grid; grid-template-columns: 220px 1fr; gap: 10px 16px; align-items: center; }
 .qr-preview { width: 160px; height: 160px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.ticket { border-top: 1px solid var(--border); padding: 14px 0; }
+.ticket:first-of-type { border-top: 0; }
+.ticket__msg { white-space: pre-line; margin: 8px 0; }
+.report { white-space: pre-wrap; background: var(--surface-2); padding: 10px; border-radius: 8px; font-size: 12px; max-height: 260px; overflow: auto; }
+code.mono { background: var(--surface-2); padding: 4px 8px; border-radius: 6px; overflow-wrap: anywhere; }

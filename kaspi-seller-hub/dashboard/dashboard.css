@@ -638,3 +638,15 @@ body.staff-mode .app { display: none; }
 .team__acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .warehouse { display: grid; gap: 12px; }
 tr.row--problem td { background: var(--danger-bg); }
+
+/* support: «Написать в поддержку», «Мои вопросы» */
+.support { display: grid; gap: var(--space-3); }
+.support__row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.support__text { width: 100%; min-height: 90px; padding: 8px 10px; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); resize: vertical; box-sizing: border-box; }
+.support__text:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ticket summary { overflow-wrap: anywhere; }
+.ticket__q { white-space: pre-line; }
+.ticket__a { margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--accent, var(--info)); background: var(--info-bg); border-radius: 4px; white-space: pre-line; }
+.ticket--unread summary { font-weight: 600; }
+.ticket__status--answered, .ticket--unread .pill { background: var(--info-bg); color: var(--info); }
+.ticket__status--closed { color: var(--text-2); }

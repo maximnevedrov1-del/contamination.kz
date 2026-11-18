@@ -398,6 +398,31 @@ Settings → «Сотрудники» and «Режим склада».
 
 Tests: `tests/sql/test7.sql`, `tests/e2e/team.js`.
 
+## Support without the owner at the computer
+
+- **Notice for every client** (admin page → «Состояние»). The banner is on every dashboard page,
+  even before login: the anon RPC `get_service_status`, cached for 5 minutes.
+- **«Помощь» → «Написать в поддержку».**
+  - The question goes to the server with the technical report attached (`shared/errorlog.js`
+    `formatReport`: no tokens, no buyers' data).
+  - The owner answers in the admin page («Вопросы», with reply templates).
+  - Every 15 minutes the worker checks questions that still wait (`background/support.js`
+    `pollTickets`). A new answer gives a Chrome notification, a badge on «Помощь» and a home item.
+- **API health counts** (`background/health.js`).
+  - Every Kaspi API request ends as «ok» or «failed: auth / rate / server / network / format /
+    other» (`setApiObserver` in `kaspi-api.js`).
+  - Every 15 minutes only these numbers go to `health_report`.
+- **Telegram for the owner.** `tools/ops-alert.mjs` runs from GitHub Actions every 10 minutes and
+  reports:
+  - outage alerts, when many clients fail at once;
+  - recovery;
+  - new questions;
+  - new invoices.
+
+  Setup: `billing/README.md` → «Уведомления в Telegram». Server side: `billing/supabase/003_support.sql`.
+
+Tests: `tests/sql/test8.sql`, `tests/e2e/support.js`.
+
 ## «Только чтение» (testing on live stores)
 
 «Настройки → Только чтение» lets a seller connect working stores without any risk. Orders,

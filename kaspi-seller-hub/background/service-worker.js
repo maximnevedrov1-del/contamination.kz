@@ -39,6 +39,8 @@ import * as K from './kaspi-api.js';
 import * as B from './billing.js';
 import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catalog-service.js';
 import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF } from './staff.js';
+import { startHealth, flushHealth, scheduleHealth, ALARM_HEALTH } from './health.js';
+import { supportHandlers, pollTickets } from './support.js';
 import { packingHandlers } from './packing.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
@@ -1312,7 +1314,9 @@ Object.assign(
   catalogHandlers({ allowedShopIds: async (settings) => allowedStoreIds(settings, await currentLicense()) }),
   staffHandlers(),
   packingHandlers(),
+  supportHandlers({ diagnostics: () => uiHandlers['ui:diagnostics']() }),
 );
+startHealth();
 
 /**
  * Subscription gate for UI actions: no licence → refused; items from stores
@@ -1383,6 +1387,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_SYNC) sync().catch((e) => report('sync', e));
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
   if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
+  if (alarm.name === ALARM_HEALTH) {
+    flushHealth().catch(() => {}); // counts only; a failed send is retried next time
+    pollTickets().catch(() => {});
+  }
 });
 
 chrome.notifications?.onClicked.addListener((id) => {
@@ -1402,10 +1410,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.runtime.onInstalled.addListener(() => {
   scheduleAlarms();
+  scheduleHealth();
   discoverTabs().catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => {
   scheduleAlarms();
   scheduleStaffCheck().catch(() => {});
+  scheduleHealth();
   discoverTabs().catch(() => {});
 });

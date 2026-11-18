@@ -28,12 +28,13 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 |---|---|
 | `unit/robust.test.mjs` | Kazakhstan time, Kaspi API retries, price-list drop guard, data migrations, error journal |
 | `unit/locales.test.mjs` | Russian and Kazakh texts have the same keys and placeholders |
-| `sql/test.sql` … `test7.sql` | billing, consent, attacks on the database, admin paging, price-list storage rules, staff (invite / join / switch off) |
+| `sql/test.sql` … `test8.sql` | billing, consent, attacks on the database, admin paging, price-list storage rules, staff (invite / join / switch off), support (notice, tickets, API health, Telegram key) |
 | `e2e/catunit.js` | catalog: XML price list, Excel/XML import, validation |
 | `e2e/cattest.js` | product upload: cards to chosen stores, price lists by URL, «empty price list» guard, support report |
 | `e2e/billtest.js`, `billtest2.js` | login, consent, trial, invoices, QR window, admin page |
 | `e2e/hack.js` | attempts to get the subscription for free |
 | `e2e/team.js` | staff: owner invites a packer, first sign-in by code + PIN, scan-to-verify packing, wrong item, switch off, PIN lock, owner unlock |
+| `e2e/support.js` | notice for every client, question with the report → answer with a template → notification and badge, API health counts (Kaspi 502), Telegram digest via `tools/ops-alert.mjs` |
 | `e2e/apitest.js` | Kaspi API mode: orders, accept, pack, waybills |
 | `e2e/run2.js`, `demofile.js` | cabinet-tab (demo) mode, printing |
 | `e2e/feat.js` | deadlines, profit, pick list |

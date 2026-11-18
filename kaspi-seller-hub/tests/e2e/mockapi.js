@@ -41,6 +41,9 @@ http.createServer((req, res) => {
   if (demo && u.searchParams.get('filter[orders][code]')) u.searchParams.set('filter[orders][code]', String(Number(u.searchParams.get('filter[orders][code]')) - OFF));
   const send = (code, obj, type = 'application/vnd.api+json') => { if (demo && obj && typeof obj === 'object' && !Buffer.isBuffer(obj)) obj = demoOut(structuredClone(obj)); res.writeHead(code, { 'Content-Type': type }); res.end(typeof obj === 'string' || Buffer.isBuffer(obj) ? obj : JSON.stringify(obj)); };
   if (u.pathname === '/__log') return send(200, log);
+  // outage simulation for the API health tests: /__down?on=1 → every API call answers 502
+  if (u.pathname === '/__down') { globalThis.DOWN = u.searchParams.get('on') === '1'; return send(200, { down: globalThis.DOWN }); }
+  if (globalThis.DOWN && u.pathname.startsWith('/shop/api/')) return send(502, '<html>Bad Gateway</html>', 'text/html');
   if (u.pathname.startsWith('/waybill/')) { log.push({ waybillToken: req.headers['x-auth-token'] || null }); return send(200, PDF(u.pathname.split('/')[2]), 'application/pdf'); }
   if (!/^GOOD-TOKEN-/.test(req.headers['x-auth-token'] || '')) return send(401, { message: 'Full authentication is required to access this resource.' });
   let body = '';

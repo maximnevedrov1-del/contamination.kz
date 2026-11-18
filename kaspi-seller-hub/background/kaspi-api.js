@@ -24,6 +24,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Outcome of every request after retries (for the API health counts, background/health.js):
+ * fn(null) on success, fn(ApiError) on failure. Only the outcome — never the URL, body or token.
+ */
+let observer = null;
+export const setApiObserver = (fn) => (observer = fn);
+const observe = (err) => {
+  try {
+    observer?.(err);
+  } catch {
+    /* counting must never break a request */
+  }
+};
+
 /** Pauses between attempts when Kaspi is busy or briefly down. */
 export const RETRY_DELAYS = [1500, 4000];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -71,23 +85,31 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
         await sleeper(RETRY_DELAYS[attempt]);
         continue;
       }
-      throw new ApiError('apiNetwork', 0, e.message);
+      throw fail(new ApiError('apiNetwork', 0, e.message));
     }
-    if (res.status === 401 || res.status === 403) throw new ApiError('apiUnauthorized', res.status);
+    if (res.status === 401 || res.status === 403) throw fail(new ApiError('apiUnauthorized', res.status));
     const busy = res.status === 429 || (idempotent && [502, 503, 504].includes(res.status));
     if (busy && !last) {
       await sleeper(retryAfter(res, RETRY_DELAYS[attempt]));
       continue;
     }
-    if (res.status === 429) throw new ApiError('apiRateLimit', 429);
-    if (!res.ok) throw new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300));
+    if (res.status === 429) throw fail(new ApiError('apiRateLimit', 429));
+    if (!res.ok) throw fail(new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300)));
+    observe(null);
     return res;
   }
 }
 
+const fail = (err) => (observe(err), err);
+
 const json = async (res) => {
   const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    // Kaspi answered 200 with something that is not JSON: the API changed or a proxy page came back
+    throw fail(new ApiError('apiFormat', res.status));
+  }
 };
 
 /** Run async jobs with a concurrency limit. */

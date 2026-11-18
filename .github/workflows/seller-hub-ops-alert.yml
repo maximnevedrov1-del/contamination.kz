@@ -1,0 +1,32 @@
+# Seller Hub: Telegram alerts for the owner — API outages, new support questions, new invoices.
+# Runs only when the secrets are set (see kaspi-seller-hub/billing/README.md → «Уведомления в Telegram»).
+name: seller-hub-ops-alert
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      OPS_KEY: ${{ secrets.OPS_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: kaspi-seller-hub/tools
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Send the digest
+        if: env.OPS_KEY != '' && env.TELEGRAM_BOT_TOKEN != ''
+        run: node kaspi-seller-hub/tools/ops-alert.mjs

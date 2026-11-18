@@ -56,6 +56,7 @@ import {
   productKey,
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
+import { statusBanner, supportCard, unreadAnswers } from './support-view.js';
 
 /* ===================================================================== */
 /* State                                                                  */
@@ -1903,6 +1904,7 @@ function renderSidebar() {
     if (el) el.textContent = v ? formatNumber(v) : ''; // the chat item is absent in the API-only build
   };
   setCount('orders', sum('newOrders'));
+  setCount('help', unreadAnswers(state.tickets));
   const urgent = enabledStores().reduce(
     (n, s) => n + (state.data.snapshots[s.id]?.sections?.orders?.items || []).filter((it) => ['soon', 'overdue'].includes(urgencyOf(deadlineOf(it, settingsNow()), settingsNow()))).length,
     0,
@@ -1938,6 +1940,9 @@ const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
 
 function renderBanners() {
   const box = clear($('banners'));
+  // the owner's notice for everyone («Kaspi не отвечает, чиним»)
+  const notice = statusBanner(state.serviceStatus);
+  if (notice) box.append(notice);
   // «Только чтение» is always visible: nothing the seller clicks changes Kaspi
   if (state.data?.settings?.readOnly)
     box.append(h('div', { class: 'banner banner--info', role: 'status', dataset: { banner: 'readonly' } },
@@ -2577,6 +2582,7 @@ function viewHome() {
     urgent.length && { tone: 'danger', icon: 'fire', text: t('home.todo.urgent', { count: urgent.length }), action: t('home.open'), go: goOrders('urgent') },
     fresh.length && { tone: 'info', icon: 'sparkle', text: t('home.todo.new', { count: fresh.length }), action: t('home.open'), go: goOrders('new') },
     unread && { tone: 'info', icon: 'chat', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
+    unreadAnswers(state.tickets) && { tone: 'info', icon: 'chat', text: t('home.todo.support', { count: unreadAnswers(state.tickets) }), action: t('home.open'), go: () => (location.hash = 'help') },
     state.packProblems?.length && { tone: 'danger', icon: 'warn', text: t('home.todo.packProblems', { count: state.packProblems.length }), action: t('home.open'), go: () => ((location.hash = 'settings'), setTimeout(() => document.querySelector('[data-card=journal]')?.scrollIntoView({ block: 'start' }), 300)) },
     lic.pendingInvoice && { tone: 'warn', icon: 'card', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
     lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: 'hourglass', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
@@ -2816,6 +2822,26 @@ function reportCard() {
   );
 }
 
+const supportUi = { topic: 'other', draft: '', withReport: true, sending: false };
+function supportCtx() {
+  const lic = state.data?.license || {};
+  return {
+    signedIn: !['loggedOut', 'unconfigured'].includes(lic.status),
+    tickets: state.tickets,
+    ui: supportUi,
+    toast,
+    errorText,
+    onTickets: refreshTickets,
+  };
+}
+/** Re-read the seller's questions from the server (the help page, after sending or reading). */
+async function refreshTickets() {
+  const res = await send('ui:tickets').catch(() => null);
+  if (res?.list) state.tickets = { at: Date.now(), list: res.list };
+  renderTopbar();
+  if (state.route === 'help') renderView();
+}
+
 function viewHelp() {
   const contacts = [
     SUPPORT.whatsapp && h('a', { class: 'btn btn--primary', href: `https://wa.me/${SUPPORT.whatsapp.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
@@ -2834,6 +2860,7 @@ function viewHelp() {
       h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour' }, onclick: startTour }, t('help.startTour'))),
       h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, gifUrl(r) && h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'gif' }, onclick: () => openGif(r) }, '▶ ', t('guide.watch')), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection')))))),
     ),
+    supportCard(supportCtx()),
     reportCard(),
     h('section', { class: 'card' },
       h('div', { class: 'card__header' }, h('h2', { class: 'card__title' }, t('help.faqTitle'))),
@@ -2979,6 +3006,8 @@ function renderAll() {
 async function loadState() {
   state.data = await withSnapshots(await send('ui:getState'));
   state.staffInfo = await send('ui:staffState').catch(() => null);
+  state.serviceStatus = (await send('ui:serviceStatus').catch(() => null))?.status || null;
+  state.tickets = (await chrome.storage.local.get('ksh.tickets'))['ksh.tickets'] || null;
   state.packProblems = ((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
   state.chat = await getChat();
   state.costs = await getCosts();
@@ -3057,6 +3086,7 @@ function bindShell() {
     state.route = routeFromHash();
     state.guideOpen = false;
     if (state.route === 'catalog') catalogView.reload();
+    if (state.route === 'help') refreshTickets();
     // a soft cross-fade between sections; instant where unsupported or motion is reduced
     if (document.startViewTransition && !reducedMotion()) document.startViewTransition(() => renderAll());
     else renderAll();
@@ -3171,6 +3201,7 @@ async function main() {
   bindShell();
   await refreshInvoiceCount();
   await loadState();
+  if (state.route === 'help') refreshTickets();
   manageChatPolling();
   sync(); // fresh snapshot from every store tab on open
   // First launch → the tour. Not under browser automation (it would sit on top of the page under test).

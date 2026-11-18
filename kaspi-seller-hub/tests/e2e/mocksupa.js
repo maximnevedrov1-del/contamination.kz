@@ -56,12 +56,12 @@ async function rpc(uid, fn, args, headers = {}) {
   const c = await pool.connect();
   try {
     await c.query('begin');
-    await c.query('set local role authenticated');
-    await c.query("select set_config('request.jwt.claim.sub', $1, true)", [uid]);
+    await c.query(uid ? 'set local role authenticated' : 'set local role anon');
+    await c.query("select set_config('request.jwt.claim.sub', $1, true)", [uid || '']);
     await c.query("select set_config('request.headers', $1, true)", [JSON.stringify({ "user-agent": headers["user-agent"], "x-forwarded-for": "5.76.0.9" })]); // like PostgREST
     const keys = Object.keys(args);
     const sql = `select public.${fn.replace(/[^a-z_]/g, '')}(${keys.map((k, i) => `${k.replace(/[^a-z_]/g, '')} => $${i + 1}`).join(', ')}) as r`;
-    const r = await c.query(sql, keys.map((k) => (args[k] !== null && typeof args[k] === 'object' && !Array.isArray(args[k]) ? JSON.stringify(args[k]) : args[k])));
+    const r = await c.query(sql, keys.map((k) => (args[k] !== null && typeof args[k] === 'object' && (!Array.isArray(args[k]) || args[k].some((v) => v !== null && typeof v === 'object')) ? JSON.stringify(args[k]) : args[k])));
     await c.query('commit');
     return r.rows[0].r;
   } catch (e) {
@@ -145,6 +145,7 @@ http.createServer((req, res) => {
       const m = u.pathname.match(/^\/rest\/v1\/rpc\/([a-z_]+)$/);
       if (m) {
         const tok = (req.headers.authorization || '').replace(/^Bearer /, '');
+        if (tok === ANON) { log.push({ rpc: m[1], anon: true }); return send(res, 200, await rpc(null, m[1], b, req.headers)); } // like PostgREST: anon key = role anon
         const s = sessions.get(tok);
         if (!s) return send(res, 401, { message: 'JWT expired' });
         log.push({ rpc: m[1], email: s.email, args: b });
