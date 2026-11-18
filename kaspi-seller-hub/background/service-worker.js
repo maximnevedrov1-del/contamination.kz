@@ -41,6 +41,7 @@ import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catal
 import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF } from './staff.js';
 import { startHealth, flushHealth, scheduleHealth, ALARM_HEALTH } from './health.js';
 import { supportHandlers, pollTickets } from './support.js';
+import { usageHandlers, flushUsage, noteAction, ACTION_OF } from './usage.js';
 import { packingHandlers } from './packing.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
@@ -1315,6 +1316,7 @@ Object.assign(
   staffHandlers(),
   packingHandlers(),
   supportHandlers({ diagnostics: () => uiHandlers['ui:diagnostics']() }),
+  usageHandlers(),
 );
 startHealth();
 
@@ -1357,6 +1359,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .then(async () => (await staffGate(msg.type, msg.payload)) || (await licenseGate(msg.type, msg.payload)) || fn(msg.payload || {}))
     .then((res) => {
       if (res?.ok === false && SYSTEM_ERROR.test(String(res.error || ''))) logError(`worker:${msg.type}`, { code: res.error, status: res.status, message: '' });
+      if (ACTION_OF[msg.type] && res && res.ok !== false && res.error == null) noteAction(ACTION_OF[msg.type]); // control panel: counts only
       sendResponse(res);
     })
     .catch((e) => {
@@ -1389,6 +1392,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
   if (alarm.name === ALARM_HEALTH) {
     flushHealth().catch(() => {}); // counts only; a failed send is retried next time
+    flushUsage().catch(() => {});
     pollTickets().catch(() => {});
   }
 });

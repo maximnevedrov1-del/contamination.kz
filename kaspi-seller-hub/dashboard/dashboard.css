@@ -671,3 +671,20 @@ tr.row--problem td { background: var(--danger-bg); }
 @media (max-width: 560px) { .onboard__step { flex-wrap: wrap; } .onboard__step .btn { margin-left: 34px; } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .connect__owner a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* surveys (dashboard/feedback-view.js) */
+.nps__scale { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+.nps__n { height: 38px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.nps__n:hover { border-color: var(--text-2); }
+.nps__n.is-on.nps__n--low { background: var(--danger); border-color: var(--danger); color: #fff; }
+.nps__n.is-on.nps__n--mid { background: var(--warn); border-color: var(--warn); color: #fff; }
+.nps__n.is-on.nps__n--high { background: var(--ok, #0f7b3f); border-color: var(--ok, #0f7b3f); color: #fff; }
+.nps__ends { display: flex; justify-content: space-between; margin: 6px 0 12px; }
+.nps__q { display: grid; gap: 6px; margin-bottom: 10px; }
+.nps__thanks { margin: 0; padding: var(--space-4, 16px); }
+.exit__reasons { display: grid; gap: 6px; }
+.csat { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+@media (max-width: 480px) { .nps__scale { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.pay__exit { margin-top: 12px; text-align: left; }
+.pay__exit summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
+.pay__exit .card { margin-top: 8px; box-shadow: none; }

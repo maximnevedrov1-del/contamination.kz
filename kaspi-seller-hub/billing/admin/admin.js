@@ -158,6 +158,7 @@
     const open = await rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).catch(() => null);
     $('ticketCount').textContent = open?.open || '';
     if (tab === 'tickets') return renderTickets(panel);
+    if (tab === 'insights') return renderInsights(panel);
     if (tab === 'status') return renderStatus(panel);
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
@@ -281,6 +282,116 @@
       listTools(page.total, list.length, 'Поиск: email или телефон'),
       el('table', null, el('thead', null, el('tr', null, ['Клиент', 'Статус', 'Срок', 'Магазины (подкл./оплач.)', 'Был онлайн', 'Регистрация', 'Согласие с офертой', ''].map((h) => el('th', null, h)))), el('tbody', null, rows)),
       moreButton(page.total, list.length),
+    );
+  }
+
+  /* ---------- «Пульт»: where sellers get stuck, what they use, who stays, NPS, why they leave ---------- */
+  const STEP = { accounts: 'Зарегистрировались', store: 'Подключили магазин', orders: 'Заказы загрузились', print: 'Проверили печать', costs: 'Указали себестоимость', backup: 'Сохранили копию', paid: 'Оплатили' };
+  const SECTION = { home: 'Главная', orders: 'Заказы', returns: 'Возвраты', refusals: 'Отказы', payments: 'Оплаты', analytics: 'Аналитика', products: 'Себестоимость', catalog: 'Выгрузка товаров', chat: 'Чат', settings: 'Настройки', account: 'Подписка', help: 'Помощь' };
+  const ACTION = { accept: 'Принять заказ', pack: 'Упаковать', print: 'Печать накладных', pickList: 'Лист сборки', export: 'Выгрузка в Excel', publish: 'Выложить товар', connect: 'Подключить магазин', sync: 'Обновить', ticket: 'Вопрос в поддержку', invite: 'Пригласить сборщика', cost: 'Себестоимость' };
+  const EXIT = { price: 'Дорого', notUsing: 'Не пользуюсь', missing: 'Нет нужной функции', bugs: 'Ошибки', closed: 'Закрыл магазин / перерыв', competitor: 'Ушёл к другому сервису', other: 'Другое' };
+  const RISK = { detractor: ['Поставил низкую оценку (0–6)', 'badge--danger'], trialEndsNoStore: ['Пробный кончается, магазин не подключён', 'badge--danger'], noStore: ['Не подключил магазин', 'badge--warn'], inactive: ['Не заходит 7+ дней', 'badge--warn'], noPrint: ['Не настроил печать', 'badge--info'], expiredRecently: ['Подписка закончилась', 'badge--info'] };
+  let insightDays = 30;
+  let riskAll = false;
+  const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+  const bar = (value, max, tone) => el('div', { class: 'bar' }, el('span', { class: 'bar__fill' + (tone ? ' bar__fill--' + tone : ''), style: `width:${max ? Math.max(2, (100 * value) / max) : 0}%` }));
+  const tile = (label, value, hint) => el('div', { class: 'tile' }, el('div', { class: 'muted' }, label), el('div', { class: 'tile__v' }, value), hint && el('div', { class: 'muted small' }, hint));
+  const hours = (h) => (h == null ? '' : h < 1 ? 'меньше часа' : h < 48 ? `≈ ${Math.round(h)} ч` : `≈ ${Math.round(h / 24)} дн.`);
+
+  /** First 8 quotes, the rest behind «ещё N». */
+  const quoteList = (list, item) => [
+    el('ul', { class: 'quotes' }, list.slice(0, 8).map(item)),
+    list.length > 8 && el('details', null, el('summary', { class: 'muted' }, `ещё ${list.length - 8}`), el('ul', { class: 'quotes' }, list.slice(8).map(item))),
+  ];
+
+  async function renderInsights(panel) {
+    const r = await rpc('admin_insights', { p_days: insightDays });
+    const f = r.funnel;
+    const period = el('select', { 'aria-label': 'Период', onchange: (e) => ((insightDays = Number(e.target.value)), render()) },
+      [[7, '7 дней'], [30, '30 дней'], [90, '90 дней'], [365, 'год']].map(([v, n]) => el('option', { value: v, selected: v === insightDays }, n)));
+    // 1. key numbers
+    const nps = r.nps;
+    const csat = r.csat || {};
+    const tiles = el('div', { class: 'tiles' },
+      tile('Активны за неделю', r.activeWeek, `за период: ${r.activeUsers}`),
+      tile('Новых за период', f.accounts),
+      tile('Пробный → оплата', f.accounts ? pct(f.paid, f.accounts) + ' %' : '—', `${f.paid} из ${f.accounts}`),
+      tile('NPS', nps.score == null ? '—' : (nps.score > 0 ? '+' : '') + nps.score, `${nps.answers} ответов за 90 дней`),
+      tile('«Ответ помог»', csat.answers ? pct(csat.good, csat.answers) + ' %' : '—', `${csat.answers || 0} оценок`));
+    // 2. funnel with the biggest drop marked
+    const keys = ['accounts', 'store', 'orders', 'print', 'costs', 'backup', 'paid'];
+    let worst = null;
+    keys.slice(1).forEach((k, i) => {
+      const prev = f[keys[i]];
+      const drop = prev - f[k]; // people lost on this step
+      if (k !== 'paid' && prev >= 3 && (!worst || drop > worst.drop)) worst = { k, drop };
+    });
+    const funnel = el('table', { class: 'funnel' }, el('tbody', null, keys.map((k, i) => el('tr', { 'data-step': k, class: worst?.k === k ? 'is-worst' : null },
+      el('td', null, STEP[k], worst?.k === k ? el('span', { class: 'badge badge--danger', style: 'margin-left:6px' }, 'узкое место') : null),
+      el('td', { style: 'width:45%' }, bar(f[k], f.accounts, worst?.k === k ? 'bad' : null)),
+      el('td', { class: 'num' }, el('b', null, f[k])),
+      el('td', { class: 'num muted' }, i ? pct(f[k], f.accounts) + ' %' : ''),
+      el('td', { class: 'num muted' }, i && k !== 'paid' && f[keys[i - 1]] > f[k] ? `−${f[keys[i - 1]] - f[k]}` : ''),
+      el('td', { class: 'muted' }, hours(r.hoursTo?.[k]))))));
+    // 3. sections and actions
+    const usage = (obj, names) => {
+      const rows = Object.entries(obj || {}).sort((a, b) => b[1].users - a[1].users || b[1].times - a[1].times);
+      const unused = Object.keys(names).filter((k) => !obj?.[k]);
+      return el('table', null,
+        el('thead', null, el('tr', null, ['', 'Продавцов', '', 'Раз'].map((x, n) => el('th', { class: n === 1 || n === 3 ? 'num' : null }, x)))),
+        el('tbody', null,
+          rows.map(([k, v]) => el('tr', null, el('td', null, names[k] || k), el('td', { class: 'num' }, `${v.users} (${pct(v.users, r.activeUsers)} %)`), el('td', { style: 'width:35%' }, bar(v.users, r.activeUsers)), el('td', { class: 'num' }, v.times))),
+          unused.map((k) => el('tr', { class: 'muted' }, el('td', null, names[k]), el('td', { class: 'num' }, '0'), el('td', null, el('span', { class: 'badge badge--warn' }, 'никто не пользуется')), el('td', { class: 'num' }, '0')))));
+    };
+    // 4. cohorts
+    const cohorts = el('table', { class: 'cohorts' },
+      el('thead', null, el('tr', null, ['Неделя регистрации', 'Человек', '1-я неделя', '2-я', '3-я', '4-я', '5-я'].map((x, n) => el('th', { class: n ? 'num' : null }, x)))),
+      el('tbody', null, (r.cohorts || []).map((c) => el('tr', null, el('td', null, date(c.week)), el('td', { class: 'num' }, c.size),
+        [0, 1, 2, 3, 4].map((w) => {
+          const n = c.active?.[w];
+          if (n == null) return el('td', { class: 'num muted' }, '');
+          const p = pct(n, c.size);
+          return el('td', { class: 'num heat', style: `--p:${p / 100}` }, p + ' %');
+        })))));
+    // 5. NPS and exit reasons
+    const npsBox = el('div', null,
+      el('div', { class: 'row' },
+        el('span', { class: 'badge badge--ok' }, `Сторонники 9–10: ${nps.promoters}`),
+        el('span', { class: 'badge' }, `Нейтральные 7–8: ${nps.passives}`),
+        el('span', { class: 'badge badge--danger' }, `Критики 0–6: ${nps.detractors}`)),
+      (nps.comments || []).length
+        ? quoteList(nps.comments, (c) => el('li', null, el('span', { class: 'badge ' + (c.score >= 9 ? 'badge--ok' : c.score >= 7 ? '' : 'badge--danger') }, c.score), ' ', c.comment, el('span', { class: 'muted small' }, ` — ${c.email || '—'}, ${date(c.at)}`)))
+        : el('p', { class: 'muted' }, 'Комментариев пока нет.'));
+    const reasons = Object.entries(r.exit?.reasons || {}).sort((a, b) => b[1] - a[1]);
+    const exitTotal = reasons.reduce((n, [, v]) => n + v, 0);
+    const exitBox = el('div', null,
+      reasons.length
+        ? el('table', null, el('tbody', null, reasons.map(([k, v]) => el('tr', null, el('td', null, EXIT[k] || k), el('td', { style: 'width:45%' }, bar(v, exitTotal, 'bad')), el('td', { class: 'num' }, `${v} (${pct(v, exitTotal)} %)`)))))
+        : el('p', { class: 'muted' }, 'Ответов пока нет.'),
+      (r.exit?.comments || []).length ? el('ul', { class: 'quotes' }, r.exit.comments.map((c) => el('li', null, el('span', { class: 'badge' }, EXIT[c.reason] || c.reason), ' ', c.comment, el('span', { class: 'muted small' }, ` — ${c.email || '—'}, ${date(c.at)}`)))) : null);
+    // 6. who to write to first
+    const risk = r.risk || [];
+    const riskBox = risk.length
+      ? el('table', null,
+          el('thead', null, el('tr', null, ['Клиент', 'Что не так', 'Был активен', 'Регистрация', ''].map((x) => el('th', null, x)))),
+          el('tbody', null, risk.map((x, n) => el('tr', { 'data-risk': x.reason, class: n >= 10 ? 'more-row' : null, hidden: n >= 10 && !riskAll },
+            el('td', null, x.email || '—'),
+            el('td', null, el('span', { class: 'badge ' + (RISK[x.reason]?.[1] || '') }, RISK[x.reason]?.[0] || x.reason)),
+            el('td', null, x.last_active_at ? date(x.last_active_at, true) : 'не заходил'),
+            el('td', null, date(x.created_at)),
+            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('Seller Hub — чем помочь?')}` }, 'Написать'))))))
+      : el('p', { class: 'muted' }, 'Сейчас никого — все в порядке.');
+    const riskMore = risk.length > 10 && !riskAll && el('button', { type: 'button', class: 'btn', 'data-action': 'risk-all', onclick: () => ((riskAll = true), render()) }, `Показать всех (${risk.length})`);
+    const section = (title, hint, ...body) => el('section', { class: 'block' }, el('h2', null, title), hint && el('p', { class: 'muted' }, hint), ...body);
+    panel.replaceChildren(
+      el('div', { class: 'row', style: 'margin:0 0 12px' }, el('b', null, 'Период:'), period, el('span', { class: 'muted' }, 'Только числа и ответы на опросы — без заказов и данных магазинов.')),
+      tiles,
+      section('Кому написать первым', `Клиенты, которые застряли или вот-вот уйдут (${risk.length}). Один звонок или письмо на этом этапе часто спасает клиента.`, riskBox, riskMore),
+      section('Воронка: где застревают', `Новые клиенты за ${insightDays} дн. «Узкое место» — шаг, на котором теряется больше всего людей. Справа — сколько обычно проходит от регистрации до шага.`, funnel),
+      section('Чем пользуются', 'Разделы, которые открывали, и действия — за период. То, чем никто не пользуется, — кандидат на упрощение или удаление.', el('div', { class: 'grid-2' }, el('div', null, el('h3', null, 'Разделы'), usage(r.sections, SECTION)), el('div', null, el('h3', null, 'Действия'), usage(r.actions, ACTION)))),
+      section('Кто остаётся (удержание)', 'Сколько людей из каждой недели регистрации пользовались расширением через 1, 2, 3, 4 недели. Если после изменения в продукте цифры растут — изменение работает.', cohorts),
+      section('Удовлетворённость (NPS)', 'Вопрос «Насколько вероятно, что порекомендуете?» 0–10. NPS = % сторонников (9–10) − % критиков (0–6), от −100 до +100. Выше 0 — хорошо, выше +30 — отлично. Спрашиваем через 14 дней работы, потом раз в 90 дней.', npsBox),
+      section('Почему не продлевают', 'Ответы при окончании пробного периода или подписки.', exitBox),
     );
   }
 

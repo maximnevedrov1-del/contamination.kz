@@ -432,3 +432,9 @@ export const ticketClose = ({ id }) => rpc('ticket_close', { p_id: Number(id) })
 
 /** Counts of marketplace API calls (no data): [{market, ok, fail, kinds}] */
 export const healthReport = (list) => rpc('health_report', { p: list });
+
+/* ---------------- control panel: usage counts and surveys ---------------- */
+export const usageReport = (steps, days, version) => rpc('usage_report', { p_steps: steps, p_days: days, p_version: version || null });
+export const feedbackDue = () => rpc('feedback_due', {});
+export const feedbackSubmit = ({ kind, score = null, reason = null, comment = null, ticket = null }) =>
+  rpc('feedback_submit', { p_kind: String(kind), p_score: score == null ? null : Number(score), p_reason: reason, p_comment: comment ? String(comment).slice(0, 1000) : null, p_ticket: ticket == null ? null : Number(ticket) });

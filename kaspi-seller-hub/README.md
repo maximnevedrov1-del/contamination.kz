@@ -421,6 +421,26 @@ Each step has a button to the right place; Settings cards are highlighted when o
 
 Test: `tests/e2e/onboard.js`.
 
+## Control panel («Пульт»): usage counts and surveys
+
+- **Counts** (`background/usage.js`). Only numbers, per day, KZ time:
+  - sections opened (the dashboard sends `ui:usage`);
+  - actions used: worker messages in `ACTION_OF`, counted when they succeed, plus Excel export and
+    the pick list from the page;
+  - the five first steps.
+
+  Every 15 minutes the counts go to `usage_report`, and sent counts are subtracted locally, so
+  nothing is counted twice.
+- **Surveys** (`dashboard/feedback-view.js`):
+  - NPS card on Home (the server decides when: `feedback_due`);
+  - «Почему не продлеваете?» on the subscription page and inside the blocking payment window;
+  - «Ответ помог?» under support answers.
+- **Server side:** `billing/supabase/004_insights.sql`. Admin tab «Пульт»: tiles, risk list,
+  funnel with the bottleneck, section and action use, weekly retention cohorts, NPS with
+  comments, exit reasons.
+
+Tests: `tests/sql/test9.sql`, `tests/e2e/insights.js`.
+
 ## Support without the owner at the computer
 
 - **Notice for every client** (admin page → «Состояние»). The banner is on every dashboard page,

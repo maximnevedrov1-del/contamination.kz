@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="top">
-      <h1>Seller Hub · оплаты</h1>
+      <h1>Seller Hub · админка</h1>
       <span id="who" class="muted"></span>
       <button type="button" id="logout" class="btn btn--ghost" hidden>Выйти</button>
     </header>
@@ -41,6 +41,7 @@
       <!-- 3. Work area -->
       <section id="app" hidden>
         <nav class="tabs" role="tablist">
+          <button type="button" role="tab" data-tab="insights">Пульт</button>
           <button type="button" role="tab" data-tab="pending" aria-selected="true">Ждут оплаты <span id="pendingCount" class="pill"></span></button>
           <button type="button" role="tab" data-tab="paid">Оплаченные</button>
           <button type="button" role="tab" data-tab="all">Все счета</button>

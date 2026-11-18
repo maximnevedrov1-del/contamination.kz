@@ -56,7 +56,8 @@ import {
   productKey,
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
-import { statusBanner, supportCard, unreadAnswers } from './support-view.js';
+import { statusBanner, supportCard, unreadAnswers, getCsat } from './support-view.js';
+import { npsCard, exitCard } from './feedback-view.js';
 import { onboardingCard, ownerInstructions, markStep, getOnboarding, ONBOARD_KEY } from './onboarding.js';
 
 /* ===================================================================== */
@@ -632,6 +633,7 @@ async function runJob(kind, type, payload, okKey) {
 
 /* ---------- export for the accountant: what is on screen (or the ticked rows) → Excel ---------- */
 function exportRows(route, list) {
+  send('ui:usage', { action: 'export' }).catch(() => {});
   // A cell starting with = + - @ would run as a formula in Excel → neutralised with a leading apostrophe.
   const cell = (v) => {
     let x = v == null ? '' : String(v);
@@ -899,6 +901,7 @@ async function openPickList(allRows) {
       lines.set(k, line);
     }
   }
+  send('ui:usage', { action: 'pickList' }).catch(() => {});
   await setPickList({
     createdAt: Date.now(),
     orderCount: orders.length,
@@ -2259,6 +2262,11 @@ function renderPay() {
         ),
     ),
     h('p', { class: 'pay__wait' }, t('pay.waiting')),
+    // ended: the window cannot be closed, so «почему не продлеваете» lives here too
+    pay.blocking && (state.feedbackDue === 'exit' || feedbackUi.exit.done) &&
+      h('details', { class: 'pay__exit', dataset: { block: 'pay-exit' }, open: feedbackUi.exit.open || null, ontoggle: (e) => (feedbackUi.exit.open = e.target.open) },
+        h('summary', null, t('feedback.exit.notRenewing')),
+        exitCard({ ui: feedbackUi.exit, toast, errorText, rerender: () => renderPay() })),
     inv && h('p', { class: 'pay__legal' }, t('terms.payBefore'), h('a', { href: legalUrl('offer'), target: '_blank', rel: 'noopener' }, t('terms.offerShort')), t('terms.payAfter')),
   );
   clear(dlg).append(body);
@@ -2314,7 +2322,7 @@ function paywall() {
   const lic = state.data.license || {};
   if (lic.needsConsent) return h('section', { class: 'card' }, emptyState(t('terms.title'), t('terms.text'), h('button', { type: 'button', class: 'btn btn--primary', onclick: openTerms }, t('terms.open'))));
   const text = { loggedOut: 'account.paywallLoggedOut', offline: 'account.paywallOffline', invalid: 'account.paywallInvalid', clock: 'account.paywallClock' }[lic.status] || (lic.trialBlocked ? 'account.trialUsed' : 'account.paywallExpired');
-  return h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton'))));
+  return h('div', { class: 'settings' }, h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton')))), exitEl());
 }
 
 function viewAccount() {
@@ -2500,7 +2508,7 @@ function viewAccount() {
   );
 
   // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
-  return h('div', { class: 'settings' }, statusCard, pendingCard, planCard, historyCard);
+  return h('div', { class: 'settings' }, statusCard, exitEl(), pendingCard, planCard, historyCard);
 }
 
 /* ===================================================================== */
@@ -2595,6 +2603,27 @@ function onboardCtx() {
       renderView();
     },
   };
+}
+
+const feedbackUi = { nps: { score: null, comment: '', done: false }, exit: { reason: null, comment: '', done: false } };
+function npsCtx() {
+  return {
+    ui: feedbackUi.nps,
+    toast,
+    errorText,
+    rerender: () => renderView(),
+    onDone: (later) => {
+      state.feedbackDue = null;
+      if (later) feedbackUi.nps.done = false;
+      renderView();
+    },
+  };
+}
+/** «Почему не продлеваете?» — on the paywall and the subscription page once it has ended. */
+const exitEl = () => (state.feedbackDue === 'exit' || feedbackUi.exit.done ? exitCard({ ui: feedbackUi.exit, toast, errorText, rerender: () => renderView() }) : null);
+/** Control panel: which section was opened (numbers only, background/usage.js). */
+function noteSection() {
+  if (!staffMode()) send('ui:usage', { section: state.route }).catch(() => {});
 }
 
 function viewHome() {
@@ -2693,11 +2722,14 @@ function viewHome() {
       )
     : null;
 
+  // NPS (when the server says it is time) — a card, never a blocking window
+  const npsEl = state.feedbackDue === 'nps' || feedbackUi.nps.done ? npsCard(npsCtx()) : null;
+
   // 4. «Первые шаги»: until everything that makes the extension useful is done (dashboard/onboarding.js)
   const stepsEl = onboardingCard(onboardCtx());
 
   // new seller: first steps on top; working seller: today's tasks and numbers first
-  return enabledStores().length ? h('div', { class: 'home' }, todoCard, stepsEl, tilesEl, storesEl) : h('div', { class: 'home' }, stepsEl);
+  return enabledStores().length ? h('div', { class: 'home' }, todoCard, npsEl, stepsEl, tilesEl, storesEl) : h('div', { class: 'home' }, stepsEl);
 }
 
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
@@ -2848,6 +2880,8 @@ function supportCtx() {
   return {
     signedIn: !['loggedOut', 'unconfigured'].includes(lic.status),
     tickets: state.tickets,
+    csat: state.csat,
+    onCsat: (id, score) => (state.csat = { ...(state.csat || {}), [id]: score }),
     ui: supportUi,
     toast,
     errorText,
@@ -3029,7 +3063,9 @@ async function loadState() {
   state.serviceStatus = (await send('ui:serviceStatus').catch(() => null))?.status || null;
   state.tickets = (await chrome.storage.local.get('ksh.tickets'))['ksh.tickets'] || null;
   state.onboard = await getOnboarding();
-  state.packProblems = ((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
+  state.csat = await getCsat();
+  state.feedbackDue = (await send('ui:feedbackDue').catch(() => null))?.due || null;
+  state.packProblems =((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
   state.chat = await getChat();
   state.costs = await getCosts();
   [state.photos, state.catalog] = await Promise.all([getPhotos(), getCatalog()]);
@@ -3108,6 +3144,7 @@ function bindShell() {
     state.guideOpen = false;
     if (state.route === 'catalog') catalogView.reload();
     if (state.route === 'help') refreshTickets();
+    noteSection();
     // a soft cross-fade between sections; instant where unsupported or motion is reduced
     if (document.startViewTransition && !reducedMotion()) document.startViewTransition(() => renderAll());
     else renderAll();
@@ -3228,6 +3265,7 @@ async function main() {
   await refreshInvoiceCount();
   await loadState();
   if (state.route === 'help') refreshTickets();
+  noteSection();
   manageChatPolling();
   sync(); // fresh snapshot from every store tab on open
   // First launch → the tour. Not under browser automation (it would sit on top of the page under test).

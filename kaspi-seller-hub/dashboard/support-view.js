@@ -6,6 +6,9 @@
 import { h } from '../shared/utils.js';
 import { t, formatDate } from '../shared/i18n.js';
 import { svgIcon } from '../shared/icons.js';
+import { csatRow } from './feedback-view.js';
+
+const CSAT_KEY = 'ksh.csat'; // {ticketId: 0|1} — answered «Ответ помог?» on this computer
 
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
 export const TOPICS = ['connect', 'orders', 'print', 'payment', 'warehouse', 'idea', 'other'];
@@ -68,6 +71,12 @@ export function supportCard(ctx) {
       t(`support.topics.${x.topic}`), ' · ', formatDate(x.created_at, 'short'), ' — ', String(x.message).slice(0, 80)),
     h('p', { class: 'ticket__q' }, x.message),
     x.reply ? h('div', { class: 'ticket__a' }, h('b', null, t('support.answer')), ' ', x.reply) : h('p', { class: 'muted small' }, t('support.waiting')),
+    x.reply && csatRow(x, ctx.csat?.[x.id], async (score) => {
+      const { [CSAT_KEY]: m = {} } = await chrome.storage.local.get(CSAT_KEY);
+      await chrome.storage.local.set({ [CSAT_KEY]: { ...m, [x.id]: score } });
+      ctx.onCsat?.(x.id, score);
+      await ctx.onTickets();
+    }),
     x.status !== 'closed' && x.reply && h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'ticket-close' }, onclick: async () => {
       const res = await send('ui:ticketClose', { id: x.id });
       if (!res?.ok) return ctx.toast(ctx.errorText(res?.error), 'error');
@@ -83,3 +92,5 @@ export function supportCard(ctx) {
       h('div', null, sendBtn)),
     list.length ? h('div', { class: 'card__body faq', dataset: { block: 'tickets' } }, h('h3', { class: 'card__title small' }, t('support.mine')), items) : null);
 }
+
+export const getCsat = async () => (await chrome.storage.local.get(CSAT_KEY))[CSAT_KEY] || {};

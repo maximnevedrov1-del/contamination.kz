@@ -100,7 +100,7 @@ export async function scheduleStaffCheck() {
 /* ---------- what the worker answers on a warehouse computer ---------- */
 
 /** Allowed without anybody signed in (the sign-in screen). */
-const PUBLIC = new Set(['ui:getState', 'ui:serviceStatus', 'ui:staffState', 'ui:staffRequestCode', 'ui:staffVerify', 'ui:staffPinLogin', 'ui:ownerUnlock', 'ui:logError']);
+const PUBLIC = new Set(['ui:getState', 'ui:serviceStatus', 'ui:usage', 'ui:staffState', 'ui:staffRequestCode', 'ui:staffVerify', 'ui:staffPinLogin', 'ui:ownerUnlock', 'ui:logError']);
 /** Allowed to a signed-in packer (packing only). */
 const STAFF_ALLOWED = new Set([...PUBLIC, 'ui:sync', 'ui:staffLogout', 'ui:staffCheck', 'ui:pack', 'ui:accept', 'ui:print', 'ui:fetchInvoices', 'ui:packLogAdd', 'ui:packProblem', 'ui:setBarcode']);
 

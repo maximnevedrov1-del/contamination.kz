@@ -52,3 +52,24 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ticket__msg { white-space: pre-line; margin: 8px 0; }
 .report { white-space: pre-wrap; background: var(--surface-2); padding: 10px; border-radius: 8px; font-size: 12px; max-height: 260px; overflow: auto; }
 code.mono { background: var(--surface-2); padding: 4px 8px; border-radius: 6px; overflow-wrap: anywhere; }
+/* «Пульт» */
+.small { font-size: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.tile { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.tile__v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.block { margin-top: 26px; }
+.block h3 { font-size: 13px; margin: 8px 0; color: var(--text-3); font-weight: 500; }
+.bar { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.bar__fill { display: block; height: 100%; background: var(--info); border-radius: inherit; }
+.bar__fill--bad { background: var(--danger); }
+.funnel tr.is-worst td { background: var(--danger-bg); }
+.funnel td { padding: 8px; }
+.cohorts .heat { background: color-mix(in srgb, var(--ok) calc(var(--p) * 60%), transparent); }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.quotes { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.quotes li { padding: 8px 10px; background: var(--surface-2); border-radius: 8px; }
+#panel { overflow-x: auto; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+@media (max-width: 600px) { main { padding: 12px; } .top { padding: 12px 16px; flex-wrap: wrap; } .input, select { min-width: 0; max-width: 100%; } }
+main > * { min-width: 0; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
