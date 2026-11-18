@@ -16,6 +16,7 @@ import { getInvoices, getPrintQueue, getSettings, getPickList } from '../shared/
 import { formatNumber, formatDate } from '../shared/i18n.js';
 import { h, clear } from '../shared/utils.js';
 import { layoutFor, normalizePrint, testSheet, TRIM_MODES } from './print-layout.js';
+import { markStep } from './onboarding.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -282,7 +283,10 @@ async function main() {
   document.title = t('print.title');
   const mode = new URLSearchParams(location.search).get('mode');
   if (mode === 'pick') return renderPickList();
-  if (mode === 'test') return renderTestPage(settings);
+  if (mode === 'test') {
+    markStep('print'); // «Первые шаги»: the printer was tried
+    return renderTestPage(settings);
+  }
 
   const [queue, invoices] = await Promise.all([getPrintQueue(), getInvoices()]);
   const byKey = new Map(invoices.map((i) => [`${i.shopId}::${i.orderId}`, i]));
@@ -302,6 +306,7 @@ async function main() {
     return;
   }
   pages.append(h('div', { class: 'empty no-print' }, t('print.rendering')));
+  markStep('print'); // «Первые шаги»: waybills printed at least once
 
   const print = normalizePrint(settings.print);
   const originals = h('div', { class: 'notice notice--links' }, h('span', null, t('print.originalsTitle')));

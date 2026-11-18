@@ -398,6 +398,29 @@ Settings → «Сотрудники» and «Режим склада».
 
 Tests: `tests/sql/test7.sql`, `tests/e2e/team.js`.
 
+## «Первые шаги» (activation)
+
+Most sellers who stop using a tool never reached the useful part. Home shows five steps with
+progress until they are done or the seller hides the card (`dashboard/onboarding.js`):
+
+1. connect a store;
+2. orders loaded;
+3. test print;
+4. at least one cost price;
+5. backup saved.
+
+Each step has a button to the right place; Settings cards are highlighted when opened this way.
+
+- Steps that leave no trace in the data are marked in `ksh.onboarding`: the test print (or the
+  first real waybill print) and the backup. The print tab marks its step and Home updates by itself.
+- **Connect dialog:**
+  - «Почему давать токен безопасно» — the token stays in the browser and goes only to Kaspi; it
+    cannot withdraw money and can be revoked;
+  - a ready message for the store owner (WhatsApp / Telegram / copy), because only the owner can
+    create the token.
+
+Test: `tests/e2e/onboard.js`.
+
 ## Support without the owner at the computer
 
 - **Notice for every client** (admin page → «Состояние»). The banner is on every dashboard page,

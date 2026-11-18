@@ -57,6 +57,7 @@ import {
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
 import { statusBanner, supportCard, unreadAnswers } from './support-view.js';
+import { onboardingCard, ownerInstructions, markStep, getOnboarding, ONBOARD_KEY } from './onboarding.js';
 
 /* ===================================================================== */
 /* State                                                                  */
@@ -1698,6 +1699,7 @@ function viewSettings() {
           a.click();
           setTimeout(() => URL.revokeObjectURL(a.href), 5000);
           toast(t('backup.saved'), 'ok');
+          markStep('backup');
         } }, t('backup.save')),
         h('button', { type: 'button', class: 'btn', onclick: (e) => e.currentTarget.nextElementSibling.click() }, t('backup.restore')),
         h('input', { type: 'file', accept: '.json,application/json', hidden: true, dataset: { action: 'backup-file' }, onchange: async (e) => {
@@ -2279,6 +2281,7 @@ function bindConnectDialog() {
     $('connectError').hidden = true;
     $('connectName').value = '';
     $('connectToken').value = '';
+    $('connectOwner').replaceChildren(ownerInstructions(copyText, toast));
     applyI18n(dlg);
     dlg.showModal();
     $('connectName').focus();
@@ -2562,6 +2565,38 @@ function sparkline(values, label) {
     s('path', { d: `M${pts.join(' L')}`, class: 'spark__line' }));
 }
 
+/** Settings card (found by a selector inside it): open Settings, scroll to it, highlight it. */
+function goToCard(selector) {
+  location.hash = 'settings';
+  setTimeout(() => {
+    const el = document.querySelector(selector)?.closest('.card');
+    el?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    el?.classList.add('is-highlight');
+    setTimeout(() => el?.classList.remove('is-highlight'), 2000);
+  }, 300);
+}
+
+function onboardCtx() {
+  return {
+    stores: enabledStores().length,
+    loaded: dataStores().some((s) => state.data.snapshots[s.id]?.sections?.orders),
+    costs: Object.keys(state.costs || {}).length,
+    flags: state.onboard || {},
+    go: {
+      store: () => $('connectStoreBtn').click(),
+      orders: () => sync(),
+      print: () => goToCard('[data-card=print]'),
+      costs: () => (location.hash = 'products'),
+      backup: () => goToCard('[data-action=backup-save]'),
+    },
+    onHide: async () => {
+      await markStep('hidden');
+      state.onboard = await getOnboarding();
+      renderView();
+    },
+  };
+}
+
 function viewHome() {
   const orders = allOrders();
   const sn = settingsNow();
@@ -2658,26 +2693,11 @@ function viewHome() {
       )
     : null;
 
-  // 4. first steps (until done)
-  const steps = [
-    { done: enabledStores().length > 0, text: t('home.step.store'), go: () => $('connectStoreBtn').click(), action: t('home.step.storeBtn') },
-    { done: tokens.length > 0, text: t('home.step.api'), go: () => (location.hash = 'settings'), action: t('home.open') },
-    { done: productRows().length > 0 && noCost === 0, text: t('home.step.cost'), go: () => (location.hash = 'products'), action: t('home.open') },
-    { done: !!state.data.catalogReady, text: t('home.step.catalog'), go: () => (location.hash = 'catalog'), action: t('home.open') },
-  ];
-  const left = steps.filter((x) => !x.done).length;
-  const stepsEl =
-    left > 0
-      ? h(
-          'section',
-          { class: 'card home-steps' },
-          h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('home.stepsTitle')), h('div', { class: 'card__sub' }, t('home.stepsSub', { done: steps.length - left, total: steps.length })))),
-          h('ol', { class: 'steps' }, steps.map((x, i) => h('li', { class: ['steps__item', x.done && 'steps__item--done'] }, h('span', { class: 'steps__num' }, x.done ? '✓' : String(i + 1)), h('span', { class: 'steps__text' }, x.text), !x.done && h('button', { type: 'button', class: 'btn btn--sm', onclick: x.go }, x.action)))),
-        )
-      : null;
+  // 4. «Первые шаги»: until everything that makes the extension useful is done (dashboard/onboarding.js)
+  const stepsEl = onboardingCard(onboardCtx());
 
   // new seller: first steps on top; working seller: today's tasks and numbers first
-  return enabledStores().length ? h('div', { class: 'home' }, todoCard, tilesEl, stepsEl, storesEl) : h('div', { class: 'home' }, stepsEl);
+  return enabledStores().length ? h('div', { class: 'home' }, todoCard, stepsEl, tilesEl, storesEl) : h('div', { class: 'home' }, stepsEl);
 }
 
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
@@ -3008,6 +3028,7 @@ async function loadState() {
   state.staffInfo = await send('ui:staffState').catch(() => null);
   state.serviceStatus = (await send('ui:serviceStatus').catch(() => null))?.status || null;
   state.tickets = (await chrome.storage.local.get('ksh.tickets'))['ksh.tickets'] || null;
+  state.onboard = await getOnboarding();
   state.packProblems = ((await chrome.storage.local.get('ksh.packLog'))['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);
   state.chat = await getChat();
   state.costs = await getCosts();
@@ -3174,6 +3195,11 @@ function bindShell() {
   });
   onKeyChange(KEYS.catalog, (next) => {
     state.catalog = next || {};
+  });
+  // «Первые шаги»: the print tab or a backup marks a step → Home updates by itself
+  onKeyChange(ONBOARD_KEY, (next) => {
+    state.onboard = next || {};
+    if (state.route === 'home') renderView();
   });
   onKeyChange(KEYS.costs, (next) => {
     state.costs = next || {};
