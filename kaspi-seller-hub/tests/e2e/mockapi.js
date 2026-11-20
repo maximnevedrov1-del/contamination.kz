@@ -44,6 +44,12 @@ http.createServer((req, res) => {
   // outage simulation for the API health tests: /__down?on=1 → every API call answers 502
   if (u.pathname === '/__down') { globalThis.DOWN = u.searchParams.get('on') === '1'; return send(200, { down: globalThis.DOWN }); }
   if (globalThis.DOWN && u.pathname.startsWith('/shop/api/')) return send(502, '<html>Bad Gateway</html>', 'text/html');
+  // per-token failure for one store: /__fail?token=GOOD-TOKEN-B&status=503 (status=0 clears)
+  if (u.pathname === '/__fail') { (globalThis.FAIL ||= {})[u.searchParams.get('token')] = Number(u.searchParams.get('status')) || 0; return send(200, globalThis.FAIL); }
+  // every API request is logged with its (fake) token: tests count requests per store and look for writes
+  if (u.pathname.startsWith('/shop/api/')) log.push({ req: req.method, path: u.pathname, token: req.headers['x-auth-token'] || null });
+  const injected = globalThis.FAIL?.[req.headers['x-auth-token']];
+  if (injected && u.pathname.startsWith('/shop/api/')) return send(injected, { message: `injected ${injected}` });
   if (u.pathname.startsWith('/waybill/')) { log.push({ waybillToken: req.headers['x-auth-token'] || null }); return send(200, PDF(u.pathname.split('/')[2]), 'application/pdf'); }
   if (!/^GOOD-TOKEN-/.test(req.headers['x-auth-token'] || '')) return send(401, { message: 'Full authentication is required to access this resource.' });
   let body = '';

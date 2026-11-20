@@ -54,7 +54,23 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/readonly.js` | «Только чтение»: banner; reads work; accept / pack / publish refused in the UI, by the worker and by the API client; no POST reaches Kaspi |
 | `e2e/learn.js` | page guides, tour, help GIFs (desktop + phone) |
 | `e2e/apionly.js` | release build without cabinet mode: no chat, no content scripts, a Kaspi page never creates a store |
+| `e2e/apionly-sync.js` | synchronisation in the **release build** (API-only, prepared by `e2e/mkrelcopy.sh`): no stores → empty state; one and two token stores load orders without any Kaspi tab; one store 503/401 → its error shown, the other works, its cache kept; six syncs at once → at most one extra cycle, no deadlock; worker restart → stores and alarms back; «Только чтение» → no write reaches the API. Any request to the real kaspi.kz fails the test |
 | `e2e/devices.js` | layout on 10 screen sizes (320–1920 px) |
 
 The mock Kaspi API (`e2e/mockapi.js`) follows the formats in guide.kaspi.kz; it is not Kaspi.
 Passing tests do not replace a check on a real store.
+
+## Exit codes
+
+Every suite run by `e2e/regress.sh` counts as passed only with **exit code 0 and** `ALL PASS` in its
+output; `regress.sh` prints a PASS/FAIL line per suite with its exit code and exits with 1 if any
+failed. (Some older suites print `FAIL` without setting the exit code; requiring both covers them.)
+
+## Release build in tests (`e2e/mkrelcopy.sh`)
+
+The real `tools/build-release.mjs` runs on an isolated copy (`tests/relcopy/`) with a made-up but
+valid config: an https Supabase address, an anon-role key and the mock Supabase signing key. The
+source `shared/billing-config.js` is never changed. `tests/relcopy/dist/kaspi-seller-hub` is the
+build as shipped (`apionly.js`). `tests/relmock/` is the same build where only the Kaspi and
+Supabase addresses (code, host permissions, CSP connect-src) point at the local mocks; the script
+asserts the build's own decisions still hold (cabinet off, no content scripts, no `scripting`).

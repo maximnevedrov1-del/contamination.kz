@@ -60,4 +60,5 @@ const posts = () => fetch('http://localhost:8099/__log').then((r) => r.json()).t
   check('no page errors', errs.length === 0, errs.join(' | '));
   console.log(fails ? `${fails} FAILED` : 'ALL PASS');
   await ctx.close();
+  process.exit(fails ? 1 : 0); // the exit code is what CI and regress.sh check
 })().catch((e) => { console.error('CRASH', e.message.split('\n')[0]); process.exit(1); });

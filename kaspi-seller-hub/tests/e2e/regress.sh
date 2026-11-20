@@ -12,24 +12,38 @@ fresh() {
   $S/e2e/mkbillcopy.sh >/dev/null
   rm -rf billprof bill2prof profile2 apiprof featprof
 }
+# A suite passes only with exit code 0 AND «ALL PASS» in its output (older suites print FAIL
+# without setting the exit code, so both are required). Summary and exit code at the end.
+FAILED=()
+run() { # name, command…
+  local name="$1"; shift
+  local out code
+  out=$(timeout 600 "$@" 2>&1); code=$?
+  local summary
+  summary=$(printf '%s\n' "$out" | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')
+  if [ $code -eq 0 ] && printf '%s\n' "$out" | grep -q '^ALL PASS'; then echo "$name: PASS (exit 0) $summary"
+  else echo "$name: FAIL (exit $code) $summary"; FAILED+=("$name"); fi
+}
 for t in cattest billtest hack billtest2 team support insights orchestra growth telegram; do
   fresh
-  echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
+  run "$t" node $t.js
 done
 # API / demo suites use their own copies
 rm -rf $S/apicopy && copyext $S/apicopy && sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" $S/apicopy/shared/selectors.js
 for t in apitest run2 demofile feat uxtest learn photoprint interactive readonly onboard; do
   pkill -f "node mockapi.js"; (node mockapi.js > mock.log 2>&1 &); sleep 1; rm -rf apiprof profile2
-  echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
+  run "$t" node $t.js
 done
-# Release build without cabinet mode (fake but well-formed subscription config; the build refuses an empty one)
-rm -rf $S/relcopy && copyext $S/relcopy && python3 - "$S/relcopy/shared/billing-config.js" <<'PY'
-import base64, json, sys
-p = sys.argv[1]; s = open(p).read()
-b = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).decode().rstrip('=')
-s = s.replace("supabaseUrl: ''", "supabaseUrl: 'https://example-project.supabase.co'")
-s = s.replace("supabaseAnonKey: ''", "supabaseAnonKey: '%s.%s.sig'" % (b({'alg': 'HS256'}), b({'role': 'anon'})))
-s = s.replace("licenseKeys: []", "licenseKeys: [{ kty: 'EC', crv: 'P-256', x: 'AAAA', y: 'BBBB', kid: 'k1', alg: 'ES256' }]")
-open(p, 'w').write(s)
-PY
-(cd $S/relcopy && node tools/build-release.mjs >/dev/null) && echo "apionly: $(timeout 300 node apionly.js $S/relcopy/dist/kaspi-seller-hub 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | tr '\n' ' ')"
+# Release build (API-only, as shipped) of an isolated copy with a made-up valid config: mkrelcopy.sh.
+# apionly.js checks the build untouched; apionly-sync.js syncs with the same build pointed at the mocks.
+fresh
+if $S/e2e/mkrelcopy.sh >/dev/null; then
+  run apionly node apionly.js $S/relcopy/dist/kaspi-seller-hub
+  pkill -f "node mockapi.js"; (node mockapi.js > mock.log 2>&1 &); sleep 1
+  run apionly-sync node apionly-sync.js $S/relmock
+else
+  echo "release build: FAIL (mkrelcopy.sh)"; FAILED+=(release-build)
+fi
+echo "---"
+if [ ${#FAILED[@]} -eq 0 ]; then echo "REGRESSION: ALL SUITES PASS"; exit 0; fi
+echo "REGRESSION: ${#FAILED[@]} FAILED: ${FAILED[*]}"; exit 1
