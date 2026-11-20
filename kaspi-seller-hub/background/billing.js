@@ -235,7 +235,9 @@ export async function verifiedClaims(jwt, expectedSub = null) {
 const sec = (iso) => (iso ? Math.floor(new Date(iso).getTime() / 1000) : null);
 /** Server answer and token disagree (just paid, consent given…) → the token is older. */
 const claimsStale = (k, lic) =>
-  !k || (k.pu ?? null) !== sec(lic.paid_until) || (k.te ?? null) !== sec(lic.trial_ends_at) || k.sl !== lic.paid_store_limit || (k.tv ?? null) !== (lic.terms_version ?? null) || (k.tr ?? null) !== (lic.terms_required ?? null);
+  !k || (k.pu ?? null) !== sec(lic.paid_until) || (k.te ?? null) !== sec(lic.trial_ends_at) || k.sl !== lic.paid_store_limit || (k.tv ?? null) !== (lic.terms_version ?? null) || (k.tr ?? null) !== (lic.terms_required ?? null) ||
+  // boost / grace / freeze changed (a 24-hour boost, «Заморозить», «Отменить», payment)
+  (k.bu ?? null) !== sec(lic.boost_until) || (k.fu ?? null) !== sec(lic.frozen_until) || (k.gu ?? null) !== sec(lic.grace_until);
 // Server state we already refreshed the token for (no refresh loop if the hook is off).
 let refreshedFor = null;
 
@@ -244,7 +246,7 @@ async function trustedLicence(lic, fresh) {
   let s = await get(SESSION_KEY);
   let claims = await verifiedClaims(s?.access_token, s?.user_id);
   // Fresh server data newer than the token → get a new token once (throttled).
-  const state = JSON.stringify([lic.paid_until, lic.trial_ends_at, lic.paid_store_limit, lic.terms_version, lic.terms_required]);
+  const state = JSON.stringify([lic.paid_until, lic.trial_ends_at, lic.paid_store_limit, lic.terms_version, lic.terms_required, lic.boost_until, lic.frozen_until, lic.grace_until]);
   if (fresh && claimsStale(claims?.ksh, lic) && refreshedFor !== state) {
     refreshedFor = state;
     await accessToken(true);

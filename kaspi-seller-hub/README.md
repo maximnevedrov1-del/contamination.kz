@@ -421,6 +421,36 @@ Each step has a button to the right place; Settings cards are highlighted when o
 
 Test: `tests/e2e/onboard.js`.
 
+## Plans, retention and the sellers' Telegram bot
+
+- **Plans:** «Старт» 12 000 ₸ (1 store), «Мульти» 20 000 ₸ (up to 3), +5 000 ₸ per extra store
+  (`billing_price`, `plan_stores` in `001_billing.sql`).
+  - Upgrade mid-period: (price new − price paid) / 30 × days left.
+  - The top bar shows «Магазин: … (1/1)  + Добавить магазин». On «Старт» at the limit it opens the
+    upsell window: 24 h free for 3 stores (once) or «Расширить тариф сейчас»
+    (`dashboard/growth-view.js`).
+- **Grace, freeze, boost.** These live in the signed access token: claims `bu`, `gu`, `fu`, `bs`. The
+  extension re-reads the token when the server says they changed (`claimsStale`).
+  - Grace: 4 days after the paid period, full access.
+  - Frozen: no access, paid days kept.
+- **Cancellation flow** (`cancel_flow`): reason → 30 % on 2 invoices / «Старт» next period / 30-day
+  freeze / feedback as a support question → or cancel at period end (no renewal, no grace).
+  `resume_subscription` undoes it.
+- **Telegram bot:** `billing/supabase/functions/telegram-bot/` (Deno, the same file runs in the Node
+  tests).
+  - Linking: a one-time `/start` token.
+  - Morning digest at 09:00 Almaty (GitHub Actions `seller-hub-bot`).
+  - Deadline alerts: the worker calls `/alert` with the seller's token after a sync
+    (`background/growth.js`).
+  - Care message after 6 days away, grace reminders, win-back at 30/60 days.
+  - A blocked bot (403) is recorded and skipped.
+- **Smart polling:** every 2 minutes 08:00–22:00 Almaty, every 10 minutes at night. The requests
+  come from the seller's browser with their own token, so a trial is not slowed down.
+- **Circuit breaker:** after 3 outage-type failures in a row a store rests 10 minutes. The banner
+  says «Kaspi API временно недоступен, показываем последние актуальные данные от …».
+
+Tests: `tests/sql/test10.sql`, `tests/e2e/telegram.js`, `tests/e2e/growth.js`.
+
 ## Control panel («Пульт»): usage counts and surveys
 
 - **Counts** (`background/usage.js`). Only numbers, per day, KZ time:

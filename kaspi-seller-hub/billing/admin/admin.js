@@ -534,7 +534,50 @@
         }
       } }, ops.has_key ? 'Создать новый ключ' : 'Создать ключ')),
       keyOut,
+      botSection(),
     );
+  }
+
+  /* «Telegram-бот для продавцов»: username, links in the buttons, «что нового» for win-back, the bot's key */
+  function botSection() {
+    const box = el('div', { 'data-block': 'bot-settings' }, el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'), el('p', { class: 'muted' }, 'Загрузка…'));
+    rpc('admin_growth_settings', { p: {} }).then((g) => {
+      const f = {
+        bot_username: el('input', { class: 'input', placeholder: 'SellerHubBot', value: g.bot_username || '' }),
+        app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
+        support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
+        whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
+      };
+      const keyOut = el('div', { class: 'row', hidden: true });
+      const c = g.cancellations || {};
+      box.replaceChildren(
+        el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'),
+        el('p', { class: 'muted' }, `Подключили: ${g.linked}, заблокировали бота: ${g.blocked}. Отмены за 90 дней: скидка ${c.discount || 0}, «Старт» ${c.downgrade || 0}, заморозка ${c.freeze || 0}, отменили ${c.cancelled || 0}. Инструкция: billing/README.md → «Telegram-бот для продавцов».`),
+        el('div', { class: 'grid2' }, 'Имя бота (без @)', f.bot_username, 'Сайт (кнопка «Посмотреть заказы» → /open)', f.app_url, 'Поддержка (кнопка «Поддержка»)', f.support_url, 'Что нового (win-back через 30 дней)', f.whats_new),
+        el('div', { class: 'row' },
+          el('button', { type: 'button', class: 'btn btn--primary', 'data-action': 'bot-save', onclick: async () => {
+            try {
+              await rpc('admin_growth_settings', { p: { bot_username: f.bot_username.value, app_url: f.app_url.value, support_url: f.support_url.value, whats_new: f.whats_new.value } });
+              toast('Сохранено');
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Сохранить'),
+          el('button', { type: 'button', class: 'btn', 'data-action': 'bot-key', onclick: async () => {
+            if (g.has_bot_key && !confirm('Старый ключ бота перестанет работать. Создать новый?')) return;
+            const key = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+            try {
+              await rpc('admin_growth_settings', { p: { bot_key_hash: await sha256hex(key) } });
+              keyOut.replaceChildren(el('span', null, 'Ключ бота (показывается один раз — в секреты функции BOT_KEY и GitHub BOT_KEY):'), el('code', { class: 'mono', 'data-field': 'bot-key' }, key));
+              keyOut.hidden = false;
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, g.has_bot_key ? 'Новый ключ бота' : 'Создать ключ бота')),
+        keyOut,
+      );
+    }).catch((e) => box.replaceChildren(el('p', { class: 'muted' }, 'Бот: ' + e.message)));
+    return box;
   }
 
   async function renderConfig(panel) {
@@ -554,14 +597,18 @@
       el(
         'div',
         { class: 'grid2' },
-        'Цена в месяц, ₸', num('base_price'),
-        'Магазинов в базовой цене', num('base_stores'),
+        '«Старт» (1 магазин), ₸/мес', num('start_price'),
+        '«Мульти», ₸/мес', num('base_price'),
+        'Магазинов в «Мульти»', num('base_stores'),
         'Каждый следующий магазин, ₸', num('extra_store_price'),
         'Пробный период, дней', num('trial_days'),
         'Магазинов в пробном периоде', num('trial_store_limit'),
         'Максимум месяцев в счёте', num('max_months'),
         'Напоминать об оплате за, дней', num('remind_days'),
+        'Льготный период после окончания оплаты, дней', num('grace_days'),
+        'Заморозка при отмене («закрыл магазин»), дней', num('freeze_days'),
       ),
+      el('p', { class: 'muted' }, '«Старт» 0 ₸ — тарифа «Старт» нет, 1 магазин платит как «Мульти».'),
       el('h2', { style: 'margin-top:20px' }, 'Оплата через Kaspi'),
       el('div', { class: 'grid2' }, 'Ссылка на картинку QR Kaspi Pay', f.kaspi_qr_url, '', preview, 'Инструкция для клиента', f.payment_instructions),
       el('h2', { style: 'margin-top:20px' }, 'Оферта и политика'),
@@ -583,7 +630,7 @@
             class: 'btn btn--primary',
             onclick: async () => {
               const p = {};
-              ['base_price', 'base_stores', 'extra_store_price', 'trial_days', 'trial_store_limit', 'max_months', 'remind_days'].forEach((k) => (p[k] = Number(f[k].value)));
+              ['start_price', 'base_price', 'base_stores', 'extra_store_price', 'trial_days', 'trial_store_limit', 'max_months', 'remind_days', 'grace_days', 'freeze_days'].forEach((k) => (p[k] = Number(f[k].value)));
               p.kaspi_qr_url = f.kaspi_qr_url.value.trim();
               p.payment_instructions = f.payment_instructions.value.trim();
               if (f.terms_version.value.trim()) p.terms_version = f.terms_version.value.trim();

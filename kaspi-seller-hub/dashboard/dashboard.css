@@ -688,3 +688,17 @@ tr.row--problem td { background: var(--danger-bg); }
 .pay__exit { margin-top: 12px; text-align: left; }
 .pay__exit summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
 .pay__exit .card { margin-top: 8px; box-shadow: none; }
+
+/* plans and retention (dashboard/growth-view.js) */
+.store-meter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.store-meter__text { white-space: nowrap; }
+.store-meter--full .store-meter__text { color: var(--warn); font-weight: 600; }
+.dialog--growth { max-width: 520px; width: calc(100vw - 32px); }
+.upsell__offer { font-size: 16px; font-weight: 600; margin: 8px 0; }
+.upsell__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.offer { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 10px 0; display: grid; gap: 6px; }
+.offer p { margin: 0; color: var(--text-2); }
+.offer .btn { justify-self: start; }
+.cancel__done { font-size: 15px; margin: 12px 0; }
+.tg__list { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); }
+@media (max-width: 720px) { .store-meter__text { white-space: normal; } }

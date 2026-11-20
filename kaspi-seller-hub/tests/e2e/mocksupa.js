@@ -98,6 +98,15 @@ http.createServer((req, res) => {
         if (!f) return send(res, 404, { message: 'Object not found' });
         res.writeHead(200, { 'Content-Type': f.type, ...cors }); return res.end(f.body);
       }
+      // Edge Function «telegram-bot»: the real billing/supabase/functions/telegram-bot/bot.js, Telegram = :8095
+      if (u.pathname.startsWith('/functions/v1/telegram-bot/')) {
+        const { handle } = await import(require('path').join(__dirname, '../../billing/supabase/functions/telegram-bot/bot.js'));
+        const env = { SUPABASE_URL: `http://localhost:${PORT}`, SUPABASE_ANON_KEY: ANON, BOT_TOKEN: '123:abc', BOT_KEY: 'bot-key-0123456789abcdef0123456789abcdef', WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
+        const r = await handle(new Request(`http://localhost:${PORT}${u.pathname}`, { method: req.method, headers: req.headers, body: req.method === 'POST' ? bodyBuf : undefined }), env);
+        log.push({ fn: u.pathname.split('/').pop(), status: r.status });
+        res.writeHead(r.status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(await r.text());
+      }
       if (req.headers.apikey !== ANON) return send(res, 401, { message: 'No API key found in request' });
       if (u.pathname === '/auth/v1/otp') {
         const email = String(b.email || '').toLowerCase();

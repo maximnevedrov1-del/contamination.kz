@@ -28,7 +28,7 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 |---|---|
 | `unit/robust.test.mjs` | Kazakhstan time, Kaspi API retries, price-list drop guard, data migrations, error journal |
 | `unit/locales.test.mjs` | Russian and Kazakh texts have the same keys and placeholders |
-| `sql/test.sql` … `test9.sql` | billing, consent, attacks on the database, admin paging, price-list storage rules, staff (invite / join / switch off), support (notice, tickets, API health, Telegram key), control panel (usage counts, NPS / exit / «ответ помог?», funnel, cohorts, risk list) |
+| `sql/test.sql` … `test10.sql` | billing, consent, attacks on the database, admin paging, price-list storage rules, staff (invite / join / switch off), support (notice, tickets, API health, Telegram key), control panel (usage counts, NPS / exit / «ответ помог?», funnel, cohorts, risk list), plans and retention («Старт»/«Мульти», boost, proration, grace, cancellation offers, freeze, Telegram link/digest/alerts/care/win-back) |
 | `e2e/catunit.js` | catalog: XML price list, Excel/XML import, validation |
 | `e2e/cattest.js` | product upload: cards to chosen stores, price lists by URL, «empty price list» guard, support report |
 | `e2e/billtest.js`, `billtest2.js` | login, consent, trial, invoices, QR window, admin page |
@@ -37,6 +37,8 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/support.js` | notice for every client, question with the report → answer with a template → notification and badge, API health counts (Kaspi 502), Telegram digest via `tools/ops-alert.mjs` |
 | `e2e/insights.js` | «Пульт»: section and action counts + first steps reach the server once, NPS card → answer, «Ответ помог?», «Почему не продлеваете?» inside the blocking payment window, admin panel (tiles, funnel bottleneck, unused sections, quotes, risk list, phone width) |
 | `e2e/orchestra.js` | everything together: an expired session + every background job and page request at once (one token refresh, nobody logged out), worker stopped and woken, lost alarms recreated, Kaspi outage and recovery, warehouse lock, another account on the same computer |
+| `e2e/telegram.js` | the sellers' bot function against the real SQL and a mock Telegram: one-time link, morning digest template and buttons, alert with the seller's token, care message, blocked bot (403), secrets |
+| `e2e/growth.js` | store meter, soft paywall on «Старт» (24 h boost, upgrade with proration), cancellation flow (discount, freeze/unfreeze, cancel/resume), grace days, Telegram card, digest numbers and a real alert after a sync, Kaspi circuit breaker, smart polling |
 | `perf/sqlperf.sh` | server timing at scale (10 000 sellers, ~900 000 usage days, 300 000 health rows, 20 000 tickets, 50 000 invoices): every function the extension and the admin page call |
 | `perf/open.js` | opening speed with a 250 ms network delay: dashboard first paint, sections, popup, worker wake-up, admin page |
 | `perf/site.js` | landing page on a phone over 4G and slow 3G: FCP, LCP, CLS, bytes |
