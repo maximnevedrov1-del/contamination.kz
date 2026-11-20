@@ -1,0 +1,27 @@
+# Seller Hub: the sellers' Telegram bot — morning digest at 09:00 Almaty (04:00 UTC), «6 days away»,
+# grace reminders, win-back. Calls the bot function; runs only when the secrets are set
+# (kaspi-seller-hub/billing/README.md → «Telegram-бот для продавцов»).
+name: seller-hub-bot
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      BOT_KEY: ${{ secrets.BOT_KEY }}
+    steps:
+      - name: Send what is due
+        if: env.BOT_KEY != '' && env.SUPABASE_URL != ''
+        run: |
+          code=$(curl -sS -o out.json -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/telegram-bot/run" -H "x-bot-key: ${BOT_KEY}" -H 'content-type: application/json' -d '{}')
+          cat out.json; echo
+          test "$code" = 200

@@ -58,6 +58,7 @@ import {
 import { lineChart, barChart } from './charts.js';
 import { statusBanner, supportCard, unreadAnswers, getCsat } from './support-view.js';
 import { npsCard, exitCard } from './feedback-view.js';
+import { storeMeter, needsUpsell, openUpsell, openCancelFlow, planNotice, telegramCard } from './growth-view.js';
 import { onboardingCard, ownerInstructions, markStep, getOnboarding, ONBOARD_KEY } from './onboarding.js';
 
 /* ===================================================================== */
@@ -1688,6 +1689,7 @@ function viewSettings() {
     teamCard(staffCtx()),
     warehouseCard(staffCtx()),
     journalCard(staffCtx()),
+    state.data.license?.status && !['unconfigured', 'loggedOut'].includes(state.data.license.status) ? telegramCard(tgCtx()) : null,
     card(t('settings.notifications'), null, notif('newOrders', 'settings.notifyNewOrders'), notif('deadlines', 'settings.notifyDeadlines'), notif('newMessages', 'settings.notifyNewMessages'), notif('returns', 'settings.notifyReturns')),
     card(
       t('backup.title'),
@@ -1862,6 +1864,11 @@ function renderTopbar() {
   $('pageSubtitle').textContent = t(`${state.route}.subtitle`);
   document.title = `${t(`${state.route}.title`)} · ${t('app.name')}`;
 
+  const meter = $('storeMeter');
+  if (meter) {
+    const current = state.filters.shopId === 'all' ? t('common.allStores') : storeName(state.filters.shopId);
+    clear(meter).append(storeMeter({ lic: state.data?.license, used: enabledStores().length, current, onAdd: () => addStore() }) || '');
+  }
   const hasFilters = ['orders', 'returns', 'refusals', 'payments', 'analytics', 'products'].includes(state.route);
   $('dataFilters').hidden = !hasFilters;
   // phones: the filters fold into one button that says what is selected («30 дней · Все магазины»)
@@ -1948,6 +1955,9 @@ function renderBanners() {
   // the owner's notice for everyone («Kaspi не отвечает, чиним»)
   const notice = statusBanner(state.serviceStatus);
   if (notice) box.append(notice);
+  // grace days / frozen / cancelled
+  const plan = planNotice(state.data?.license, { onPay: () => openPay(false), onResume: resumeSubscription });
+  if (plan) box.append(plan);
   // «Только чтение» is always visible: nothing the seller clicks changes Kaspi
   if (state.data?.settings?.readOnly)
     box.append(h('div', { class: 'banner banner--info', role: 'status', dataset: { banner: 'readonly' } },
@@ -1979,6 +1989,14 @@ function renderBanners() {
     const snap = state.data.snapshots[s.id];
     const status = snap?.status || 'noTab';
     if (status === 'ok') return;
+    // Kaspi down 3 times in a row → the store rests 10 minutes; say plainly what is shown
+    const api = state.data.settings?.stores?.[s.id]?.api;
+    if (status === 'error' && api && (api.fails || 0) >= 3) {
+      box.append(h('div', { class: 'banner banner--warn', role: 'status', dataset: { banner: 'kaspi-down' } },
+        h('span', { class: 'banner__icon' }, icon('warn')),
+        h('span', { class: 'banner__text' }, t('store.kaspiDown', { store: storeName(s.id), time: api.lastOkAt ? formatDate(api.lastOkAt, 'datetime') : '—' }))));
+      return;
+    }
     box.append(
       h(
         'div',
@@ -2129,7 +2147,7 @@ const memo = {
  * @returns {'blocking'|'show'|null}
  */
 function payMode(lic) {
-  if (!lic || ['unconfigured', 'loggedOut', 'offline', 'invalid', 'clock'].includes(lic.status)) return null;
+  if (!lic || ['unconfigured', 'loggedOut', 'offline', 'invalid', 'clock', 'frozen'].includes(lic.status)) return null;
   if (lic.status === 'expired') return 'blocking';
   const inv = lic.pendingInvoice;
   if (!inv) return null;
@@ -2280,10 +2298,74 @@ async function payForStores() {
   openPay(false);
 }
 
+const tgUi = { waiting: false };
+function tgCtx() {
+  if (state.tg === undefined) {
+    state.tg = null;
+    send('ui:tgStatus').then((r) => {
+      state.tg = r?.ok ? r.tg : { linked: false, error: r?.error };
+      if (state.route === 'settings') renderView();
+    });
+  }
+  return { tg: state.tg, ui: tgUi, toast, errorText, rerender: () => renderView(), onTg: (tg) => ((state.tg = tg), renderView()) };
+}
+
+/** «Разморозить» / «Возобновить подписку». */
+async function resumeSubscription() {
+  const res = await send('ui:resumeSubscription');
+  if (!res?.ok) return toast(errorText(res?.error), 'error');
+  toast(t('plan.resumed'), 'ok');
+  await loadState();
+}
+
+/** Account page: the plan, a running discount, «перейти на Старт» planned, «Отменить подписку». */
+function subscriptionCard(lic) {
+  if (!['active', 'grace', 'frozen'].includes(lic.status) || !lic.paidUntil) return null;
+  const pr = lic.pricing || {};
+  const name = lic.plan === 'start' ? t('plan.start', { price: formatMoney(pr.start_price || 12000) }) : t('plan.multi', { price: formatMoney(pr.base_price || 20000), stores: pr.base_stores || 3, extra: formatMoney(pr.extra_store_price || 5000) });
+  const disc = lic.discount?.pct > 0 ? h('p', { dataset: { block: 'discount' } }, '🎁 ', t('plan.discount', { pct: lic.discount.pct, count: lic.discount.left })) : null;
+  return h('section', { class: 'card', dataset: { card: 'subscription' } },
+    h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('plan.title')), h('div', { class: 'card__sub' }, name))),
+    h('div', { class: 'card__body support' },
+      disc,
+      lic.downgradeNext ? h('p', { class: 'muted' }, t('plan.downgradeNext')) : null,
+      lic.cancelAt
+        ? h('div', null, h('p', null, t('plan.cancelled', { date: formatDate(lic.paidUntil) })), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'resume' }, onclick: resumeSubscription }, t('plan.resume')))
+        : lic.status !== 'frozen' && h('div', null, h('button', { type: 'button', class: 'btn btn--ghost btn--sm', dataset: { action: 'cancel-subscription' }, onclick: () => openCancelFlow({ lic, toast, errorText, onLicense: (l) => { if (l) state.data.license = l; renderAll(); } }) }, t('plan.cancelBtn')))));
+}
+
+/** Opens the «connect a store» form (set by bindConnectDialog). */
+let openConnectDialog = () => {};
+
+/** «+ Добавить магазин»: on «Старт» at the limit → the upsell window first, never a dead end. */
+function addStore() {
+  const lic = state.data?.license;
+  const used = enabledStores().length;
+  if (!needsUpsell(lic, used)) return openConnectDialog();
+  openUpsell({
+    lic,
+    used,
+    toast,
+    errorText,
+    onConnect: () => openConnectDialog(),
+    onLicense: (l) => {
+      if (l) state.data.license = l;
+      renderAll();
+    },
+    onPay: async (total) => {
+      const res = await send('ui:billingAddon', { total });
+      if (res?.ok === false) return toast(errorText(res.error), 'error');
+      if (res?.license) state.data.license = res.license;
+      openPay(false);
+    },
+  });
+}
+
 /** Simple "connect a store": name + API token → then the payment window right away. */
 function bindConnectDialog() {
   const dlg = $('connectDialog');
-  $('connectStoreBtn').addEventListener('click', () => {
+  $('connectStoreBtn').addEventListener('click', () => addStore());
+  openConnectDialog = () => {
     const pr = state.data?.license?.pricing;
     $('connectPrice').textContent = pr && state.data.license.status !== 'unconfigured' ? t('connect.price', { extra: formatMoney(pr.extra_store_price), base: pr.base_stores }) : '';
     $('connectError').hidden = true;
@@ -2293,7 +2375,7 @@ function bindConnectDialog() {
     applyI18n(dlg);
     dlg.showModal();
     $('connectName').focus();
-  });
+  };
   $('connectCancel').addEventListener('click', () => dlg.close());
   $('connectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2321,7 +2403,7 @@ function bindConnectDialog() {
 function paywall() {
   const lic = state.data.license || {};
   if (lic.needsConsent) return h('section', { class: 'card' }, emptyState(t('terms.title'), t('terms.text'), h('button', { type: 'button', class: 'btn btn--primary', onclick: openTerms }, t('terms.open'))));
-  const text = { loggedOut: 'account.paywallLoggedOut', offline: 'account.paywallOffline', invalid: 'account.paywallInvalid', clock: 'account.paywallClock' }[lic.status] || (lic.trialBlocked ? 'account.trialUsed' : 'account.paywallExpired');
+  const text = { loggedOut: 'account.paywallLoggedOut', offline: 'account.paywallOffline', invalid: 'account.paywallInvalid', clock: 'account.paywallClock', frozen: 'plan.paywallFrozen' }[lic.status] || (lic.trialBlocked ? 'account.trialUsed' : 'account.paywallExpired');
   return h('div', { class: 'settings' }, h('section', { class: 'card' }, emptyState(t('account.paywallTitle'), t(text), h('a', { class: 'btn btn--primary', href: '#account' }, t('account.paywallButton')))), exitEl());
 }
 
@@ -2508,7 +2590,7 @@ function viewAccount() {
   );
 
   // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
-  return h('div', { class: 'settings' }, statusCard, exitEl(), pendingCard, planCard, historyCard);
+  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, planCard, historyCard);
 }
 
 /* ===================================================================== */

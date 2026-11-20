@@ -42,12 +42,13 @@ import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF }
 import { startHealth, flushHealth, scheduleHealth, ALARM_HEALTH } from './health.js';
 import { supportHandlers, pollTickets } from './support.js';
 import { usageHandlers, flushUsage, noteAction, ACTION_OF } from './usage.js';
+import { growthHandlers, reportDigest, alertDeadlines } from './growth.js';
 import { packingHandlers } from './packing.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
 import { FEATURES } from '../shared/features.js';
 import { logError, getErrorLog, clearErrorLog, formatReport } from '../shared/errorlog.js';
-import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf } from '../shared/utils.js';
+import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf, kzParts } from '../shared/utils.js';
 
 const S = globalThis.KSH_SELECTORS;
 const LOG = '[KSH/sw]';
@@ -475,6 +476,10 @@ async function syncNow() {
     Object.entries(tokens).map(async ([shopId, token]) => {
       const store = settingsNow.stores[shopId];
       if (!store || !store.enabled || !allowed.has(shopId)) return;
+      if (breakerOpen(store.api)) {
+        apiErrors[shopId] = store.api.error || 'apiNetwork'; // resting: the last data stays
+        return;
+      }
       try {
         const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
@@ -524,7 +529,6 @@ async function syncNow() {
 /** Warn once per order when its deadline is near or missed. */
 async function notifyDeadlines() {
   const settings = await getSettings();
-  if (!settings.notifications.deadlines) return;
   const snapshots = await getSnapshots();
   const { [KEYS.deadlineNotified]: seen = {} } = await chrome.storage.session.get(KEYS.deadlineNotified);
   const fresh = [];
@@ -543,6 +547,9 @@ async function notifyDeadlines() {
   }
   if (!fresh.length) return;
   await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen });
+  // Telegram (if linked): one message per order, even when Chrome notifications are off
+  alertDeadlines(fresh).catch((e) => console.warn(LOG, 'telegram alert', e));
+  if (!settings.notifications.deadlines) return;
   await initI18n();
   const overdue = fresh.filter((f) => f.u === 'overdue').length;
   const first = fresh[0];
@@ -655,7 +662,10 @@ async function recordApiHealth(shopIds, errors) {
     for (const id of shopIds) {
       const st = settings.stores[id];
       if (!st?.api) continue;
-      st.api = errors[id] ? { ...st.api, error: errors[id], errorAt: Date.now() } : { ...st.api, error: null, lastOkAt: Date.now() };
+      if (breakerOpen(st.api) && errors[id]) continue; // skipped while resting: keep the counters
+      st.api = errors[id]
+        ? { ...st.api, error: errors[id], errorAt: Date.now(), fails: OUTAGE_CODES.has(errors[id]) ? (st.api.fails || 0) + 1 : 0 }
+        : { ...st.api, error: null, lastOkAt: Date.now(), fails: 0 };
       changed = true;
     }
     if (changed) await saveSettings({ stores: settings.stores });
@@ -1092,8 +1102,31 @@ async function scheduleAlarms() {
   // chrome.alarms minimum period is 30 s.
   if (FEATURES.cabinet) await chrome.alarms.create(ALARM_CHAT, { periodInMinutes: Math.max(30, chatPollSec) / 60 });
   else await chrome.alarms.clear(ALARM_CHAT); // chat lives in the cabinet tab only
-  await chrome.alarms.create(ALARM_SYNC, { periodInMinutes: 5 });
+  await chrome.alarms.create(ALARM_SYNC, { periodInMinutes: 1 }); // ticks every minute; syncDue() decides
 }
+
+/**
+ * Smart polling: during the working day (08:00–22:00 Almaty) every 2 minutes, at night every
+ * 10 minutes. The requests go from the seller's own browser with their own token, so a trial
+ * is polled like a paid account (the first orders must show up fast).
+ */
+export function syncInterval(now = Date.now()) {
+  const h = kzParts(now).hours;
+  return (h >= 8 && h < 22 ? 2 : 10) * 60000;
+}
+async function syncDue() {
+  return Date.now() - ((await getLastSync()) || 0) >= syncInterval() - 15000; // alarms are not exact
+}
+
+/**
+ * Circuit breaker: after 3 failed syncs in a row because Kaspi is down (server error, network,
+ * rate limit, unexpected answer — not a wrong token), the store rests for 10 minutes; the last
+ * data is shown with its time («Kaspi API временно недоступен, показываем данные от …»).
+ */
+const OUTAGE_CODES = new Set(['apiNetwork', 'apiHttp', 'apiRateLimit', 'apiFormat', 'apiTimeout']);
+const BREAKER_FAILS = 3;
+const BREAKER_PAUSE = 10 * 60000;
+export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) >= BREAKER_FAILS && now - (api.errorAt || 0) < BREAKER_PAUSE;
 
 /* ===================================================================== */
 /* Wiring                                                                 */
@@ -1258,10 +1291,12 @@ const uiHandlers = {
   // force = re-read the licence now; reconcile = also re-issue invoices (default: only if something changed)
   'ui:billingState': ({ force, reconcile }) => billingMaintenance(!!force, reconcile ?? !!force),
   /** "Оплатить подключение": add-on (or renewal) invoice for all enabled stores. */
-  'ui:billingAddon': () =>
+  'ui:billingAddon': (p) =>
     billingCall(async () => {
       lastReconcileAt = Date.now();
-      const lic = await B.requestAddon({ total: enabledStoreList(await getSettings()).length });
+      // the upsell window asks for one store more than is connected (the store comes after payment)
+      const total = Math.max(enabledStoreList(await getSettings()).length, Math.min(200, Number(p?.total) || 0));
+      const lic = await B.requestAddon({ total });
       await notifyPayment(lic).catch(() => {});
       return { ok: true, license: lic };
     }),
@@ -1317,6 +1352,7 @@ Object.assign(
   packingHandlers(),
   supportHandlers({ diagnostics: () => uiHandlers['ui:diagnostics']() }),
   usageHandlers(),
+  growthHandlers({ license: (force) => billingMaintenance(!!force, false) }),
 );
 startHealth();
 
@@ -1387,12 +1423,13 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   await dataReady;
   if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => report('chat poll', e));
-  if (alarm.name === ALARM_SYNC) sync().catch((e) => report('sync', e));
+  if (alarm.name === ALARM_SYNC && (await syncDue())) sync().catch((e) => report('sync', e));
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
   if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
   if (alarm.name === ALARM_HEALTH) {
     flushHealth().catch(() => {}); // counts only; a failed send is retried next time
     flushUsage().catch(() => {});
+    reportDigest().catch(() => {});
     pollTickets().catch(() => {});
   }
 });

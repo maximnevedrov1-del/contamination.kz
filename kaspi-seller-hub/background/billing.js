@@ -11,7 +11,7 @@ import { BILLING } from '../shared/billing-config.js';
 const SESSION_KEY = 'ksh.session';
 const LAST_USER_KEY = 'ksh.lastUser';
 /** Per-account data on this computer (support questions, «ответ помог?» marks, unsent usage counts). */
-const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage'];
+const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage', 'ksh.tg'];
 const LICENSE_KEY = 'ksh.license';
 const DAY = 86400000;
 
@@ -55,7 +55,8 @@ async function http(path, { method = 'POST', body, token } = {}) {
     const msg = String(data?.message || data?.msg || data?.error_description || data?.error || '');
     // Postgres exceptions raised by our SQL functions carry a stable code in `message`.
     const known = ['invalid_phone', 'invalid_months', 'invalid_stores', 'terms_required', 'rate_limited', 'subscription_required', 'store_limit', 'invalid_shop', 'not_authenticated', 'forbidden',
-      'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found', 'ticket_limit'];
+      'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found', 'ticket_limit',
+      'boost_used', 'boost_not_needed', 'offer_used', 'invalid_choice', 'bot_not_configured'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
@@ -316,6 +317,10 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   let paidLimit = lic.paid_store_limit;
   let trialLimit = lic.store_limit;
   let termsOk = !lic.terms_required || lic.terms_version === lic.terms_required;
+  let boostUntil = lic.boost_until;
+  let graceUntil = lic.grace_until;
+  let frozenUntil = lic.frozen_until;
+  let baseStores = lic.pricing?.base_stores || 3;
   if (signingRequired()) {
     const claims = await trustedLicence(lic, fresh);
     if (!claims) return { status: 'invalid', canUse: false, storeLimit: 0, email: session.email, error: 'licenseInvalid' };
@@ -330,21 +335,40 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     paidLimit = k.sl;
     trialLimit = Math.max(k.tsl || 0, k.sl || 0);
     termsOk = !k.tr || k.tv === k.tr;
+    const iso = (sec) => (sec ? new Date(sec * 1000).toISOString() : null);
+    boostUntil = iso(k.bu);
+    graceUntil = iso(k.gu);
+    frozenUntil = iso(k.fu);
+    baseStores = k.bs || baseStores;
   }
 
   // Dates are re-evaluated locally so a licence ends on time even between checks.
-  const paid = !!paidUntil && new Date(paidUntil).getTime() > now;
-  const trial = !paid && !!trialEnds && new Date(trialEnds).getTime() > now;
-  const status = paid ? 'active' : trial ? 'trial' : 'expired';
-  const storeLimit = status === 'expired' ? 0 : (paid ? paidLimit : trialLimit) || lic.pricing?.base_stores || 3;
-  const coverageEnd = paid ? paidUntil : trialEnds;
+  const after = (iso) => !!iso && new Date(iso).getTime() > now;
+  const frozen = after(frozenUntil);
+  const paid = !frozen && after(paidUntil);
+  const trial = !frozen && !paid && after(trialEnds);
+  // paid period over, renewal not paid yet (not cancelled): grace days with full access
+  const grace = !frozen && !paid && !trial && after(graceUntil);
+  const status = frozen ? 'frozen' : paid ? 'active' : trial ? 'trial' : grace ? 'grace' : 'expired';
+  let storeLimit = ['expired', 'frozen'].includes(status) ? 0 : (paid || grace ? paidLimit : trialLimit) || lic.pricing?.base_stores || 3;
+  const boosted = (paid || grace) && after(boostUntil);
+  if (boosted) storeLimit = Math.max(storeLimit, baseStores);
+  const coverageEnd = paid ? paidUntil : trial ? trialEnds : grace ? graceUntil : paidUntil || trialEnds;
   const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
   const remindDays = lic.remind_days ?? 5;
   // Offer/policy not accepted (or a new version published) → nothing works until the box is ticked.
   const needsConsent = !termsOk;
   return {
     status,
-    canUse: status !== 'expired' && !needsConsent,
+    canUse: !['expired', 'frozen'].includes(status) && !needsConsent,
+    plan: (paidLimit || 0) <= 1 && lic.pricing?.start_price ? 'start' : 'multi',
+    boostUntil: boosted ? boostUntil : null,
+    canBoost: !!lic.can_boost && paid,
+    graceUntil: grace ? graceUntil : null,
+    frozenUntil: frozen ? frozenUntil : null,
+    cancelAt: lic.cancel_at || null,
+    downgradeNext: !!lic.downgrade_next,
+    discount: lic.discount || null,
     needsConsent,
     signed: signingRequired(),
     trialBlocked: !!lic.trial_blocked,
@@ -461,3 +485,16 @@ export const usageReport = (steps, days, version) => rpc('usage_report', { p_ste
 export const feedbackDue = () => rpc('feedback_due', {});
 export const feedbackSubmit = ({ kind, score = null, reason = null, comment = null, ticket = null }) =>
   rpc('feedback_submit', { p_kind: String(kind), p_score: score == null ? null : Number(score), p_reason: reason, p_comment: comment ? String(comment).slice(0, 1000) : null, p_ticket: ticket == null ? null : Number(ticket) });
+
+/* ---------------- growth: plans, cancellation flow, Telegram ---------------- */
+/** The signed-in seller's access token (refreshed if needed) — for the bot function. */
+export const currentToken = () => accessToken();
+export const upgradeQuote = (stores) => rpc('upgrade_quote', { p_stores: stores });
+export const trialBoost = () => rpc('start_trial_boost', {});
+export const cancelFlow = ({ reason, outcome, comment }) => rpc('cancel_flow', { p_reason: String(reason), p_outcome: String(outcome), p_comment: comment ? String(comment).slice(0, 1000) : null });
+export const resumeSubscription = () => rpc('resume_subscription', {});
+export const tgStatus = () => rpc('tg_status', {});
+export const tgLinkCreate = () => rpc('tg_link_create', {});
+export const tgSettings = ({ digest, alerts }) => rpc('tg_settings', { p_digest: digest, p_alerts: alerts });
+export const tgUnlink = () => rpc('tg_unlink', {});
+export const digestReport = (day, stats) => rpc('digest_report', { p_day: day, p_stats: stats });
