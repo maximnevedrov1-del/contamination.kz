@@ -635,7 +635,17 @@ async function notifyDiff(prev, next, settings) {
   }
 }
 
-async function updateBadge() {
+/** Many call sites per sync: calls within 300 ms share one run (each run parses all snapshots). */
+let badgeRun = null;
+function updateBadge() {
+  badgeRun ??= new Promise((r) => setTimeout(r, 300)).then(() => {
+    badgeRun = null;
+    return renderBadge();
+  });
+  return badgeRun;
+}
+
+async function renderBadge() {
   const [snapshots, chat, settings] = await Promise.all([getSnapshots(), getChat(), getSettings()]);
   const enabled = Object.values(snapshots).filter((s) => settings.stores[s.shopId]?.enabled === true);
   const totals = sumCounts(enabled.map(storeCounts));
@@ -716,7 +726,7 @@ async function apiTopProducts(shopId, token, items) {
   const cache = await getApiEntries();
   const key = (code) => `${shopId}::${code}`;
   const todo = items
-    .filter((i) => i.api?.entriesUrl && !cache[key(i.id)])
+    .filter((i) => i.api?.entriesUrl && i.kind !== 'refusal' && !cache[key(i.id)]) // refusals: no profit, no pick list
     .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
     .slice(0, S.api.entriesPerSync || 60);
   let stop = null;
@@ -733,7 +743,17 @@ async function apiTopProducts(shopId, token, items) {
   const fetched = todo.length;
   await Promise.all(Array.from({ length: Math.min(S.api.concurrency || 3, todo.length) }, worker));
   if (stop?.code === 'apiUnauthorized') throw stop;
-  if (fetched) await lock(() => setApiEntries(cache));
+  // Stores sync in parallel: merge into a fresh read under the lock (a whole-cache write lost
+  // the other store's entries) and drop this store's orders that left the kept window.
+  const live = new Set(items.map((i) => key(i.id)));
+  const fetchedNow = Object.keys(cache).filter((k) => k.startsWith(`${shopId}::`) && live.has(k));
+  await lock(async () => {
+    const cur = await getApiEntries();
+    let changed = false;
+    for (const k of Object.keys(cur)) if (k.startsWith(`${shopId}::`) && !live.has(k)) (delete cur[k], (changed = true));
+    for (const k of fetchedNow) if (!cur[k]) (cur[k] = cache[k], (changed = true));
+    if (changed) await setApiEntries(cur);
+  });
   const agg = new Map();
   for (const it of items) {
     for (const e of cache[key(it.id)] || []) {
