@@ -84,6 +84,33 @@ function fakeFetch(answers) {
 const waits = [];
 K._setSleep(async (ms) => waits.push(ms));
 
+/* A request that never answers: only the abort signal ends it. */
+function hangingFetch() {
+  const calls = [];
+  globalThis.fetch = (url, opts) => {
+    calls.push({ url, method: opts.method });
+    return new Promise((_, reject) => opts.signal?.addEventListener('abort', () => reject(opts.signal.reason)));
+  };
+  return calls;
+}
+await test('hung GET: aborted by the timeout, retried, then apiTimeout', async () => {
+  K._setTimeoutMs(20);
+  const alive = setInterval(() => {}, 5); // AbortSignal.timeout does not keep Node running
+  const calls = hangingFetch();
+  await assert.rejects(K.apiRequest('t', '/orders'), (e) => e.code === 'apiTimeout');
+  assert.equal(calls.length, 3);
+  K._setTimeoutMs();
+  clearInterval(alive);
+});
+await test('hung POST: apiTimeout, never repeated (Kaspi may have applied it)', async () => {
+  K._setTimeoutMs(20);
+  const alive = setInterval(() => {}, 5); // AbortSignal.timeout does not keep Node running
+  const calls = hangingFetch();
+  await assert.rejects(K.apiRequest('t', '/orders', { method: 'POST', body: {} }), (e) => e.code === 'apiTimeout');
+  assert.equal(calls.length, 1);
+  K._setTimeoutMs();
+  clearInterval(alive);
+});
 await test('GET: 503 then 200 → retried, succeeds', async () => {
   const calls = fakeFetch([{ status: 503 }, { status: 200 }]);
   const res = await K.apiRequest('t', '/orders');

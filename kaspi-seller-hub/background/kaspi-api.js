@@ -45,6 +45,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let sleeper = sleep;
 /** Tests replace the wait so retries run instantly. */
 export const _setSleep = (fn) => (sleeper = fn || sleep);
+/** Hard limit per request (headers + body): a hung Kaspi answer must not block the sync forever. */
+export const API_TIMEOUT_MS = 30000;
+let timeoutMs = API_TIMEOUT_MS;
+/** Tests shorten the limit. */
+export const _setTimeoutMs = (ms) => (timeoutMs = ms || API_TIMEOUT_MS);
+const isTimeout = (e) => e?.name === 'TimeoutError' || e?.name === 'AbortError';
 
 /** Seconds from a Retry-After header, capped so a UI action never hangs for long. */
 function retryAfter(res, fallback) {
@@ -80,13 +86,15 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
         headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': contentType },
         body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
         credentials: 'omit', // the token is the only credential; never send cabinet cookies
+        signal: AbortSignal.timeout(timeoutMs), // also covers reading the body later
       });
     } catch (e) {
       if (idempotent && !last) {
         await sleeper(RETRY_DELAYS[attempt]);
         continue;
       }
-      throw fail(new ApiError('apiNetwork', 0, e.message));
+      // A timed-out write may still have been applied by Kaspi: it is reported, never repeated.
+      throw fail(isTimeout(e) ? new ApiError('apiTimeout', 0) : new ApiError('apiNetwork', 0, e.message));
     }
     if (res.status === 401 || res.status === 403) throw fail(new ApiError('apiUnauthorized', res.status));
     const busy = res.status === 429 || (idempotent && [502, 503, 504].includes(res.status));
@@ -104,7 +112,12 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
 const fail = (err) => (observe(err), err);
 
 const json = async (res) => {
-  const text = await res.text();
+  let text;
+  try {
+    text = await res.text();
+  } catch (e) {
+    throw fail(isTimeout(e) ? new ApiError('apiTimeout', res.status) : new ApiError('apiNetwork', res.status, e.message));
+  }
   try {
     return text ? JSON.parse(text) : {};
   } catch {
@@ -220,7 +233,7 @@ export async function downloadWaybill(token, url) {
   const sameHost = new URL(url).host === new URL(A().base).host;
   const res = sameHost
     ? await apiRequest(token, url, { accept: 'application/pdf, */*' })
-    : await fetch(url, { credentials: 'omit' }).then((r) => {
+    : await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(timeoutMs) }).then((r) => {
         if (!r.ok) throw new ApiError('apiHttp', r.status);
         return r;
       });

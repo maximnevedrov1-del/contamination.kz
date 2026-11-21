@@ -127,21 +127,51 @@ async function webhook(update, env, f) {
   return tg(env, 'sendMessage', { chat_id: chat, text: 'Это бот уведомлений Seller Hub. Чтобы подключить его, откройте Seller Hub → Настройки → «Подключить Telegram».' }, f);
 }
 
-/** Scheduled run: everything due now, one message each, results back to the database. */
-export async function run(env, f = fetch, pause = 40) {
-  const jobs = await rpc(env, 'bot_jobs', { p_key: env.BOT_KEY }, null, f);
-  const results = [];
-  for (const item of jobs.items || []) {
-    const text = format(item);
-    if (!text) continue;
-    const route = item.kind === 'morning' ? 'orders' : item.kind === 'care' ? 'home' : 'account';
-    const r = await tg(env, 'sendMessage', { chat_id: item.chat_id, text, reply_markup: buttons(jobs, route), disable_web_page_preview: true }, f);
-    if (!r.ok) console.warn('[telegram-bot] not sent', item.kind, r.error); // the error is kept in tg_sent too
-    results.push({ user_id: item.user_id, kind: item.kind, key: item.key, ok: r.ok, error: r.error || null, blocked: !!r.blocked });
-    if (pause) await new Promise((res) => setTimeout(res, pause)); // Telegram: ~30 messages per second
+/**
+ * Scheduled run: everything due now, one message each, results back to the database.
+ * Results are recorded every `chunk` messages (not once at the end), so a run cut off by the
+ * function's time limit or a caller timeout never sends the same message again next time.
+ * The run stops after `budgetMs` and reports `more: true`; the caller calls again.
+ * bot_jobs returns at most a batch (007_bot_batch.sql); sent items drop out of the next batch.
+ */
+export async function run(env, f = fetch, pause = 40, { chunk = 50, budgetMs = 45000, now = Date.now } = {}) {
+  const t0 = now();
+  const stats = { due: 0, sent: 0, blocked: 0, failed: 0, more: false };
+  let pending = [];
+  const flush = async () => {
+    if (!pending.length) return;
+    const batch = pending;
+    pending = [];
+    await rpc(env, 'bot_sent', { p_key: env.BOT_KEY, p_results: batch }, null, f);
+  };
+  for (;;) {
+    const jobs = await rpc(env, 'bot_jobs', { p_key: env.BOT_KEY }, null, f);
+    const items = jobs.items || [];
+    if (!items.length) break;
+    let progressed = false;
+    for (const item of items) {
+      if (now() - t0 > budgetMs) {
+        stats.more = true;
+        break;
+      }
+      stats.due++;
+      const text = format(item);
+      if (!text) continue;
+      const route = item.kind === 'morning' ? 'orders' : item.kind === 'care' ? 'home' : 'account';
+      const r = await tg(env, 'sendMessage', { chat_id: item.chat_id, text, reply_markup: buttons(jobs, route), disable_web_page_preview: true }, f);
+      if (!r.ok) console.warn('[telegram-bot] not sent', item.kind, r.error); // the error is kept in tg_sent too
+      pending.push({ user_id: item.user_id, kind: item.kind, key: item.key, ok: r.ok, error: r.error || null, blocked: !!r.blocked });
+      progressed = true;
+      stats[r.ok ? 'sent' : 'failed']++;
+      if (r.blocked) stats.blocked++;
+      if (pending.length >= chunk) await flush();
+      if (pause) await new Promise((res) => setTimeout(res, pause)); // Telegram: ~30 messages per second
+    }
+    await flush();
+    // stop when out of time, or when nothing could be sent (items without text are never recorded)
+    if (stats.more || !progressed || !jobs.batch || items.length < jobs.batch) break;
   }
-  if (results.length) await rpc(env, 'bot_sent', { p_key: env.BOT_KEY, p_results: results }, null, f);
-  return { due: (jobs.items || []).length, sent: results.filter((r) => r.ok).length, blocked: results.filter((r) => r.blocked).length, failed: results.filter((r) => !r.ok).length };
+  return stats;
 }
 
 /** @param {Request} req */

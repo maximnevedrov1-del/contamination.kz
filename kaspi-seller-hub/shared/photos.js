@@ -16,6 +16,10 @@
 /** Hosts the release CSP allows for <img> (keep in sync with tools/build-release.mjs). */
 export const PHOTO_HOSTS = ['cdn-kaspi.kz', 'kaspi.kz'];
 export const MAX_PHOTO_DATA = 400 * 1024; // characters of the data: URL
+/** All own photo files together (ksh.photos is one storage key, rewritten on every change). */
+export const MAX_PHOTOS_DATA = 40 * 1024 * 1024;
+/** Characters taken by uploaded files (data: URLs); Kaspi links are tiny and not counted. */
+export const photosDataSize = (photos = {}) => Object.values(photos).reduce((n, v) => n + (typeof v === 'string' && v.startsWith('data:') ? v.length : 0), 0);
 const DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 /** Is this a photo source the extension may store and show? */

@@ -30,8 +30,6 @@ import {
   clearCache,
   getApiTokens,
   setApiTokens,
-  getApiEntries,
-  setApiEntries,
   getCosts,
   setCosts,
   getCatalog,
@@ -699,7 +697,7 @@ async function apiSnapshot(shopId, token, prevSnap, store) {
   const windowStart = Date.now() - days * DAY;
   const keepFrom = Date.now() - S.api.firstSyncDays * DAY;
   const kept = prevItems.filter((i) => i.api && !freshIds.has(i.id) && i.date && new Date(i.date).getTime() < windowStart && new Date(i.date).getTime() >= keepFrom);
-  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept]);
+  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept], prevItems);
   // Order contents travel with the order: needed for profit and the pick list.
   const all = [...fresh, ...kept].map((i) => ({ ...i, entries: entriesOf(i.id) || i.entries }));
   const section = (items) => ({ status: 'ok', source: 'api', items });
@@ -719,16 +717,17 @@ async function apiSnapshot(shopId, token, prevSnap, store) {
 }
 
 /**
- * Order contents are one request per order, so they are cached forever (they do
- * not change) and fetched at most `entriesPerSync` per sync (3 in parallel), active
- * and newest orders first. 5 000 orders of history fill in within ~17 syncs (≈ 1.5 h);
- * with 60 per sync it took ~7 h, so profit and «Себестоимость» stayed incomplete.
+ * Order contents are one request per order, so they are kept for as long as the order is
+ * in the snapshot (they do not change) and fetched at most `entriesPerSync` per sync
+ * (3 in parallel), active and newest orders first. 5 000 orders of history fill in within
+ * ~17 syncs (≈ 1.5 h). The contents live only inside the store's snapshot (order.entries):
+ * the separate cache ksh.apiEntries held a second copy of all of them and is removed.
  */
-async function apiTopProducts(shopId, token, items) {
-  const cache = await getApiEntries();
-  const key = (code) => `${shopId}::${code}`;
+async function apiTopProducts(shopId, token, items, prevItems = []) {
+  const cache = {};
+  for (const i of prevItems) if (i.api && Array.isArray(i.entries)) cache[i.id] = i.entries;
   const todo = items
-    .filter((i) => i.api?.entriesUrl && i.kind !== 'refusal' && !cache[key(i.id)]) // refusals: no profit, no pick list
+    .filter((i) => i.api?.entriesUrl && i.kind !== 'refusal' && !cache[i.id]) // refusals: no profit, no pick list
     .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
     .slice(0, S.api.entriesPerSync || 60);
   let stop = null;
@@ -736,29 +735,17 @@ async function apiTopProducts(shopId, token, items) {
     while (todo.length && !stop) {
       const it = todo.shift();
       try {
-        cache[key(it.id)] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
+        cache[it.id] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
       } catch (e) {
         stop = e; // the rest waits for the next sync
       }
     }
   };
-  const fetched = todo.length;
   await Promise.all(Array.from({ length: Math.min(S.api.concurrency || 3, todo.length) }, worker));
   if (stop?.code === 'apiUnauthorized') throw stop;
-  // Stores sync in parallel: merge into a fresh read under the lock (a whole-cache write lost
-  // the other store's entries) and drop this store's orders that left the kept window.
-  const live = new Set(items.map((i) => key(i.id)));
-  const fetchedNow = Object.keys(cache).filter((k) => k.startsWith(`${shopId}::`) && live.has(k));
-  await lock(async () => {
-    const cur = await getApiEntries();
-    let changed = false;
-    for (const k of Object.keys(cur)) if (k.startsWith(`${shopId}::`) && !live.has(k)) (delete cur[k], (changed = true));
-    for (const k of fetchedNow) if (!cur[k]) (cur[k] = cache[k], (changed = true));
-    if (changed) await setApiEntries(cur);
-  });
   const agg = new Map();
   for (const it of items) {
-    for (const e of cache[key(it.id)] || []) {
+    for (const e of cache[it.id] || []) {
       const k = e.sku || e.name;
       if (!k) continue;
       const p = agg.get(k) || { sku: e.sku, name: e.name || e.category, revenue: 0, units: 0, returns: 0 };
@@ -772,7 +759,7 @@ async function apiTopProducts(shopId, token, items) {
   }
   return {
     topProducts: [...agg.values()].map((p) => ({ ...p, returnRate: p.units ? p.returns / p.units : null })),
-    entriesOf: (code) => cache[key(code)],
+    entriesOf: (code) => cache[code],
   };
 }
 
@@ -1497,6 +1484,8 @@ async function ensureAlarms() {
 ensureAlarms().catch(() => {});
 
 chrome.runtime.onInstalled.addListener(() => {
+  // Order contents now live only in the snapshots: drop the old duplicate cache (one-off, idempotent).
+  chrome.storage.local.remove('ksh.apiEntries').catch(() => {});
   scheduleAlarms();
   scheduleHealth();
   discoverTabs().catch(() => {});

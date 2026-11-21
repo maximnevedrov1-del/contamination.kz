@@ -18,7 +18,7 @@ let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(
   await d.click('button:has-text("Упаковать выбранные")'); await d.click('#confirmDialog button[value=ok]');
   await d.waitForSelector('.toast', { timeout: 60000 }); const t1 = await d.locator('.toast').allTextContents();
   check('pack 2/2', t1.some((t) => t.includes('2 из 2')), JSON.stringify(t1));
-  const inv = await sw.evaluate(async () => ((await chrome.storage.local.get('ksh.invoices'))['ksh.invoices'] || []).map((i) => i.kind + ':' + i.data.includes('Накладная (ДЕМО)')));
+  const inv = await sw.evaluate(async () => (await (async () => { const g = chrome.storage.local; const ix = (await g.get('ksh.invIndex'))['ksh.invIndex'] || []; const r = await g.get(['ksh.invoices', ...ix.map((e) => 'ksh.inv.' + e.k)]); const m = new Map((r['ksh.invoices'] || []).map((i) => [i.shopId + '::' + i.orderId, i])); ix.forEach((e) => r['ksh.inv.' + e.k] && m.set(e.k, r['ksh.inv.' + e.k])); return [...m.values()]; })()).map((i) => i.kind + ':' + i.data.includes('Накладная (ДЕМО)')));
   check('2 invoices captured', inv.length === 2 && inv.every((x) => x === 'html:true'), JSON.stringify(inv));
   const pp = await ctx.newPage(); await pp.addInitScript(() => (window.print = () => (window.__p = 1)));
   await pp.goto(`chrome-extension://${id}/dashboard/print.html`); await pp.waitForTimeout(1200);

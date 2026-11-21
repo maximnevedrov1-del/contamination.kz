@@ -84,7 +84,7 @@ const mlog = () => fetch('http://localhost:8099/__log').then((r) => r.json());
   check('6 pack 1 of 2, own-delivery order refused', t6.some((x) => x.includes('1 из 2')) && t6.some((x) => x.includes('не с Kaspi Доставкой')), JSON.stringify(t6));
   const posts6 = (await mlog()).filter((x) => x.post);
   check('6 ASSEMBLE sent with numberOfSpace "1"', posts6.some((x) => x.post.status === 'ASSEMBLE' && x.post.numberOfSpace === '1'), JSON.stringify(posts6.slice(-1)));
-  const inv = await sw.evaluate(async () => ((await chrome.storage.local.get('ksh.invoices'))['ksh.invoices'] || []).map((i) => `${i.orderId}:${i.kind}`));
+  const inv = await sw.evaluate(async () => (await (async () => { const g = chrome.storage.local; const ix = (await g.get('ksh.invIndex'))['ksh.invIndex'] || []; const r = await g.get(['ksh.invoices', ...ix.map((e) => 'ksh.inv.' + e.k)]); const m = new Map((r['ksh.invoices'] || []).map((i) => [i.shopId + '::' + i.orderId, i])); ix.forEach((e) => r['ksh.inv.' + e.k] && m.set(e.k, r['ksh.inv.' + e.k])); return [...m.values()]; })()).map((i) => `${i.orderId}:${i.kind}`));
   check('6 Kaspi waybill PDF captured', inv.includes('800002001:pdf'), JSON.stringify(inv));
   check('6 token sent to the waybill on the API host', (await mlog()).some((x) => x.waybillToken === 'GOOD-TOKEN-1234'));
 

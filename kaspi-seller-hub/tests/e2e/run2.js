@@ -99,14 +99,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // T8 pack failure is reported (store C never confirms)
   await d.click('.tabs .tab:has-text("Новые")'); await sleep(150);
-  const invBefore = await sw.evaluate(async () => ((await chrome.storage.local.get('ksh.invoices'))['ksh.invoices'] || []).length);
+  const invBefore = await sw.evaluate(async () => (await (async () => { const g = chrome.storage.local; const ix = (await g.get('ksh.invIndex'))['ksh.invIndex'] || []; const r = await g.get(['ksh.invoices', ...ix.map((e) => 'ksh.inv.' + e.k)]); const m = new Map((r['ksh.invoices'] || []).map((i) => [i.shopId + '::' + i.orderId, i])); ix.forEach((e) => r['ksh.inv.' + e.k] && m.set(e.k, r['ksh.inv.' + e.k])); return [...m.values()]; })()).length);
   const cRow = d.locator('tbody tr', { hasText: 'Детский мир' }).first();
   const cId = (await cRow.locator('td').nth(1).innerText()).trim();
   await cRow.locator('input[type=checkbox]').check();
   await clearToasts();
   await d.click('button:has-text("Упаковать выбранные")'); await d.click('#confirmDialog button[value=ok]');
   let toasts = await waitToasts(2);
-  const invAfter = await sw.evaluate(async () => ((await chrome.storage.local.get('ksh.invoices'))['ksh.invoices'] || []).length);
+  const invAfter = await sw.evaluate(async () => (await (async () => { const g = chrome.storage.local; const ix = (await g.get('ksh.invIndex'))['ksh.invIndex'] || []; const r = await g.get(['ksh.invoices', ...ix.map((e) => 'ksh.inv.' + e.k)]); const m = new Map((r['ksh.invoices'] || []).map((i) => [i.shopId + '::' + i.orderId, i])); ix.forEach((e) => r['ksh.inv.' + e.k] && m.set(e.k, r['ksh.inv.' + e.k])); return [...m.values()]; })()).length);
   check('T8 failed pack reported as failure, not success', toasts.some((t) => t.includes('0 из 1')) && toasts.some((t) => t.includes('не подтвердил')), JSON.stringify(toasts));
   check('T8 no invoice stored for failed pack', invAfter === invBefore, `${invBefore}→${invAfter}`);
   check('T8 order still "new" in the store tab', await tabs.C.evaluate((id) => [...document.querySelectorAll('[data-testid=order-row]')].find((r) => r.innerText.includes(id))?.querySelector('[data-testid=order-status]').textContent, cId) === 'Новый');

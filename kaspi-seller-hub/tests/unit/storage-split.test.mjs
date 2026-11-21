@@ -113,4 +113,43 @@ await t('addInvoices dedupes, stamps ts and applies limits; pruneInvoices drops 
   assert.deepEqual((await S.getInvoices()).map((i) => i.orderId), ['y']);
 });
 
+await t('invoices are split per key: adding one writes only its file and the index', async () => {
+  for (const k of Object.keys(data)) if (k.startsWith('ksh.inv')) delete data[k];
+  await S.addInvoices([inv('a', now - 2), inv('b', now - 1)]);
+  assert.ok(!('ksh.invoices' in data) && data['ksh.invIndex'].length === 2);
+  writes.length = 0;
+  await S.addInvoices([inv('c', now)]);
+  assert.deepEqual(writes, [['ksh.inv.A::c', 'ksh.invIndex']]);
+  assert.equal(await S.countInvoices(), 3);
+  assert.deepEqual((await S.getInvoices()).map((i) => i.orderId).sort(), ['a', 'b', 'c']);
+  await S.clearInvoices();
+  assert.equal(await S.countInvoices(), 0);
+  assert.ok(!Object.keys(data).some((k) => k.startsWith('ksh.inv')));
+});
+await t('returns/refusals equal to orders are stored as ids and rebuilt on read', async () => {
+  const o1 = { id: '1', kind: 'order' };
+  const r1 = { id: '2', kind: 'return' };
+  const sn = snap('R', [o1, r1]);
+  sn.sections.returns = { status: 'ok', source: 'api', items: [r1] };
+  sn.sections.refusals = { status: 'ok', items: [{ id: '9', kind: 'refusal' }] }; // not in orders → kept as is
+  await S.setSnapshots({ ...(await S.getSnapshots()), R: sn });
+  const raw = data['ksh.snap.R'];
+  assert.deepEqual(raw.sections.returns, { status: 'ok', source: 'api', itemsFrom: 'orders', ids: ['2'] });
+  assert.equal(raw.sections.refusals.items.length, 1);
+  const back = await S.getSnapshot('R');
+  assert.deepEqual(back.sections.returns.items, [r1]);
+  writes.length = 0;
+  await S.updateSnapshot('R', () => undefined); // unchanged → no write
+  assert.equal(writes.length, 0);
+  await S.updateSnapshot('R', (cur) => void cur.sections.returns.items.push({ id: '3', kind: 'return' }));
+  assert.equal(data['ksh.snap.R'].sections.returns.items.length, 2); // no longer a subset → full list
+});
+await t('chat keeps the 50 most recently opened conversations per store', async () => {
+  const threads = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`c${i}`, { messages: [], ts: i }]));
+  await S.setChat({ A: { conversations: [], threads } });
+  const kept = Object.keys(data['ksh.chat'].A.threads);
+  assert.equal(kept.length, 50);
+  assert.ok(kept.includes('c59') && !kept.includes('c0'));
+});
+
 console.log(`\n${n} passed`);

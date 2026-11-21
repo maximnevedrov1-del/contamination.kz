@@ -13,7 +13,7 @@
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
 import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos } from '../shared/storage.js';
-import { isAllowedPhoto } from '../shared/photos.js';
+import { isAllowedPhoto, photosDataSize, MAX_PHOTOS_DATA } from '../shared/photos.js';
 import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
@@ -359,13 +359,22 @@ export function catalogHandlers({ allowedShopIds }) {
     'ui:setPhoto': async ({ sku, src }) => {
       if (typeof sku !== 'string' || !sku.trim() || sku.length > 200) return { ok: false, error: 'catalogInvalid' };
       if (src != null && !isAllowedPhoto(src)) return { ok: false, error: 'photoNotAllowed' };
-      await lock(async () => {
+      const full = await lock(async () => {
         const photos = await getPhotos();
         if (src == null) delete photos[sku];
-        else photos[sku] = src;
+        else {
+          const prev = photos[sku];
+          photos[sku] = src;
+          if (src.startsWith('data:') && photosDataSize(photos) > MAX_PHOTOS_DATA) {
+            if (prev == null) delete photos[sku];
+            else photos[sku] = prev;
+            return true; // nothing written
+          }
+        }
         await setPhotos(photos);
+        return false;
       });
-      return { ok: true };
+      return full ? { ok: false, error: 'photoLimit' } : { ok: true };
     },
 
     'ui:backupExport': async () => {
@@ -407,7 +416,14 @@ export function catalogHandlers({ allowedShopIds }) {
         for (const [k, v] of Object.entries(b.costs || {}).slice(0, 50000)) if (typeof k === 'string' && k.length <= 200 && num(v) != null) (costs[k] = num(v)), costsN++;
         await setCosts(costs);
         const photos = await getPhotos();
-        for (const [k, v] of Object.entries(b.photos || {}).slice(0, 20000)) if (typeof k === 'string' && k.length <= 200 && isAllowedPhoto(v)) photos[k] = v;
+        let photoBytes = photosDataSize(photos);
+        for (const [k, v] of Object.entries(b.photos || {}).slice(0, 20000)) {
+          if (typeof k !== 'string' || k.length > 200 || !isAllowedPhoto(v)) continue;
+          const add = v.startsWith('data:') ? v.length : 0;
+          if (add && photoBytes + add > MAX_PHOTOS_DATA) continue; // over the total limit: the rest of the files are skipped
+          photoBytes += add;
+          photos[k] = v;
+        }
         await setPhotos(photos);
         const catalog = await getCatalog();
         for (const raw of Object.values(b.catalog || {}).slice(0, 50000)) {

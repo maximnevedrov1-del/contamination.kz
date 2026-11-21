@@ -28,7 +28,7 @@ import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
 import { svgIcon } from '../shared/icons.js';
 import { renderLockScreen, renderPacker, teamCard, warehouseCard, journalCard } from './staff-view.js';
-import { getChat, getInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
+import { getChat, countInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
 import { PAPER_MODES, LABEL_PRESETS, LABEL_LIMITS, normalizePrint } from './print-layout.js';
 import {
@@ -833,7 +833,7 @@ function renderProgress() {
 }
 
 async function refreshInvoiceCount() {
-  state.invoiceCount = (await getInvoices()).length;
+  state.invoiceCount = await countInvoices();
 }
 
 /* ===================================================================== */

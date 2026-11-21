@@ -29,6 +29,7 @@ class BillingError extends Error {
 const get = async (k) => (await chrome.storage.local.get(k))[k] ?? null;
 const set = (k, v) => chrome.storage.local.set({ [k]: v });
 
+const BILLING_TIMEOUT_MS = 20000;
 async function http(path, { method = 'POST', body, token } = {}) {
   let res;
   try {
@@ -40,11 +41,17 @@ async function http(path, { method = 'POST', body, token } = {}) {
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(BILLING_TIMEOUT_MS), // a hung server must not block the sync (licence check)
     });
   } catch (e) {
     throw new BillingError('billingNetwork', e.message);
   }
-  const text = await res.text();
+  let text;
+  try {
+    text = await res.text();
+  } catch (e) {
+    throw new BillingError('billingNetwork', e.message);
+  }
   let data = null;
   try {
     data = text ? JSON.parse(text) : null;

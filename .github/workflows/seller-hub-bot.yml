@@ -24,6 +24,11 @@ jobs:
         run: echo "::error::SUPABASE_URL / BOT_KEY secrets are not set" && exit 1
       - name: Send what is due
         run: |
-          code=$(curl -sS --retry 3 --retry-connrefused --retry-delay 10 --max-time 60 -o out.json -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/telegram-bot/run" -H "x-bot-key: ${BOT_KEY}" -H 'content-type: application/json' -d '{}')
-          cat out.json; echo
-          test "$code" = 200
+          # One call sends for ~45 s and records results every 50 messages; "more": true → call again.
+          # No curl --retry on a timeout: a cut-off call may have sent messages already (recorded ones are not repeated).
+          for i in $(seq 1 20); do
+            code=$(curl -sS --retry 3 --retry-connrefused --retry-delay 10 --connect-timeout 15 --max-time 120 -o out.json -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/telegram-bot/run" -H "x-bot-key: ${BOT_KEY}" -H 'content-type: application/json' -d '{}')
+            cat out.json; echo
+            test "$code" = 200
+            grep -q '"more":true' out.json || break
+          done

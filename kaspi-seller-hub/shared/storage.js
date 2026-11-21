@@ -15,7 +15,7 @@ export const KEYS = Object.freeze({
   registry: 'ksh.registry', // session
   printQueue: 'ksh.printQueue', // session
   apiTokens: 'ksh.apiTokens', // { [shopId]: token } — never sent to extension pages
-  apiEntries: 'ksh.apiEntries', // { [shopId::code]: entries[] } — order contents cache
+  apiEntries: 'ksh.apiEntries', // legacy: order contents now live in the snapshots; removed on update
   costs: 'ksh.costs', // { [sku]: cost price in ₸ } — written by the worker only
   deadlineNotified: 'ksh.deadlineNotified', // session: order keys already warned about
   pickList: 'ksh.pickList', // session: pick list handed to print.html
@@ -121,7 +121,60 @@ export const SNAP_INDEX = 'ksh.snapIndex';
 export const SNAP_PREFIX = 'ksh.snap.';
 const snapKey = (shopId) => SNAP_PREFIX + shopId;
 const IS_WORKER = typeof window === 'undefined';
-/** JSON of each store as last written/seen in this context → unchanged stores are skipped. */
+
+/*
+ * Returns and refusals are a subset of the store's orders (API sync): stored as order ids
+ * ({ itemsFrom:'orders', ids }) instead of a second full copy, and rebuilt on read.
+ * A list with any item that is not identical to the order (cabinet pages) is stored as is.
+ */
+const DERIVED = ['returns', 'refusals'];
+export function packSnapshot(sn) {
+  const orders = sn?.sections?.orders?.items;
+  if (!Array.isArray(orders)) return sn;
+  let byId = null;
+  let out = sn;
+  for (const name of DERIVED) {
+    const sec = sn.sections[name];
+    if (!Array.isArray(sec?.items) || !sec.items.length) continue;
+    byId ??= new Map(orders.map((i) => [String(i.id), i]));
+    const same = sec.items.every((i) => {
+      const o = byId.get(String(i?.id));
+      return o && (o === i || JSON.stringify(o) === JSON.stringify(i));
+    });
+    if (!same) continue;
+    if (out === sn) out = { ...sn, sections: { ...sn.sections } };
+    const { items, ...rest } = sec;
+    out.sections[name] = { ...rest, itemsFrom: 'orders', ids: items.map((i) => String(i.id)) };
+  }
+  return out;
+}
+export function unpackSnapshot(sn) {
+  const secs = sn?.sections;
+  if (!secs || !DERIVED.some((n) => secs[n]?.itemsFrom === 'orders')) return sn;
+  const byId = new Map((secs.orders?.items || []).map((i) => [String(i.id), i]));
+  for (const name of DERIVED) {
+    const sec = secs[name];
+    if (sec?.itemsFrom !== 'orders') continue;
+    const { itemsFrom, ids, ...rest } = sec;
+    secs[name] = { ...rest, items: (ids || []).map((id) => byId.get(id)).filter(Boolean) };
+  }
+  return sn;
+}
+
+/** Short fingerprint of a stored snapshot (two 32-bit hashes + length), kept instead of its whole JSON. */
+function digest(str) {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619);
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995) ^ (h2 >>> 15);
+  }
+  return `${str.length}:${(h1 >>> 0).toString(36)}:${(h2 >>> 0).toString(36)}`;
+}
+const fingerprint = (stored) => digest(JSON.stringify(stored));
+
+/** Fingerprint of each store as last written/seen in this context → unchanged stores are skipped. */
 let snapSeen = null;
 function watchSnapshots() {
   if (snapSeen) return;
@@ -132,7 +185,7 @@ function watchSnapshots() {
     for (const [k, c] of Object.entries(changes)) {
       if (!k.startsWith(SNAP_PREFIX)) continue;
       if (c.newValue === undefined) snapSeen.delete(k.slice(SNAP_PREFIX.length));
-      else snapSeen.set(k.slice(SNAP_PREFIX.length), JSON.stringify(c.newValue));
+      else snapSeen.set(k.slice(SNAP_PREFIX.length), fingerprint(c.newValue));
     }
     if (SNAP_INDEX in changes && !changes[SNAP_INDEX].newValue) snapSeen.clear();
   });
@@ -150,15 +203,16 @@ export async function getSnapshots() {
   // rewrites only the stores the caller actually changed.
   if (IS_WORKER) {
     watchSnapshots();
-    for (const [id, sn] of Object.entries(out)) snapSeen.set(id, JSON.stringify(sn));
+    for (const [id, sn] of Object.entries(out)) snapSeen.set(id, fingerprint(sn));
   }
+  for (const sn of Object.values(out)) unpackSnapshot(sn);
   return out;
 }
 /** One store's snapshot (null when absent). */
 export async function getSnapshot(shopId) {
   const got = await local().get([SNAP_INDEX, snapKey(shopId), KEYS.snapshots]);
   if (!Array.isArray(got[SNAP_INDEX])) return got[KEYS.snapshots]?.[shopId] ?? null;
-  return got[snapKey(shopId)] ?? null;
+  return unpackSnapshot(got[snapKey(shopId)] ?? null);
 }
 /** Pages get the worker's state without the (large) snapshots and read them here. */
 export async function withSnapshots(st) {
@@ -177,9 +231,10 @@ export async function setSnapshots(v) {
   const ids = Object.keys(v || {}).filter((id) => v[id]);
   const patch = {};
   for (const id of ids) {
-    const json = JSON.stringify(v[id]);
-    if (legacy || snapSeen.get(id) !== json) patch[snapKey(id)] = v[id];
-    snapSeen.set(id, json);
+    const stored = packSnapshot(v[id]);
+    const fp = fingerprint(stored);
+    if (legacy || snapSeen.get(id) !== fp) patch[snapKey(id)] = stored;
+    snapSeen.set(id, fp);
   }
   const gone = before.filter((id) => !ids.includes(id));
   if (legacy || gone.length || ids.length !== before.length || ids.some((id, i) => before[i] !== id)) patch[SNAP_INDEX] = ids;
@@ -204,8 +259,9 @@ export async function updateSnapshot(shopId, fn) {
     await setSnapshots(all);
     return all[shopId] ?? null;
   }
-  const cur = got[snapKey(shopId)] ?? null;
-  const curJson = cur && JSON.stringify(cur); // before fn may mutate it
+  const raw = got[snapKey(shopId)] ?? null;
+  const curFp = raw && fingerprint(raw); // before fn may mutate it
+  const cur = unpackSnapshot(raw);
   let next = fn(cur);
   if (next === undefined) next = cur;
   const ids = got[SNAP_INDEX];
@@ -215,38 +271,106 @@ export async function updateSnapshot(shopId, fn) {
     snapSeen.delete(shopId);
     return null;
   }
-  const json = JSON.stringify(next);
+  const stored = packSnapshot(next);
+  const fp = fingerprint(stored);
   const patch = {};
-  if (json !== curJson) patch[snapKey(shopId)] = next;
+  if (fp !== curFp) patch[snapKey(shopId)] = stored;
   if (!ids.includes(shopId)) patch[SNAP_INDEX] = [...ids, shopId];
-  snapSeen.set(shopId, json);
+  snapSeen.set(shopId, fp);
   if (Object.keys(patch).length) await local().set(patch);
   return next;
 }
 
 /** Chat cache: { [shopId]: { conversations: [...], threads: { [conversationId]: messages[] } } } */
 export const getChat = () => read(local, KEYS.chat, {});
-export const setChat = (v) => write(local, KEYS.chat, v);
+/** Opened conversations kept per store (each holds its messages); the oldest opened go first. */
+export const CHAT_THREADS_MAX = 50;
+export function pruneChat(v, max = CHAT_THREADS_MAX) {
+  for (const store of Object.values(v || {})) {
+    const ids = Object.keys(store?.threads || {});
+    if (ids.length <= max) continue;
+    ids.sort((a, b) => (store.threads[b]?.ts || 0) - (store.threads[a]?.ts || 0));
+    for (const id of ids.slice(max)) delete store.threads[id];
+  }
+  return v;
+}
+export const setChat = (v) => write(local, KEYS.chat, pruneChat(v));
+
+/* ---------- invoices: one storage key per waybill ----------
+ * ksh.invIndex = [{ k, shopId, orderId, ts, size }] and ksh.inv.<shopId::orderId> = Invoice.
+ * Adding a waybill writes only that file and the small index (the old single array
+ * ksh.invoices, up to 50 MB, was read and rewritten whole for every waybill).
+ * The old key is still read and is moved into the split keys by the next write.
+ */
+export const INV_INDEX = 'ksh.invIndex';
+export const INV_PREFIX = 'ksh.inv.';
+const invKey = (i) => `${i.shopId}::${i.orderId}`;
+const invEntry = (i) => ({ k: invKey(i), shopId: i.shopId, orderId: i.orderId, ts: i.ts, size: i.data?.length || 0 });
+async function invState() {
+  const got = await local().get([INV_INDEX, KEYS.invoices]);
+  return { index: Array.isArray(got[INV_INDEX]) ? got[INV_INDEX] : [], legacy: Array.isArray(got[KEYS.invoices]) ? got[KEYS.invoices] : null };
+}
 
 /** @returns {Promise<Invoice[]>} */
-export const getInvoices = () => read(local, KEYS.invoices, []);
+export async function getInvoices() {
+  const { index, legacy } = await invState();
+  const per = index.length ? await local().get(index.map((e) => INV_PREFIX + e.k)) : {};
+  const map = new Map((legacy || []).map((i) => [invKey(i), i]));
+  for (const e of index) if (per[INV_PREFIX + e.k]) map.set(e.k, per[INV_PREFIX + e.k]);
+  return [...map.values()];
+}
+/** Number of stored waybills without loading the files. */
+export async function countInvoices() {
+  const { index, legacy } = await invState();
+  return new Set([...index.map((e) => e.k), ...(legacy || []).map(invKey)]).size;
+}
+
+/** Apply the limits to the index; write the new files that stay, remove the ones that go. */
+async function commitInvoices(byK, added, legacy, now) {
+  const all = [...byK.values()];
+  const kept = pruneInvoiceList(all, now);
+  const keep = new Set(kept.map((e) => e.k));
+  const patch = { [INV_INDEX]: kept };
+  for (const [k, v] of added) if (keep.has(k)) patch[INV_PREFIX + k] = v;
+  await local().set(patch); // index and new files in one write
+  const drop = all.filter((e) => !keep.has(e.k)).map((e) => INV_PREFIX + e.k);
+  if (legacy) drop.push(KEYS.invoices);
+  if (drop.length) await local().remove(drop);
+  return all.length - kept.length;
+}
+/** Index + files to write, with the old single-array invoices moved in (split keys win). */
+function invMerge(index, legacy) {
+  const byK = new Map(index.map((e) => [e.k, e]));
+  const added = new Map();
+  for (const i of legacy || []) {
+    if (!i || byK.has(invKey(i))) continue;
+    added.set(invKey(i), i);
+    byK.set(invKey(i), invEntry(i));
+  }
+  return { byK, added };
+}
 
 /**
  * Add/replace invoices (deduplicated by shopId + orderId).
  * @param {Invoice[]} list
  */
 export async function addInvoices(list) {
-  const map = new Map((await getInvoices()).map((i) => [`${i.shopId}::${i.orderId}`, i]));
   const now = Date.now();
-  list.forEach((i) => map.set(`${i.shopId}::${i.orderId}`, { ...i, ts: i.ts || now }));
-  await write(local, KEYS.invoices, pruneInvoiceList([...map.values()], now));
+  const { index, legacy } = await invState();
+  const { byK, added } = invMerge(index, legacy);
+  for (const i of list) {
+    const v = { ...i, ts: i.ts || now };
+    added.set(invKey(v), v);
+    byK.set(invKey(v), invEntry(v));
+  }
+  await commitInvoices(byK, added, legacy, now);
 }
 
 /**
  * Waybills are base64 files (often 50–300 KB each), so the list is bounded:
  * older than maxAgeDays, beyond maxCount or beyond maxBytes → the oldest go first.
  * Entries without ts (older versions) are kept by age but go first by count/size.
- * The newest invoice is always kept.
+ * The newest invoice is always kept. Works on invoices and on index entries ({ size }).
  */
 export const INVOICE_LIMITS = Object.freeze({ maxAgeDays: 30, maxCount: 500, maxBytes: 50 * 1024 * 1024 });
 export function pruneInvoiceList(list, now = Date.now(), limits = INVOICE_LIMITS) {
@@ -255,7 +379,7 @@ export function pruneInvoiceList(list, now = Date.now(), limits = INVOICE_LIMITS
   const out = [];
   let bytes = 0;
   for (const i of sorted) {
-    const size = (i.data?.length || 0) + 200;
+    const size = (i.size ?? i.data?.length ?? 0) + 200;
     if (out.length && (out.length >= limits.maxCount || bytes + size > limits.maxBytes)) break;
     out.push(i);
     bytes += size;
@@ -264,13 +388,19 @@ export function pruneInvoiceList(list, now = Date.now(), limits = INVOICE_LIMITS
 }
 /** Remove invoices of the given stores (store removed) and apply the limits. */
 export async function pruneInvoices({ dropShops = [] } = {}) {
-  const list = await getInvoices();
+  const { index, legacy } = await invState();
+  const { byK, added } = invMerge(index, legacy);
   const drop = new Set(dropShops);
-  const next = pruneInvoiceList(list.filter((i) => !drop.has(i.shopId)));
-  if (next.length !== list.length) await write(local, KEYS.invoices, next);
-  return list.length - next.length;
+  const gone = [...byK.values()].filter((e) => drop.has(e.shopId));
+  gone.forEach((e) => (byK.delete(e.k), added.delete(e.k)));
+  const pruned = await commitInvoices(byK, added, legacy, Date.now());
+  if (gone.length) await local().remove(gone.map((e) => INV_PREFIX + e.k));
+  return gone.length + pruned;
 }
-export const clearInvoices = () => write(local, KEYS.invoices, []);
+export async function clearInvoices() {
+  const { index } = await invState();
+  await local().remove([INV_INDEX, KEYS.invoices, ...index.map((e) => INV_PREFIX + e.k)]);
+}
 
 export const getLastSync = () => read(local, KEYS.lastSync, 0);
 export const setLastSync = (ts) => write(local, KEYS.lastSync, ts);
@@ -322,8 +452,6 @@ export const setApiTokens = (v) =>
     for (const [shopId, tok] of Object.entries(v || {})) if (tok) enc[shopId] = isEncrypted(tok) ? tok : await encryptToken(shopId, tok);
     await write(local, KEYS.apiTokens, enc);
   });
-export const getApiEntries = () => read(local, KEYS.apiEntries, {});
-export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
 
 export const getCosts = () => read(local, KEYS.costs, {});
 export const setCosts = (v) => write(local, KEYS.costs, v);
