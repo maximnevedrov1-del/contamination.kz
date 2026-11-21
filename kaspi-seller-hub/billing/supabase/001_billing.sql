@@ -151,7 +151,7 @@ drop policy if exists invoices_read_own on public.invoices;
 create policy invoices_read_own on public.invoices for select to authenticated using (user_id = auth.uid());
 -- billing_config and admins: no policies → no direct access; read through functions.
 
-revoke all on public.billing_config, public.accounts, public.invoices, public.admins from anon, authenticated;
+revoke all on public.billing_config, public.accounts, public.invoices, public.admins, public.consents, public.store_claims from anon, authenticated;
 grant select on public.accounts, public.invoices to authenticated;
 
 -- ---------- helpers ----------
@@ -646,6 +646,7 @@ create table if not exists public.price_feeds (
   unique (user_id, shop_key)
 );
 alter table public.price_feeds enable row level security;
+revoke all on public.price_feeds from anon, authenticated;   -- read and written only through the functions below
 
 -- Trial or paid, and the current offer accepted.
 create or replace function public.has_access()
