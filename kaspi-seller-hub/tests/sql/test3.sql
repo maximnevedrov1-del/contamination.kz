@@ -10,7 +10,7 @@ select pg_temp.ok('new account: terms not accepted, required = 2026-11-16', (sel
 set request.headers = '{"x-forwarded-for": "5.76.1.2, 10.0.0.1", "user-agent": "Mozilla/5.0 Chrome/130"}';
 select pg_temp.ok('accept_terms ok', (select r->>'version' = '2026-11-16' from (select accept_terms() r) x));
 select pg_temp.ok('licence now shows accepted version + time', (select l->>'terms_version' = '2026-11-16' and l->>'terms_accepted_at' is not null from (select get_license(1) l) x));
-select pg_temp.ok('client cannot read consents table directly', (select count(*) = 0 from public.consents));
+do $$ declare n int; begin select count(*) into n from public.consents; raise notice '% client cannot read consents table directly', case when n = 0 then 'PASS' else 'FAIL' end; exception when insufficient_privilege then raise notice 'PASS client cannot read consents table directly (no table rights)'; end $$;
 do $$ begin insert into public.consents (user_id, version) values ('55555555-5555-5555-5555-555555555555', 'fake'); raise notice 'FAIL client forged a consent row'; exception when others then raise notice 'PASS client cannot forge consent rows (%)', sqlerrm; end $$;
 do $$ begin update public.accounts set terms_version = 'x'; raise notice 'FAIL client updated own terms_version directly'; exception when others then raise notice 'PASS no direct account update (%)', sqlerrm; end $$;
 select pg_temp.ok('invoice allowed after consent', (select (create_invoice(3, 1, null)->>'amount')::int = 20000));

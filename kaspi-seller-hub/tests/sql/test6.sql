@@ -27,7 +27,7 @@ select accept_terms() is not null;
 do $$ begin insert into storage.objects (bucket_id, name) values ('pricelists', current_setting('t.feed') || '/shop-abc.xml'); raise notice 'FAIL wrote into another client''s feed'; exception when others then raise notice 'PASS cannot write into another client''s feed (%)', sqlerrm; end $$;
 with x as (update storage.objects set metadata = '{"hacked":1}' where name like current_setting('t.feed') || '%' returning 1) select pg_temp.ok('cannot overwrite another client''s price list', count(*) = 0) from x;
 with x as (delete from storage.objects where name like current_setting('t.feed') || '%' returning 1) select pg_temp.ok('cannot delete another client''s price list', count(*) = 0) from x;
-select pg_temp.ok('cannot see other clients'' feeds', (select count(*) = 0 from price_feeds));
+do $$ declare n int; begin select count(*) into n from public.price_feeds; raise notice '% cannot see other clients feeds', case when n = 0 then 'PASS' else 'FAIL' end; exception when insufficient_privilege then raise notice 'PASS cannot see other clients feeds (no table rights)'; end $$;
 
 -- subscription over → uploads stop (the last file stays where Kaspi reads it)
 reset role;

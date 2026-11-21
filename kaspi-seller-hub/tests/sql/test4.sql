@@ -23,7 +23,7 @@ do $$ begin insert into public.store_claims values (repeat('a', 64), 'a0000000-0
 
 -- ===== one trial per store =====
 select pg_temp.ok('first account claims stores 1001+1002, keeps trial', (select l->>'status' = 'trial' and not (l->>'trial_blocked')::boolean from (select get_license(2, array[:k1, :k2]) l) x));
-select pg_temp.ok('first account sees nothing of the claims table', (select count(*) = 0 from store_claims));
+do $$ declare n int; begin select count(*) into n from public.store_claims; raise notice '% first account sees nothing of the claims table', case when n = 0 then 'PASS' else 'FAIL' end; exception when insufficient_privilege then raise notice 'PASS first account sees nothing of the claims table (no table rights)'; end $$;
 set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
 select pg_temp.ok('second account with a NEW store keeps its trial', (select l->>'status' = 'trial' from (select get_license(1, array[:k3]) l) x));
 set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000003';
