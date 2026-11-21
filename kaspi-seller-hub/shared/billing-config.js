@@ -22,6 +22,9 @@ export const BILLING = Object.freeze({
   //   licenseKeys: [{ kty: 'EC', crv: 'P-256', x: '…', y: '…', kid: '…', alg: 'ES256' }],
   licenseKeys: [],
 });
+// Deep-freeze the keys so nothing running later in the worker can add its own key.
+Object.freeze(BILLING.licenseKeys);
+BILLING.licenseKeys.forEach(Object.freeze);
 
 /**
  * Public offer and privacy policy shown next to the consent checkbox.

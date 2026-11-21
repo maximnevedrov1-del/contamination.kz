@@ -199,8 +199,9 @@ let keysPromise = null;
 function verifyingKeys() {
   keysPromise ??= Promise.all(
     BILLING.licenseKeys.map(async (jwk) => {
-      const alg = Object.keys(ALGS).find((a) => ALGS[a].kty === jwk.kty);
-      if (!alg) return null;
+      const alg = Object.keys(ALGS).find((a) => ALGS[a].kty === jwk?.kty);
+      if (!alg || (jwk.alg && jwk.alg !== alg) || (alg === 'ES256' && jwk.crv !== 'P-256')) return null;
+      if (jwk.d || jwk.k) return null; // a private/symmetric key was pasted by mistake — never use it
       const { kty, crv, x, y, n, e } = jwk; // public parts only
       const key = await crypto.subtle.importKey('jwk', { kty, crv, x, y, n, e }, ALGS[alg].import, false, ['verify']).catch(() => null);
       return key && { kid: jwk.kid || null, alg, key };
@@ -223,8 +224,16 @@ export async function verifiedClaims(jwt, expectedSub = null) {
   if (!ALGS[header?.alg]) return null; // never "none" or HS256 (symmetric: the secret would have to ship in the extension)
   const iss = BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1';
   if (payload.iss !== iss || (expectedSub && payload.sub !== expectedSub)) return null;
+  // Supabase user tokens only (not anon/service keys or tokens of another audience), with a lifetime.
+  if (payload.aud !== 'authenticated' || !Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) return null;
   const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-  const sig = b64url(parts[2]);
+  let sig;
+  try {
+    sig = b64url(parts[2]);
+  } catch {
+    return null;
+  }
+  if (header.alg === 'ES256' && sig.length !== 64) return null; // JWS ES256 = raw r||s, 64 bytes
   for (const k of await verifyingKeys()) {
     if (k.alg !== header.alg || (header.kid && k.kid && k.kid !== header.kid)) continue;
     if (await crypto.subtle.verify(ALGS[k.alg].verify, k.key, sig, data).catch(() => false)) return payload;

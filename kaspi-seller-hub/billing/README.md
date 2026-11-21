@@ -140,6 +140,26 @@ Workflow `seller-hub-db-backup` каждую ночь делает зашифр�
 
 Названия пунктов меню Supabase иногда меняются — если не нашли, ищите в документации Supabase «asymmetric JWT signing keys» и «Custom Access Token Hook».
 
+### Схема подключения (`shared/billing-config.js`)
+
+| Поле | Откуда взять | Что проверяет расширение |
+|---|---|---|
+| `supabaseUrl` | Project Settings → API → Project URL (`https://xxxx.supabase.co`) | Адрес сервера; из него же строится ожидаемый `iss` токена: `<supabaseUrl>/auth/v1` |
+| `supabaseAnonKey` | Project Settings → API → `anon public` | Публичный ключ запросов; сборка откажется, если вставлен `service_role` / `sb_secret_` |
+| `licenseKeys` | `https://xxxx.supabase.co/auth/v1/.well-known/jwks.json` → массив `keys` | Подпись токена: только `ES256` (P-256) или `RS256`, `aud = authenticated`, свой `sub`, есть `exp`/`iat` |
+
+```
+Supabase Auth ──(приватный ключ ES256 + custom_access_token_hook → claim ksh)──► access_token
+      │                                                                              │
+      └── jwks.json (открытый ключ) ──► licenseKeys в расширении ──► verifiedClaims() ┘
+                                                                         │
+                         licenseView(): срок/лимиты берутся ТОЛЬКО из ksh ──► licenseGate (service-worker.js)
+```
+
+- Пустые `supabaseUrl`/`supabaseAnonKey` → режим разработчика (всё бесплатно). Пустой `licenseKeys` → срок читается из данных браузера и правится через DevTools. `tools/build-release.mjs` не соберёт релиз ни в одном из этих случаев.
+- `licenseKeys` заморожен при загрузке: добавить «свой» ключ из консоли воркера нельзя. Если в объект ключа случайно попал приватный параметр `d` — ключ игнорируется (и его срочно нужно ротировать).
+- Проверка: `node tests/unit/license-signature.test.mjs` (подделка срока, чужой ключ, `alg: none`, HS256, правка кэша в DevTools).
+
 ## Шаг 8. Релизная сборка для Chrome Web Store
 
 ```bash
