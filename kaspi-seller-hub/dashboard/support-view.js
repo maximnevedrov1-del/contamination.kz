@@ -73,7 +73,7 @@ export function supportCard(ctx) {
     x.reply ? h('div', { class: 'ticket__a' }, h('b', null, t('support.answer')), ' ', x.reply) : h('p', { class: 'muted small' }, t('support.waiting')),
     x.reply && csatRow(x, ctx.csat?.[x.id], async (score) => {
       const { [CSAT_KEY]: m = {} } = await chrome.storage.local.get(CSAT_KEY);
-      await chrome.storage.local.set({ [CSAT_KEY]: { ...m, [x.id]: score } });
+      try { await chrome.storage.local.set({ [CSAT_KEY]: { ...m, [x.id]: score } }); } catch (e) { console.warn('[ksh.support] storage write failed', e?.message || e); }
       ctx.onCsat?.(x.id, score);
       await ctx.onTickets();
     }),

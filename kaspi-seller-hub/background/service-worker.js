@@ -160,7 +160,8 @@ const storeKeyCache = new Map();
 async function storeKeys(stores) {
   const out = [];
   for (const st of stores) {
-    const id = String(st.id ?? '');
+    // normalised so the same shop always gives the same key
+    const id = String(st.id ?? '').trim().toLowerCase();
     if (!id) continue;
     if (!storeKeyCache.has(id)) {
       const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`ksh:${id}`));
@@ -211,7 +212,7 @@ async function notifyPayment(lic) {
   const key = `${inv.id}:${inv.amount}:${new Date().toDateString()}`;
   const { 'ksh.payNotified': last } = await chrome.storage.local.get('ksh.payNotified');
   if (last === key) return;
-  await chrome.storage.local.set({ 'ksh.payNotified': key });
+  try { await chrome.storage.local.set({ 'ksh.payNotified': key }); } catch (e) { console.warn('[ksh.sw] storage write failed', e?.message || e); }
   await initI18n();
   const amount = formatMoney(inv.amount);
   const msgKey = !lic.canUse ? 'notifications.payExpired' : inv.kind === 'addon' ? 'notifications.payAddon' : 'notifications.payRenewal';
@@ -546,7 +547,7 @@ async function notifyDeadlines() {
     }
   }
   if (!fresh.length) return;
-  await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen });
+  try { await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen }); } catch (e) { console.warn('[ksh.sw] storage write failed', e?.message || e); }
   // Telegram (if linked): one message per order, even when Chrome notifications are off
   alertDeadlines(fresh).catch((e) => console.warn(LOG, 'telegram alert', e));
   if (!settings.notifications.deadlines) return;

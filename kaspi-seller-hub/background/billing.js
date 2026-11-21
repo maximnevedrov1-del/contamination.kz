@@ -27,8 +27,10 @@ class BillingError extends Error {
 }
 
 const get = async (k) => (await chrome.storage.local.get(k))[k] ?? null;
-const set = (k, v) => chrome.storage.local.set({ [k]: v });
+const set = (k, v) => chrome.storage.local.set({ [k]: v }).catch((e) => console.warn('[ksh.billing] storage write failed', k, e?.message || e));
 
+// per-worker random factor so many installs do not re-check the licence at the same moment
+const REFRESH_JITTER = 0.8 + Math.random() * 0.4;
 const BILLING_TIMEOUT_MS = 20000;
 async function http(path, { method = 'POST', body, token } = {}) {
   let res;
@@ -289,7 +291,7 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
   // A cache "from the future" was edited by hand → ignore it.
   const age = cache ? Date.now() - cache.fetchedAt : Infinity;
   const usable = cache && age >= -60000;
-  const fresh = usable && age < BILLING.refreshMinutes * 60000;
+  const fresh = usable && age < BILLING.refreshMinutes * 60000 * REFRESH_JITTER;
   if (cache && fresh && !force) return cache.data;
   if (!(await get(SESSION_KEY))) return null;
   try {

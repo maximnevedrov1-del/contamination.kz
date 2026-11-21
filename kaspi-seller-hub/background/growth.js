@@ -23,7 +23,7 @@ async function tgStatus(force = false) {
   if (!B.isConfigured() || !(await B.signedIn())) return { linked: false };
   const s = await B.tgStatus();
   const v = { ...s, at: Date.now() };
-  await chrome.storage.local.set({ [TG_KEY]: v });
+  try { await chrome.storage.local.set({ [TG_KEY]: v }); } catch (e) { console.warn('[ksh.growth] storage write failed', e?.message || e); }
   return v;
 }
 
