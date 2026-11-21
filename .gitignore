@@ -3,3 +3,6 @@ kaspi-seller-hub/dist/
 
 # Chrome profiles from test runs (may hold real tokens)
 kaspi-seller-hub/tests/**/*prof*/
+
+# graphify output (generated code map)
+graphify-out/
