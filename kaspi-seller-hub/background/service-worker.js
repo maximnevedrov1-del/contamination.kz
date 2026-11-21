@@ -47,7 +47,7 @@ import { packingHandlers } from './packing.js';
 import { initI18n, t, formatMoney, formatDate } from '../shared/i18n.js';
 import { migrateStorage, DATA_VERSION } from '../shared/migrations.js';
 import { FEATURES } from '../shared/features.js';
-import { logError, getErrorLog, clearErrorLog, formatReport } from '../shared/errorlog.js';
+import { logError, scrub, getErrorLog, clearErrorLog, formatReport } from '../shared/errorlog.js';
 import { sleep, withTimeout, createMutex, fillTemplate, nextStoreColor, groupBy, uid, storeCounts, sumCounts, deadlineOf, urgencyOf, kzParts } from '../shared/utils.js';
 
 const S = globalThis.KSH_SELECTORS;
@@ -1401,7 +1401,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .catch((e) => {
       console.error(LOG, msg.type, e);
       logError(`worker:${msg.type}`, e);
-      sendResponse({ ok: false, error: e.message || 'workerError' });
+      sendResponse({ ok: false, error: scrub(e.message) || 'workerError' });
     });
   return true;
 });

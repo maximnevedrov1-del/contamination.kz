@@ -10,6 +10,7 @@
  * made after an explicit, confirmed click in the dashboard.
  */
 import '../shared/selectors.js';
+import { scrub } from '../shared/errorlog.js';
 
 const A = () => globalThis.KSH_SELECTORS.api;
 const DAY = 86400000;
@@ -94,7 +95,7 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
       continue;
     }
     if (res.status === 429) throw fail(new ApiError('apiRateLimit', 429));
-    if (!res.ok) throw fail(new ApiError('apiHttp', res.status, (await res.text().catch(() => '')).slice(0, 300)));
+    if (!res.ok) throw fail(new ApiError('apiHttp', res.status, scrub(await res.text().catch(() => ''))));  // Kaspi body may hold buyer PII
     observe(null);
     return res;
   }

@@ -19,9 +19,11 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       BOT_KEY: ${{ secrets.BOT_KEY }}
     steps:
+      - name: Fail if secrets are missing
+        if: env.BOT_KEY == '' || env.SUPABASE_URL == ''
+        run: echo "::error::SUPABASE_URL / BOT_KEY secrets are not set" && exit 1
       - name: Send what is due
-        if: env.BOT_KEY != '' && env.SUPABASE_URL != ''
         run: |
-          code=$(curl -sS -o out.json -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/telegram-bot/run" -H "x-bot-key: ${BOT_KEY}" -H 'content-type: application/json' -d '{}')
+          code=$(curl -sS --retry 3 --retry-connrefused --retry-delay 10 --max-time 60 -o out.json -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/telegram-bot/run" -H "x-bot-key: ${BOT_KEY}" -H 'content-type: application/json' -d '{}')
           cat out.json; echo
           test "$code" = 200
