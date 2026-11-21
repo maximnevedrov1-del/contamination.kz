@@ -20,6 +20,8 @@ import {
   getChat,
   setChat,
   addInvoices,
+  pruneInvoices,
+  updateSnapshot,
   setLastSync,
   getLastSync,
   getRegistry,
@@ -561,9 +563,7 @@ async function notifyDeadlines() {
 async function onContentUpdate(snap) {
   if (!snap?.authenticated || !snap.shopId) return;
   await lock(async () => {
-    const all = await getSnapshots();
-    all[snap.shopId] = mergeStoreSnapshot(all[snap.shopId], [snap]);
-    await setSnapshots(all);
+    await updateSnapshot(snap.shopId, (cur) => mergeStoreSnapshot(cur || undefined, [snap]));
   });
   await updateBadge();
   broadcast('bg:stateChanged', await getState());
@@ -782,8 +782,8 @@ async function refreshApiOrder(shopId, token, code) {
   if (!raw) return null;
   const item = K.toOrderItem(raw);
   await lock(async () => {
-    const all = await getSnapshots();
-    const sec = all[shopId]?.sections;
+    await updateSnapshot(shopId, (cur) => {
+    const sec = cur?.sections;
     if (!sec) return;
     const old = sec.orders?.items?.find((i) => i.id === item.id);
     if (old?.entries) item.entries = old.entries;
@@ -795,7 +795,7 @@ async function refreshApiOrder(shopId, token, code) {
     put('orders', true);
     put('returns', item.kind === 'return');
     put('refusals', item.kind === 'refusal');
-    await setSnapshots(all);
+    });
   });
   return item;
 }
@@ -996,14 +996,14 @@ const actions = {
         continue;
       }
       await lock(async () => {
-        const all = await getSnapshots();
-        const items = all[shopId]?.sections?.orders?.items || [];
-        for (const st of res.statuses) {
-          const it = items.find((o) => o.id === String(st.id));
-          if (it && st.paymentStatus) Object.assign(it, { paymentStatus: st.paymentStatus, paymentRaw: st.paymentRaw });
-          results.push({ shopId, orderId: st.id, ok: !!st.paymentStatus, error: st.paymentStatus ? undefined : 'orderNotVisible' });
-        }
-        await setSnapshots(all);
+        await updateSnapshot(shopId, (cur) => {
+          const items = cur?.sections?.orders?.items || [];
+          for (const st of res.statuses) {
+            const it = items.find((o) => o.id === String(st.id));
+            if (it && st.paymentStatus) Object.assign(it, { paymentStatus: st.paymentStatus, paymentRaw: st.paymentRaw });
+            results.push({ shopId, orderId: st.id, ok: !!st.paymentStatus, error: st.paymentStatus ? undefined : 'orderNotVisible' });
+          }
+        });
       });
     }
     broadcast('bg:stateChanged', await getState());
@@ -1301,11 +1301,10 @@ const uiHandlers = {
     const next = await lock(async () => {
       const settings = await getSettings();
       delete settings.stores[shopId];
-      const [snaps, chat, tokens] = await Promise.all([getSnapshots(), getChat(), getApiTokens()]);
-      delete snaps[shopId];
+      const [chat, tokens] = await Promise.all([getChat(), getApiTokens()]);
       delete chat[shopId];
       delete tokens[shopId];
-      await Promise.all([setSnapshots(snaps), setChat(chat), setApiTokens(tokens)]);
+      await Promise.all([updateSnapshot(shopId, () => null), setChat(chat), setApiTokens(tokens), pruneInvoices({ dropShops: [shopId] })]);
       return saveSettings({ stores: settings.stores });
     });
     await updateBadge();

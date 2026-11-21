@@ -8,6 +8,7 @@
  * numbers go to usage_report() — only for signed-in sellers. No orders, products, amounts,
  * store names or tokens. Surveys (NPS, «почему не продлеваете», «ответ помог?») live here too.
  */
+import { getSnapshots } from '../shared/storage.js';
 import { dayKey } from '../shared/utils.js';
 import { isConfigured, signedIn, usageReport, feedbackDue, feedbackSubmit } from './billing.js';
 
@@ -49,7 +50,8 @@ export const noteAction = (a) => (ACTIONS.includes(a) ? bump('actions', a) : Pro
 
 /** First steps from what is on this computer (same rules as «Первые шаги» on Home). */
 async function steps() {
-  const got = await chrome.storage.local.get(['ksh.settings', 'ksh.snapshots', 'ksh.costs', 'ksh.onboarding']);
+  const got = await chrome.storage.local.get(['ksh.settings', 'ksh.costs', 'ksh.onboarding']);
+  got['ksh.snapshots'] = await getSnapshots();
   const stores = Object.values(got['ksh.settings']?.stores || {}).filter((s) => s.enabled !== false);
   return {
     store: stores.length > 0,

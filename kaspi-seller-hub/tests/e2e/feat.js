@@ -15,7 +15,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await d.evaluate(() => (location.hash = 'orders'));
   await d.waitForFunction(() => document.querySelectorAll('table.data tbody tr').length > 10, null, { timeout: 90000 });
   for (let k = 0; k < 60; k++) { // wait until order contents are attached (entries)
-    const ok = await d.evaluate(async () => Object.values((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots']).some((s) => (s.sections?.orders?.items || []).some((i) => i.id === '800002001' && i.entries?.length)));
+    const ok = await d.evaluate(async () => Object.values((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })())).some((s) => (s.sections?.orders?.items || []).some((i) => i.id === '800002001' && i.entries?.length)));
     if (ok) break; await sleep(1000);
   }
   await d.reload(); await d.waitForSelector('table.data tbody tr');
@@ -62,7 +62,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await d.evaluate(() => (location.hash = 'orders')); await sleep(500);
   await d.fill('input[type=search]', '800002001'); await sleep(500);
   const op = await cell('800002001', /^Прибыль/), amt = Number((await cell('800002001', /^Сумма/)).replace(/\D/g, ''));
-  const snapE = await d.evaluate(async () => Object.values((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots'])[0].sections.orders.items.find((i) => i.id === '800002001').entries);
+  const snapE = await d.evaluate(async () => Object.values((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()))[0].sections.orders.items.find((i) => i.id === '800002001').entries);
   const exp1 = amt - snapE.reduce((s, e) => s + costs[e.sku] * e.quantity, 0) - amt * 0.1;
   check('6 order profit column correct', Number(op.replace(/[^\d]/g, '')) === Math.round(Math.abs(exp1)), `amount=${amt} expected=${Math.round(exp1)} got=${op}`);
   await d.evaluate(() => (location.hash = 'analytics')); await sleep(1200);
@@ -78,7 +78,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await pp.waitForLoadState(); await sleep(1500);
   const lines = await pp.$$eval('.pick tbody tr', (trs) => trs.map((tr) => tr.innerText.replace(/\s+/g, ' ')));
   const qty = await pp.$$eval('.pick .qty', (q) => q.reduce((n, x) => n + Number(x.innerText), 0));
-  const expQty = await d.evaluate(async () => { const it = Object.values((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots'])[0].sections.orders.items; return ['800002001', '800002002'].reduce((n, c) => n + it.find((i) => i.id === c).entries.reduce((m, e) => m + e.quantity, 0), 0); });
+  const expQty = await d.evaluate(async () => { const it = Object.values((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()))[0].sections.orders.items; return ['800002001', '800002002'].reduce((n, c) => n + it.find((i) => i.id === c).entries.reduce((m, e) => m + e.quantity, 0), 0); });
   check('8 pick list built from 2 orders, quantities add up', lines.length >= 1 && qty === expQty, `${JSON.stringify(lines)} qty=${qty} expected=${expQty}`);
   await pp.screenshot({ path: __dirname + '/feat-picklist.png' }); await pp.close();
   // nothing selected → all to assemble

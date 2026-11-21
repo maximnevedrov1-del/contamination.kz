@@ -57,7 +57,7 @@ const ALL = ['ksh-sync', 'ksh-health', 'ksh-chat-poll', 'ksh-card-imports'];
     check(`1.${round} every answer arrived`, res.every((r) => r && r.ok !== false || r?.status), JSON.stringify(res.map((r) => r?.ok ?? r?.status)));
   }
   const st = await msg('ui:getState');
-  const snaps = async () => Object.values((await store('ksh.snapshots')) || {});
+  const snaps = async () => Object.values((await d.evaluate(async () => (await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()))) || {});
   check('1 both stores and their orders intact', Object.keys(st.settings.stores).length === 2 && (await snaps()).filter((s) => s?.sections?.orders?.items?.length).length === 2, String((await snaps()).length));
 
   // 2. the worker is stopped (Chrome does this after 30 s idle) → woken by a page; nothing lost

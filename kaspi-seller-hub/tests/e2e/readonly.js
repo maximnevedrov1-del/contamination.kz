@@ -29,7 +29,7 @@ const posts = () => fetch('http://localhost:8099/__log').then((r) => r.json()).t
 
   // 2. reads still work
   const sync = await msg('ui:sync');
-  check('2 orders still load (reads allowed)', !!sync?.settings && (await d.evaluate(async () => Object.values((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots'])[0]?.sections?.orders?.items?.length)) > 0);
+  check('2 orders still load (reads allowed)', !!sync?.settings && (await d.evaluate(async () => Object.values((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()))[0]?.sections?.orders?.items?.length)) > 0);
 
   // 3. accept through the UI → refused, nothing sent
   await d.goto(url('orders')); await d.reload(); await sleep(1500);

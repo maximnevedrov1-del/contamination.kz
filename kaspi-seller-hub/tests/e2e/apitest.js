@@ -42,7 +42,7 @@ const mlog = () => fetch('http://localhost:8099/__log').then((r) => r.json());
   const firstLog = await mlog();
   const lists = firstLog.filter((x) => x.list);
   check('3 every list request has a state filter and ≤14-day window', lists.every((x) => x.list && x.days <= 14), `requests=${lists.length}`);
-  const snaps = await sw.evaluate(async () => JSON.stringify((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots']));
+  const snaps = await sw.evaluate(async () => JSON.stringify((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })())));
   check('3 buyer name/phone not stored', !snaps.includes('SECRET NAME') && !snaps.includes('7000000000'));
   const state = await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:getState' }).then((s) => JSON.stringify(s)));
   check('3 token never sent to pages (getState)', !state.includes('GOOD-TOKEN'));

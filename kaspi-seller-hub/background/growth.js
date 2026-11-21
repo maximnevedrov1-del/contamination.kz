@@ -7,6 +7,7 @@
  * The server never gets buyers' data: only counts, sums, order numbers and store names.
  */
 import { BILLING } from '../shared/billing-config.js';
+import { getSnapshots } from '../shared/storage.js';
 import { dayKey, deadlineOf, urgencyOf } from '../shared/utils.js';
 import * as B from './billing.js';
 
@@ -56,7 +57,8 @@ export async function reportDigest() {
   if (!B.isConfigured() || !(await B.signedIn())) return false;
   const tg = await tgStatus().catch(() => null);
   if (!tg?.linked || tg.digest === false) return false;           // nobody to send it to
-  const got = await chrome.storage.local.get(['ksh.snapshots', 'ksh.settings']);
+  const got = await chrome.storage.local.get(['ksh.settings']);
+  got['ksh.snapshots'] = await getSnapshots();
   const settings = got['ksh.settings'] || {};
   const today = dayKey(Date.now());
   const yesterday = dayKey(Date.now() - 86400000);

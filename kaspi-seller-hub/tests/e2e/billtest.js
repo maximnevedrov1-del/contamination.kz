@@ -20,7 +20,7 @@ const OUT = __dirname;
   await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#orders`);
   await d.waitForFunction(() => !document.querySelector('#refreshBtn').disabled, null, { timeout: 30000 }); await sleep(500);
   check('1 logged out: orders replaced by paywall', (await d.locator('#view').innerText()).includes('Нужна подписка'));
-  const snapsLoggedOut = await d.evaluate(async () => Object.keys((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots'] || {}).length);
+  const snapsLoggedOut = await d.evaluate(async () => Object.keys((await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()) || {}).length);
   check('1 logged out: no store data was synced', snapsLoggedOut === 0, String(snapsLoggedOut));
   const packTry = await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:pack', payload: { items: [{ shopId: '1001', orderId: '500000' }] } }));
   check('1 logged out: worker refuses actions', packTry?.error === 'subscriptionRequired', JSON.stringify(packTry));

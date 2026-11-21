@@ -34,7 +34,7 @@ const check = (n, ok, info = '') => { if (!ok) fails++; console.log(ok ? 'PASS' 
     await sleep(1500); // typing the next token
   }
   const counts = () => sw.evaluate(async () => {
-    const snaps = (await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots'] || {};
+    const snaps = (await (async () => { const g = chrome.storage.local; const ids = (await g.get('ksh.snapIndex'))['ksh.snapIndex']; if (!ids) return (await g.get('ksh.snapshots'))['ksh.snapshots']; const r = await g.get(ids.map((i) => 'ksh.snap.' + i)); return Object.fromEntries(ids.filter((i) => r['ksh.snap.' + i]).map((i) => [i, r['ksh.snap.' + i]])); })()) || {};
     return Object.values(snaps).map((s) => s.sections?.orders?.items?.length || 0);
   });
   let c = [];
@@ -52,7 +52,7 @@ const check = (n, ok, info = '') => { if (!ok) fails++; console.log(ok ? 'PASS' 
   // ---------- 2. storage ----------
   report.storageMb = await sw.evaluate(async () => {
     const mb = async (k) => Math.round(((await chrome.storage.local.getBytesInUse(k)) / 1048576) * 10) / 10;
-    return { snapshots: await mb('ksh.snapshots'), entries: await mb('ksh.apiEntries'), total: await mb(null) };
+    return { snapshots: await mb(['ksh.snapshots', 'ksh.snapIndex', ...((await chrome.storage.local.get('ksh.snapIndex'))['ksh.snapIndex'] || []).map((i) => 'ksh.snap.' + i)]), entries: await mb('ksh.apiEntries'), total: await mb(null) };
   });
   console.log('INFO storage MB', JSON.stringify(report.storageMb));
 
