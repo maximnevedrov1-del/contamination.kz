@@ -9,8 +9,8 @@
  * Never put the service_role key here.
  */
 export const BILLING = Object.freeze({
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://zraktrilvwrfpcbmkqwi.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyYWt0cmlsdndyZnBjYm1rcXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyMjE4MzgsImV4cCI6MjExMDc5NzgzOH0.57Hd8d70R2OVjC40H_Ej552xWXn9_vFK4XasiAvU-XA',
   // How often the licence is re-checked online, and how long a cached licence is
   // trusted while the server cannot be reached.
   refreshMinutes: 10,
