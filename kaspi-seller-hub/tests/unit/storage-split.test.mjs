@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 const data = {};
 const listeners = [];
 const writes = [];
+let failNext = null; // set to an Error: every set() throws it
 const fire = (changes) => listeners.forEach((l) => l(changes, 'local'));
 globalThis.chrome = {
   storage: {
@@ -15,6 +16,7 @@ globalThis.chrome = {
         return Object.fromEntries(keys.filter((x) => x in data).map((x) => [x, structuredClone(data[x])]));
       },
       async set(o) {
+        if (failNext) throw failNext;
         writes.push(Object.keys(o).sort());
         const ch = {};
         for (const [k, v] of Object.entries(o)) (ch[k] = { oldValue: data[k], newValue: structuredClone(v) }), (data[k] = structuredClone(v));
@@ -150,6 +152,37 @@ await t('chat keeps the 50 most recently opened conversations per store', async 
   const kept = Object.keys(data['ksh.chat'].A.threads);
   assert.equal(kept.length, 50);
   assert.ok(kept.includes('c59') && !kept.includes('c0'));
+});
+
+const quota = () => Object.assign(new Error('QUOTA_BYTES quota exceeded'), { name: 'QuotaExceededError' });
+await t('quota failure: setters resolve with {ok:false}, old data stays, health reports it', async () => {
+  assert.deepEqual(S.getStorageHealth(), { ok: true });
+  assert.deepEqual(await S.setCosts({ A: { x: 1 } }), { ok: true });
+  const warn = console.warn; console.warn = () => {};
+  try {
+    failNext = quota();
+    const r = await S.setCosts({ A: { x: 2 } });
+    assert.equal(r.ok, false);
+    assert.equal(r.kind, 'quota');
+    const h = S.getStorageHealth();
+    assert.equal(h.ok, false);
+    assert.equal(h.kind, 'quota');
+    assert.equal(h.key, 'ksh.costs');
+    const before = structuredClone(data);
+    const r2 = await S.setSnapshots({ ...(await S.getSnapshots()), Q: snap('Q') });
+    assert.equal(r2.ok, false);
+    const r3 = await S.addInvoices([{ shopId: 'Q', orderId: '1', ts: Date.now(), data: 'x' }]);
+    assert.equal(r3.ok, false);
+    assert.deepEqual(data, before); // nothing written, nothing removed
+  } finally { failNext = null; console.warn = warn; }
+  assert.deepEqual((await S.getCosts()).A, { x: 1 });
+  assert.ok(await S.getSnapshot('R')); // earlier snapshots still readable
+  assert.equal(await S.getSnapshot('Q'), null);
+});
+await t('normal write after a failure returns {ok:true}', async () => {
+  assert.deepEqual(await S.setCosts({ A: { x: 3 } }), { ok: true });
+  assert.deepEqual((await S.getCosts()).A, { x: 3 });
+  assert.deepEqual(await S.addInvoices([{ shopId: 'Q', orderId: '1', ts: Date.now(), data: 'x' }]), { ok: true });
 });
 
 console.log(`\n${n} passed`);

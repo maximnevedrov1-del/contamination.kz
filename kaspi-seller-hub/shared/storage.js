@@ -84,7 +84,29 @@ async function read(area, key, fallback) {
   const res = await area().get(key);
   return res[key] ?? structuredClone(fallback);
 }
-const write = (area, key, value) => area().set({ [key]: value });
+let lastWriteError = null;
+/** storage.set that never throws (quota etc.): returns { ok: true } or { ok: false, kind, message }. One call = all or nothing. */
+async function safeSet(area, items, label) {
+  let err = null;
+  try {
+    await area().set(items);
+    const le = globalThis.chrome?.runtime?.lastError;
+    if (le) err = le;
+  } catch (e) {
+    err = e || new Error('storage write failed');
+  }
+  if (!err) return { ok: true };
+  const message = String(err.message ?? err);
+  const kind = err.name === 'QuotaExceededError' || /quota/i.test(message) ? 'quota' : 'error';
+  console.warn('[ksh.storage] write failed', label, kind, message);
+  lastWriteError = { at: Date.now(), key: label, kind, message };
+  return { ok: false, kind, message };
+}
+/** Last failed write since this worker started, or { ok: true }. */
+export function getStorageHealth() {
+  return lastWriteError ? { ok: false, ...lastWriteError } : { ok: true };
+}
+const write = (area, key, value) => safeSet(area, { [key]: value }, key);
 
 /** @returns {Promise<Settings>} */
 export async function getSettings() {
@@ -230,18 +252,22 @@ export async function setSnapshots(v) {
   const before = legacy ? Object.keys(got[KEYS.snapshots] || {}) : got[SNAP_INDEX];
   const ids = Object.keys(v || {}).filter((id) => v[id]);
   const patch = {};
+  const seen = [];
   for (const id of ids) {
     const stored = packSnapshot(v[id]);
     const fp = fingerprint(stored);
     if (legacy || snapSeen.get(id) !== fp) patch[snapKey(id)] = stored;
-    snapSeen.set(id, fp);
+    seen.push([id, fp]);
   }
   const gone = before.filter((id) => !ids.includes(id));
   if (legacy || gone.length || ids.length !== before.length || ids.some((id, i) => before[i] !== id)) patch[SNAP_INDEX] = ids;
-  if (Object.keys(patch).length) await local().set(patch); // index and data in one write
+  const res = Object.keys(patch).length ? await safeSet(local, patch, 'snapshots') : { ok: true }; // index and data in one write
+  if (!res.ok) return res; // nothing was written: keep old data, skip removals and fingerprints
+  for (const [id, fp] of seen) snapSeen.set(id, fp);
   gone.forEach((id) => snapSeen.delete(id));
   const drop = [...gone.map(snapKey), ...(legacy && KEYS.snapshots in got ? [KEYS.snapshots] : [])];
   if (drop.length) await local().remove(drop);
+  return res;
 }
 /**
  * Change one store: fn(snapshot|null) → new snapshot, or undefined to keep the (mutated) one,
@@ -266,7 +292,10 @@ export async function updateSnapshot(shopId, fn) {
   if (next === undefined) next = cur;
   const ids = got[SNAP_INDEX];
   if (!next) {
-    if (ids.includes(shopId)) await local().set({ [SNAP_INDEX]: ids.filter((id) => id !== shopId) });
+    if (ids.includes(shopId)) {
+      const r = await safeSet(local, { [SNAP_INDEX]: ids.filter((id) => id !== shopId) }, 'snapshot');
+      if (!r.ok) return null; // index unchanged: keep the data it points to
+    }
     await local().remove(snapKey(shopId));
     snapSeen.delete(shopId);
     return null;
@@ -276,8 +305,7 @@ export async function updateSnapshot(shopId, fn) {
   const patch = {};
   if (fp !== curFp) patch[snapKey(shopId)] = stored;
   if (!ids.includes(shopId)) patch[SNAP_INDEX] = [...ids, shopId];
-  snapSeen.set(shopId, fp);
-  if (Object.keys(patch).length) await local().set(patch);
+  if (!Object.keys(patch).length || (await safeSet(local, patch, 'snapshot')).ok) snapSeen.set(shopId, fp);
   return next;
 }
 
@@ -332,11 +360,12 @@ async function commitInvoices(byK, added, legacy, now) {
   const keep = new Set(kept.map((e) => e.k));
   const patch = { [INV_INDEX]: kept };
   for (const [k, v] of added) if (keep.has(k)) patch[INV_PREFIX + k] = v;
-  await local().set(patch); // index and new files in one write
+  const res = await safeSet(local, patch, 'invoices'); // index and new files in one write
+  if (!res.ok) return { ...res, pruned: 0 }; // nothing written: skip removals so the index never points at missing data
   const drop = all.filter((e) => !keep.has(e.k)).map((e) => INV_PREFIX + e.k);
   if (legacy) drop.push(KEYS.invoices);
   if (drop.length) await local().remove(drop);
-  return all.length - kept.length;
+  return { ...res, pruned: all.length - kept.length };
 }
 /** Index + files to write, with the old single-array invoices moved in (split keys win). */
 function invMerge(index, legacy) {
@@ -363,7 +392,8 @@ export async function addInvoices(list) {
     added.set(invKey(v), v);
     byK.set(invKey(v), invEntry(v));
   }
-  await commitInvoices(byK, added, legacy, now);
+  const { pruned, ...res } = await commitInvoices(byK, added, legacy, now);
+  return res;
 }
 
 /**
@@ -393,7 +423,8 @@ export async function pruneInvoices({ dropShops = [] } = {}) {
   const drop = new Set(dropShops);
   const gone = [...byK.values()].filter((e) => drop.has(e.shopId));
   gone.forEach((e) => (byK.delete(e.k), added.delete(e.k)));
-  const pruned = await commitInvoices(byK, added, legacy, Date.now());
+  const { ok, pruned } = await commitInvoices(byK, added, legacy, Date.now());
+  if (!ok) return 0;
   if (gone.length) await local().remove(gone.map((e) => INV_PREFIX + e.k));
   return gone.length + pruned;
 }
