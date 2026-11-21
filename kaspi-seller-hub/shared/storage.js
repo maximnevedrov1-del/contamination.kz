@@ -75,6 +75,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   stores: {},
 });
 
+import { decryptToken, encryptToken, isEncrypted } from './token-crypto.js';
+
 const local = () => chrome.storage.local;
 const session = () => chrome.storage.session;
 
@@ -282,8 +284,44 @@ export const getPrintQueue = () => read(session, KEYS.printQueue, []);
 export const setPrintQueue = (v) => write(session, KEYS.printQueue, v);
 
 /** API tokens. Read only by the service worker. */
-export const getApiTokens = () => read(local, KEYS.apiTokens, {});
-export const setApiTokens = (v) => write(local, KEYS.apiTokens, v);
+// Stored encrypted ({ [shopId]: 'enc1:…' }, shared/token-crypto.js); callers see plain tokens.
+// Older versions stored plain strings: they are read as is and re-encrypted on the first read.
+// Token writes and that migration run one after another, so a migration never overwrites a newer token.
+let tokenChain = Promise.resolve();
+const tokenSerial = (fn) => {
+  const run = tokenChain.then(fn, fn);
+  tokenChain = run.catch(() => {});
+  return run;
+};
+export async function getApiTokens() {
+  const raw = await read(local, KEYS.apiTokens, {});
+  const out = {};
+  let plain = false;
+  for (const [shopId, v] of Object.entries(raw || {})) {
+    if (!v) continue;
+    if (!isEncrypted(v)) plain = true;
+    const tok = await decryptToken(shopId, v);
+    if (tok) out[shopId] = tok;
+    else console.warn('[ksh] API token of store', shopId, 'cannot be decrypted — reconnect the store');
+  }
+  if (plain) await tokenSerial(migrateApiTokens).catch((e) => console.warn('[ksh] token encryption failed', e));
+  return out;
+}
+async function migrateApiTokens() {
+  const raw = await read(local, KEYS.apiTokens, {}); // fresh: a newer write may have happened
+  let changed = false;
+  for (const [shopId, v] of Object.entries(raw)) {
+    if (v && !isEncrypted(v)) (raw[shopId] = await encryptToken(shopId, v)), (changed = true);
+  }
+  if (changed) await write(local, KEYS.apiTokens, raw);
+}
+/** @param {Record<string, string>} v plain tokens by shopId */
+export const setApiTokens = (v) =>
+  tokenSerial(async () => {
+    const enc = {};
+    for (const [shopId, tok] of Object.entries(v || {})) if (tok) enc[shopId] = isEncrypted(tok) ? tok : await encryptToken(shopId, tok);
+    await write(local, KEYS.apiTokens, enc);
+  });
 export const getApiEntries = () => read(local, KEYS.apiEntries, {});
 export const setApiEntries = (v) => write(local, KEYS.apiEntries, v);
 
