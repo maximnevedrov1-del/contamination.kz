@@ -111,6 +111,9 @@ jobs:
           mkdir -p ../apicopy && tar -C ../.. --exclude=./tests --exclude=./dist -cf - . | tar -C ../apicopy -xf -
           sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" ../apicopy/shared/selectors.js
           grep -q "localhost:8099" ../apicopy/shared/selectors.js
+          # Tests run the extension in developer mode (no login), never against the real Supabase.
+          sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" ../apicopy/shared/billing-config.js
+          grep -q "supabaseUrl: ''," ../apicopy/shared/billing-config.js
       - name: apitest, feat, photoprint (fresh mock API and profile each)
         run: |
           rc=0
