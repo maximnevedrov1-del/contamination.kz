@@ -54,57 +54,65 @@ function dataUrlToBytes(dataUrl) {
 /** Load the optional bundled pdf.js. */
 async function loadPdfJs() {
   try {
-    const lib = await import('../vendor/pdfjs/pdf.min.mjs');
-    lib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.mjs');
-    return lib;
-  } catch {
-    return null;
+      const lib = await import('../vendor/pdfjs/pdf.min.mjs');
+      lib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.mjs');
+      return lib;
+    } catch {
+      return null;
+    }
   }
-}
 
-/** Print resolution of waybills: barcodes must stay sharp on thermal label printers. */
-export const PRINT_DPI = 300;
-const PT_TO_MM = 25.4 / 72;
-const MAX_CANVAS_SIDE = 7000; // browsers refuse bigger canvases
+  /** Print resolution of waybills: barcodes must stay sharp on thermal label printers. */
+  export const PRINT_DPI = 300;
+  const PT_TO_MM = 25.4 / 72;
+  const MAX_CANVAS_SIDE = 7000; // browsers refuse bigger canvases
 
-/**
- * Render every page of a PDF waybill into an image at PRINT_DPI. The page keeps its
- * proportions; `layoutOf` (print-layout.js) says on which paper it goes and whether
- * it is turned 90° to fit a label / cell of the other orientation.
- * @returns {Promise<Array<{ src:string, wMm:number, hMm:number, layout:ReturnType<typeof layoutFor> }>>}
- */
-async function renderPdf(pdfjs, bytes, layoutOf, { trim = false } = {}) {
-  const pdf = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
-  const images = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    const base = page.getViewport({ scale: 1 }); // 1 unit = 1 pt, page rotation applied
-    const scale = Math.min(PRINT_DPI / 72, MAX_CANVAS_SIDE / Math.max(base.width, base.height));
-    const viewport = page.getViewport({ scale });
-    let canvas = document.createElement('canvas');
-    canvas.width = Math.round(viewport.width);
-    canvas.height = Math.round(viewport.height);
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    // Kaspi puts its ~100×150 mm label in the corner of an A4 page: for a label printer
-    // (and 4 per A4) the empty paper is cut off, so the label prints at its real size
-    // instead of A4 shrunk into a label (barcodes too small to scan).
-    if (trim) canvas = cropToContent(canvas, Math.round((2 / 25.4) * PRINT_DPI));
-    const mm = (px) => Math.round(((px / scale) * PT_TO_MM) * 10) / 10;
-    const wMm = mm(canvas.width);
-    const hMm = mm(canvas.height);
-    const layout = layoutOf({ w: wMm, h: hMm });
-    if (layout.rotate) canvas = rotate90(canvas);
-    // PNG (lossless: barcodes stay sharp) encoded off the main thread; a blob URL instead of a
-    // multi-megabyte data: string (toDataURL blocked the page ~0.1 s per waybill)
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    images.push({ src: URL.createObjectURL(blob), wMm, hMm, layout });
-    canvas.width = canvas.height = 0; // free memory before the next page
-    page.cleanup();
+  /**
+   * Render every page of a PDF waybill into an image at PRINT_DPI. The page keeps its
+   * proportions; `layoutOf` (print-layout.js) says on which paper it goes and whether
+   * it is turned 90° to fit a label / cell of the other orientation.
+   * @returns {Promise<Array<{ src:string, wMm:number, hMm:number, layout:ReturnType<typeof layoutFor> }>>}
+   */
+  async function renderPdf(pdfjs, bytes, layoutOf, { trim = false } = {}) {
+    const pdf = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
+    const images = [];
+    let canvas = null;
+    try {
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const base = page.getViewport({ scale: 1 }); // 1 unit = 1 pt, page rotation applied
+      const scale = Math.min(PRINT_DPI / 72, MAX_CANVAS_SIDE / Math.max(base.width, base.height));
+      const viewport = page.getViewport({ scale });
+      canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      // Kaspi puts its ~100×150 mm label in the corner of an A4 page: for a label printer
+      // (and 4 per A4) the empty paper is cut off, so the label prints at its real size
+      // instead of A4 shrunk into a label (barcodes too small to scan).
+      if (trim) canvas = cropToContent(canvas, Math.round((2 / 25.4) * PRINT_DPI));
+      const mm = (px) => Math.round(((px / scale) * PT_TO_MM) * 10) / 10;
+      const wMm = mm(canvas.width);
+      const hMm = mm(canvas.height);
+      const layout = layoutOf({ w: wMm, h: hMm });
+      if (layout.rotate) canvas = rotate90(canvas);
+      // PNG (lossless: barcodes stay sharp) encoded off the main thread; a blob URL instead of a
+      // multi-megabyte data: string (toDataURL blocked the page ~0.1 s per waybill)
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+      images.push({ src: URL.createObjectURL(blob), wMm, hMm, layout });
+      canvas.width = canvas.height = 0; // free memory before the next page
+      page.cleanup();
+    }
+  } catch (e) {
+    images.forEach((i) => URL.revokeObjectURL(i.src)); // a half-rendered waybill is not shown
+    throw e;
+  } finally {
+    if (canvas) canvas.width = canvas.height = 0;
+    await pdf.destroy();
   }
-  await pdf.destroy();
   return images;
 }
 
@@ -310,7 +318,9 @@ async function main() {
 
   const [queue, invoices] = await Promise.all([getPrintQueue(), getInvoices()]);
   const byKey = new Map(invoices.map((i) => [`${i.shopId}::${i.orderId}`, i]));
-  const wanted = queue.length ? queue : invoices.map((i) => ({ shopId: i.shopId, orderId: i.orderId }));
+  // no queue (page opened directly): the newest waybills only, not every one ever saved
+  const MAX_UNQUEUED = 100;
+  const wanted = queue.length ? queue : [...invoices].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, MAX_UNQUEUED).map((i) => ({ shopId: i.shopId, orderId: i.orderId }));
   const found = wanted.map((q) => byKey.get(`${q.shopId}::${q.orderId}`)).filter(Boolean);
   const missingCount = wanted.length - found.length;
   const storeName = (id) => settings.stores[id]?.alias || settings.stores[id]?.name || id;
@@ -360,20 +370,27 @@ async function main() {
         const imgs = rendered.get(inv);
         if (imgs instanceof Error) throw imgs;
         imgs.forEach(({ src, layout }) => waybills.push({ src, layout, label }));
-        originals.append(h('a', { href: URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' })), target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId })));
+        // the PDF copy is made on click, not for every waybill up front
+        const link = h('a', { href: '#', target: '_blank', rel: 'noopener' }, t('print.openOriginal', { id: inv.orderId }));
+        link.addEventListener('click', () => {
+          if (link.href.startsWith('blob:')) return;
+          link.href = blobUrl(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' }));
+        });
+        originals.append(link);
       } catch (e) {
         console.error('[KSH/print] pdf render failed', inv.orderId, e);
       }
     } else {
-      const blobUrl = URL.createObjectURL(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' }));
+      const url = blobUrl(new Blob([dataUrlToBytes(inv.data)], { type: 'application/pdf' }));
       const page = pageEl(label);
       page.append(
-        h('iframe', { src: blobUrl, title: label }),
-        h('p', { class: 'no-print' }, h('a', { href: blobUrl, target: '_blank', rel: 'noopener' }, t('print.openPdf'))),
+        h('iframe', { src: url, title: label }),
+        h('p', { class: 'no-print' }, h('a', { href: url, target: '_blank', rel: 'noopener' }, t('print.openPdf'))),
       );
       fragment.append(page);
     }
   }
+  waybills.forEach((w) => blobUrls.add(w.src));
   buildSheets(waybills).forEach((sheet) => fragment.append(sheet));
   clear(pages).append(fragment);
   if (originals.childElementCount) notices.append(originals);
@@ -382,5 +399,14 @@ async function main() {
   await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => (img.onload = img.onerror = r)))));
   if (!hasPdf || pdfjs) window.print();
 }
+
+/** Blob URLs of this page: released when the tab is closed or reloaded. */
+const blobUrls = new Set();
+function blobUrl(blob) {
+  const url = URL.createObjectURL(blob);
+  blobUrls.add(url);
+  return url;
+}
+addEventListener('pagehide', () => blobUrls.forEach((u) => URL.revokeObjectURL(u)));
 
 main();

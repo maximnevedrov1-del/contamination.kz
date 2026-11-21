@@ -645,6 +645,8 @@ function updateBadge() {
   return badgeRun;
 }
 
+let printOpening = false;
+
 async function renderBadge() {
   const [snapshots, chat, settings] = await Promise.all([getSnapshots(), getChat(), getSettings()]);
   const enabled = Object.values(snapshots).filter((s) => settings.stores[s.shopId]?.enabled === true);
@@ -927,9 +929,23 @@ const actions = {
   },
 
   /** "Print invoices": hand the selection to print.html. */
+  // One print tab: repeated clicks reload it instead of opening a tab each (every tab renders
+  // the whole queue at 300 dpi — 50 clicks used to mean 50 tabs and an out-of-memory browser).
   print: async ({ items }) => {
-    await setPrintQueue(items);
-    await chrome.tabs.create({ url: chrome.runtime.getURL('dashboard/print.html') });
+    if (printOpening) return { ok: true };
+    printOpening = true;
+    try {
+      await setPrintQueue(items);
+      const url = chrome.runtime.getURL('dashboard/print.html');
+      const [tab] = (await chrome.tabs.query({ url })).filter((t) => t.url === url);
+      if (tab) {
+        await chrome.tabs.update(tab.id, { active: true });
+        await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+        await chrome.tabs.reload(tab.id);
+      } else await chrome.tabs.create({ url });
+    } finally {
+      setTimeout(() => (printOpening = false), 1500); // a burst of clicks opens one tab
+    }
     return { ok: true };
   },
 
