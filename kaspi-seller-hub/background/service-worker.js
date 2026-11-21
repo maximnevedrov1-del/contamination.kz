@@ -1392,7 +1392,7 @@ async function licenseGate(type, payload) {
   const shops = [...(payload?.items || []).map((i) => i.shopId), payload?.shopId, ...(payload?.shopIds || [])].filter(Boolean);
   if (shops.length && type !== 'ui:connectApi') {
     const allowed = new Set(allowedStoreIds(await getSettings(), lic));
-    if (shops.some((id) => !allowed.has(id))) return { ok: false, error: 'storeOverLimit' };
+    if (shops.some((id) => !allowed.has(id))) return { ok: false, error: lic.sharedStores ? 'storeShared' : 'storeOverLimit' };
   }
   return null;
 }

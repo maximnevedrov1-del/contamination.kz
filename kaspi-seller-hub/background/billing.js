@@ -373,6 +373,9 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   let storeLimit = ['expired', 'frozen'].includes(status) ? 0 : (paid || grace ? paidLimit : trialLimit) || lic.pricing?.base_stores || 3;
   const boosted = (paid || grace) && after(boostUntil);
   if (boosted) storeLimit = Math.max(storeLimit, baseStores);
+  // Stores of this login in use on other computers right now count against the same limit.
+  const sharedStores = Math.max(0, Math.floor(Number(lic.shared_stores) || 0));
+  if (sharedStores && storeLimit != null) storeLimit = Math.max(0, storeLimit - sharedStores);
   const coverageEnd = paid ? paidUntil : trial ? trialEnds : grace ? graceUntil : paidUntil || trialEnds;
   const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
   const remindDays = lic.remind_days ?? 5;
@@ -395,6 +398,7 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     termsVersion: lic.terms_required || null,
     termsAcceptedAt: lic.terms_accepted_at || null,
     storeLimit,
+    sharedStores,
     coverageEnd,
     daysLeft: Math.max(0, Math.ceil(msLeft / DAY)),
     remindDays,
