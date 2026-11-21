@@ -69,6 +69,12 @@
 
 Выполните `006_indexes.sql`. Его тоже можно запускать повторно.
 
+В нём же функция `health()` для внешнего мониторинга доступности: `POST /rest/v1/rpc/health` с anon-ключом возвращает `{"ok": true}`.
+
+### Резервные копии
+
+Workflow `seller-hub-db-backup` каждую ночь делает зашифрованный дамп БД и хранит его 30 дней в артефактах GitHub Actions. Нужны секреты `SUPABASE_DB_URL` (строка подключения из Project Settings → Database) и `BACKUP_PASSPHRASE` (храните копию вне GitHub). Восстановление описано в начале файла workflow.
+
 ## Шаг 3. Вход по коду из письма
 
 1. **Authentication → Sign In / Providers → Email**: должно быть включено.
