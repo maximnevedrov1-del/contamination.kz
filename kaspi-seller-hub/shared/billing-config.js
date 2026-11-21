@@ -20,7 +20,10 @@ export const BILLING = Object.freeze({
   // When set, the subscription is read ONLY from tokens signed by this key, so it cannot
   // be faked by editing the browser storage. Paste the objects as they are, e.g.
   //   licenseKeys: [{ kty: 'EC', crv: 'P-256', x: '…', y: '…', kid: '…', alg: 'ES256' }],
-  licenseKeys: [],
+  licenseKeys: [
+    { kty: 'EC', crv: 'P-256', alg: 'ES256', kid: '1cdfdce0-66d9-457a-9b62-035d1d1ebaff', x: 'cvZImr8hS_rStHS_VwlVXrcb1N-TdhmdeCw-G7zHono', y: 'fFNyzE2N12mbol8pLyOwNuEuQ46UXl5ezpEYKKyv938' },
+    { kty: 'EC', crv: 'P-256', alg: 'ES256', kid: 'aa6ca63c-7540-45b2-a3ca-19669682cbae', x: 'Migl7uXgj3nGAKRkPmocOjnhssv8on2yBt1ibCp1kRE', y: 'ncjgsnfCQcFqKv-1Z9HvfFuTRQ0Xy7VByX350IUn-pQ' },
+  ],
 });
 // Deep-freeze the keys so nothing running later in the worker can add its own key.
 Object.freeze(BILLING.licenseKeys);

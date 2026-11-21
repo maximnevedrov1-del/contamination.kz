@@ -23,7 +23,7 @@ writeFileSync(path.join(dir, 'background/billing.js'), readFileSync(path.join(RO
 const cfg = readFileSync(path.join(ROOT, 'shared/billing-config.js'), 'utf8')
   .replace(/supabaseUrl: '[^']*'/, `supabaseUrl: '${URL_}'`)
   .replace(/supabaseAnonKey: '[^']*'/, "supabaseAnonKey: 'anon'")
-  .replace('licenseKeys: []', `licenseKeys: [${JSON.stringify(pub)}]`);
+  .replace(/^  licenseKeys: \[[^\]]*\]/m, `licenseKeys: [${JSON.stringify(pub)}]`);
 writeFileSync(path.join(dir, 'shared/billing-config.js'), cfg);
 
 const store = {};

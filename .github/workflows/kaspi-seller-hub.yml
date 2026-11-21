@@ -46,9 +46,15 @@ jobs:
           if grep -rnE '\beval\s*\(|new Function\s*\(' background dashboard popup shared content --include=*.js; then
             echo 'eval / new Function found'; exit 1
           fi
-      - name: Release build refuses an unconfigured build
+      - name: Release build works with the real config and refuses an unconfigured one
         run: |
-          if node tools/build-release.mjs; then echo 'release build must refuse an empty subscription config'; exit 1; fi
+          node tools/build-release.mjs
+          mkdir -p /tmp/emptycfg && tar --exclude=./tests --exclude=./dist -cf - . | tar -C /tmp/emptycfg -xf -
+          sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" /tmp/emptycfg/shared/billing-config.js
+          if (cd /tmp/emptycfg && node tools/build-release.mjs); then echo 'release build must refuse an empty subscription config'; exit 1; fi
+          rm -rf /tmp/nokeys && mkdir -p /tmp/nokeys && tar --exclude=./tests --exclude=./dist -cf - . | tar -C /tmp/nokeys -xf -
+          perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m" /tmp/nokeys/shared/billing-config.js
+          if (cd /tmp/nokeys && node tools/build-release.mjs); then echo 'release build must refuse a config without signing keys'; exit 1; fi
 
   sql:
     name: Database (billing, consent, attacks, price lists)
@@ -113,7 +119,8 @@ jobs:
           grep -q "localhost:8099" ../apicopy/shared/selectors.js
           # Tests run the extension in developer mode (no login), never against the real Supabase.
           sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" ../apicopy/shared/billing-config.js
-          grep -q "supabaseUrl: ''," ../apicopy/shared/billing-config.js
+          perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m" ../apicopy/shared/billing-config.js
+          grep -q "supabaseUrl: ''," ../apicopy/shared/billing-config.js && grep -q "^  licenseKeys: \[\]" ../apicopy/shared/billing-config.js
       - name: apitest, feat, photoprint (fresh mock API and profile each)
         run: |
           rc=0
