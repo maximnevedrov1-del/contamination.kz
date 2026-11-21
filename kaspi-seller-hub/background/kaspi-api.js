@@ -38,8 +38,15 @@ const observe = (err) => {
   }
 };
 
-/** Pauses between attempts when Kaspi is busy or briefly down. */
+/** Pauses between attempts when Kaspi is busy or briefly down (base values, see backoff()). */
 export const RETRY_DELAYS = [1500, 4000];
+/**
+ * Exponential pause with jitter: base × (0.5…1.5). Hundreds of browsers that hit a Kaspi hiccup at
+ * the same moment do not come back at the same moment. An explicit Retry-After is followed as given.
+ */
+const backoff = (attempt) => Math.round(RETRY_DELAYS[attempt] * (0.5 + Math.random()));
+/** One request may not hang the sync: no answer within this time = timeout (retried for GET). */
+const timeoutMs = () => A().requestTimeoutMs || 25000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let sleeper = sleep;
 /** Tests replace the wait so retries run instantly. */
@@ -73,24 +80,31 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
   for (let attempt = 0; ; attempt++) {
     const last = attempt >= RETRY_DELAYS.length;
     let res;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs());
     try {
       res = await fetch(url.href, {
         method,
         headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': contentType },
         body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
         credentials: 'omit', // the token is the only credential; never send cabinet cookies
+        signal: ctrl.signal,
       });
     } catch (e) {
+      const timedOut = ctrl.signal.aborted;
       if (idempotent && !last) {
-        await sleeper(RETRY_DELAYS[attempt]);
+        await sleeper(backoff(attempt));
         continue;
       }
-      throw fail(new ApiError('apiNetwork', 0, e.message));
+      // a write that timed out may or may not have been applied by Kaspi: never repeated here
+      throw fail(timedOut ? new ApiError('apiTimeout', 0, `no answer in ${timeoutMs()} ms`) : new ApiError('apiNetwork', 0, e.message));
+    } finally {
+      clearTimeout(timer);
     }
     if (res.status === 401 || res.status === 403) throw fail(new ApiError('apiUnauthorized', res.status));
     const busy = res.status === 429 || (idempotent && [502, 503, 504].includes(res.status));
     if (busy && !last) {
-      await sleeper(retryAfter(res, RETRY_DELAYS[attempt]));
+      await sleeper(retryAfter(res, backoff(attempt)));
       continue;
     }
     if (res.status === 429) throw fail(new ApiError('apiRateLimit', 429));
@@ -141,12 +155,13 @@ export async function verifyToken(token) {
  * Kaspi needs a state filter and a creationDate range (≤ windowDays) per request.
  * @returns {Promise<any[]>} raw JSON:API order objects
  */
-export async function listOrders(token, days) {
-  const now = Date.now();
+export async function listOrders(token, days, { states = A().states, endDaysAgo = 0 } = {}) {
+  // [now − endDaysAgo − days, now − endDaysAgo]: the quick start and the history backfill read parts
+  const now = Date.now() - endDaysAgo * DAY;
   const jobs = [];
   for (let end = now; end > now - days * DAY; end -= A().windowDays * DAY) {
     const start = Math.max(end - A().windowDays * DAY + 1, now - days * DAY);
-    for (const state of A().states) {
+    for (const state of states) {
       jobs.push(async () => {
         const all = [];
         for (let page = 0; page < 50; page++) {

@@ -45,11 +45,21 @@ http.createServer((req, res) => {
   if (u.pathname === '/__down') { globalThis.DOWN = u.searchParams.get('on') === '1'; return send(200, { down: globalThis.DOWN }); }
   if (globalThis.DOWN && u.pathname.startsWith('/shop/api/')) return send(502, '<html>Bad Gateway</html>', 'text/html');
   // per-token failure for one store: /__fail?token=GOOD-TOKEN-B&status=503 (status=0 clears)
-  if (u.pathname === '/__fail') { (globalThis.FAIL ||= {})[u.searchParams.get('token')] = Number(u.searchParams.get('status')) || 0; return send(200, globalThis.FAIL); }
+  // optional &retryAfter=<s> (Retry-After header) and &times=<n> (fail only the next n requests)
+  if (u.pathname === '/__fail') { (globalThis.FAIL ||= {})[u.searchParams.get('token')] = Number(u.searchParams.get('status')) || 0; (globalThis.FAILOPT ||= {})[u.searchParams.get('token')] = { retryAfter: u.searchParams.get('retryAfter'), times: Number(u.searchParams.get('times')) || Infinity }; return send(200, globalThis.FAIL); }
+  // a store whose API never answers (hung connection): /__hang?token=X&on=1
+  if (u.pathname === '/__hang') { (globalThis.HANG ||= {})[u.searchParams.get('token')] = u.searchParams.get('on') === '1'; return send(200, globalThis.HANG); }
+  if (globalThis.HANG?.[req.headers['x-auth-token']] && u.pathname.startsWith('/shop/api/')) { log.push({ hung: req.headers['x-auth-token'] }); return; }
   // every API request is logged with its (fake) token: tests count requests per store and look for writes
   if (u.pathname.startsWith('/shop/api/')) log.push({ req: req.method, path: u.pathname, token: req.headers['x-auth-token'] || null });
   const injected = globalThis.FAIL?.[req.headers['x-auth-token']];
-  if (injected && u.pathname.startsWith('/shop/api/')) return send(injected, { message: `injected ${injected}` });
+  if (injected && u.pathname.startsWith('/shop/api/')) {
+    const o = globalThis.FAILOPT?.[req.headers['x-auth-token']] || {};
+    if (o.times-- > 0) {
+      if (o.retryAfter) res.setHeader('Retry-After', o.retryAfter);
+      return send(injected, { message: `injected ${injected}` });
+    }
+  }
   if (u.pathname.startsWith('/waybill/')) { log.push({ waybillToken: req.headers['x-auth-token'] || null }); return send(200, PDF(u.pathname.split('/')[2]), 'application/pdf'); }
   if (!/^GOOD-TOKEN-/.test(req.headers['x-auth-token'] || '')) return send(401, { message: 'Full authentication is required to access this resource.' });
   let body = '';
@@ -94,7 +104,7 @@ http.createServer((req, res) => {
     const p = Object.fromEntries(u.searchParams);
     if (p['filter[orders][code]']) return send(200, { data: orders.filter((o) => o.attributes.code === p['filter[orders][code]']).map(withLinks), meta: { pageCount: 1, totalCount: 1 } });
     const st = p['filter[orders][state]'], ge = +p['filter[orders][creationDate][$ge]'], le = +p['filter[orders][creationDate][$le]'];
-    log.push({ list: st, days: Math.round((le - ge) / DAY) });
+    log.push({ list: st, days: Math.round((le - ge) / DAY), fromDaysAgo: Math.round((Date.now() - ge) / DAY) });
     if (!st || !ge || !le) return send(200, { data: [], meta: { pageCount: 0, totalCount: 0 } });
     if (le - ge > 14 * DAY) return send(400, { message: 'range too big' });
     const size = Math.min(100, +p['page[size]'] || 20), page = +p['page[number]'] || 0;

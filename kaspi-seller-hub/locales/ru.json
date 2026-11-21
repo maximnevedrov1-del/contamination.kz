@@ -631,7 +631,11 @@
     "billing_boost_not_needed": "На вашем тарифе уже есть 3 магазина.",
     "billing_offer_used": "Это предложение уже использовано за последние полгода.",
     "billing_invalid_choice": "Выберите вариант.",
-    "billing_bot_not_configured": "Telegram-бот ещё не настроен владельцем сервиса."
+    "billing_bot_not_configured": "Telegram-бот ещё не настроен владельцем сервиса.",
+    "apiTimeout": "Kaspi долго не отвечает — показываем последние данные, попробуем снова",
+    "tokenAlreadyConnected": "Этот токен уже подключён к другому магазину",
+    "connectBusy": "Проверяем токен — подождите",
+    "connectWait": "Токен не прошёл проверку. Попробуйте снова через 10 секунд"
   },
   "format": {
     "monthsShort": [

@@ -55,6 +55,7 @@ PGHOST=/tmp PGPORT=5499 PGUSER=postgres tests/sql/run.sh   # every SQL file on i
 | `e2e/learn.js` | page guides, tour, help GIFs (desktop + phone) |
 | `e2e/apionly.js` | release build without cabinet mode: no chat, no content scripts, a Kaspi page never creates a store |
 | `e2e/apionly-sync.js` | synchronisation in the **release build** (API-only, prepared by `e2e/mkrelcopy.sh`): no stores → empty state; one and two token stores load orders without any Kaspi tab; one store 503/401 → its error shown, the other works, its cache kept; six syncs at once → at most one extra cycle, no deadlock; worker restart → stores and alarms back; «Только чтение» → no write reaches the API. Any request to the real kaspi.kz fails the test |
+| `e2e/syncload.js` | mass onboarding safety: quick start (first sync = orders in progress + 7 days of archive, the rest one window per sync up to 90 days, no duplicates); a store whose API hangs (request timeout + per-store cap, the other store updated, the next sync not blocked); 429 with Retry-After; connect guards (double click, the same token twice, a refused token retried at once). `SYNCLOAD_SRC=<tree>` runs it on another copy of the code (e.g. before a fix) |
 | `e2e/devices.js` | layout on 10 screen sizes (320–1920 px) |
 
 The mock Kaspi API (`e2e/mockapi.js`) follows the formats in guide.kaspi.kz; it is not Kaspi.

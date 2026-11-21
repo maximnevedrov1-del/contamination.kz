@@ -595,7 +595,11 @@
     "billing_boost_not_needed": "Тарифіңізде 3 дүкен бар.",
     "billing_offer_used": "Бұл ұсыныс соңғы жарты жылда пайдаланылған.",
     "billing_invalid_choice": "Нұсқаны таңдаңыз.",
-    "billing_bot_not_configured": "Telegram-ботты сервис иесі әлі баптамаған."
+    "billing_bot_not_configured": "Telegram-ботты сервис иесі әлі баптамаған.",
+    "apiTimeout": "Kaspi ұзақ жауап бермейді — соңғы деректерді көрсетеміз, қайта тырысамыз",
+    "tokenAlreadyConnected": "Бұл токен басқа дүкенге қосылған",
+    "connectBusy": "Токенді тексеріп жатырмыз — күтіңіз",
+    "connectWait": "Токен тексеруден өтпеді. 10 секундтан кейін қайталаңыз"
   },
   "format": {
     "monthsShort": [

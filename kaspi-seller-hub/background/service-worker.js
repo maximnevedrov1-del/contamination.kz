@@ -483,10 +483,11 @@ async function syncNow() {
         return;
       }
       try {
-        const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
+        // one store that hangs must not hold the others (the request timeout covers headers only)
+        const snap = await withTimeout(apiSnapshot(shopId, token, prevNow[shopId], store), S.api.storeSyncMs || 180000, 'apiTimeout');
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
       } catch (e) {
-        apiErrors[shopId] = e.code || e.message;
+        apiErrors[shopId] = e.code || e.message; // withTimeout rejects with message 'apiTimeout'
         console.warn(LOG, 'api sync failed', shopId, e.code, e.status, e.detail);
       }
     }),
@@ -679,17 +680,61 @@ async function recordApiHealth(shopIds, errors) {
  * sync) + older API orders kept from the cache, split into orders / returns /
  * refusals, plus top products from order contents.
  */
+const BACKFILL_KEY = 'ksh.apiBackfill'; // { [shopId]: ms } — the archive is loaded back to this date
+
+/**
+ * Which orders to read in this sync.
+ *  - First sync (quick start): orders in progress over the whole history window + the archive of
+ *    the last quickStartDays. The seller sees today's work in seconds, not after 90 days of archive.
+ *  - Later syncs: the last syncDays (all states) + ONE older archive window (windowDays) until
+ *    firstSyncDays are covered — the history fills in over a few syncs, without one heavy cycle.
+ * Stores synced before this existed (cache already has API orders, no progress mark) are complete.
+ */
+async function ordersToRead(shopId, token, hadApi) {
+  const { [BACKFILL_KEY]: bf = {} } = await chrome.storage.local.get(BACKFILL_KEY);
+  const now = Date.now();
+  const limit = now - S.api.firstSyncDays * DAY;
+  const quick = S.api.quickStartDays || 7;
+  if (!hadApi && bf[shopId] == null) {
+    const active = S.api.states.filter((st) => st !== 'ARCHIVE');
+    const [inProgress, recent] = await Promise.all([K.listOrders(token, S.api.firstSyncDays, { states: active }), K.listOrders(token, quick, { states: ['ARCHIVE'] })]);
+    return { raw: [...inProgress, ...recent], days: S.api.firstSyncDays, first: true, backfillTo: now - quick * DAY };
+  }
+  const raw = await K.listOrders(token, S.api.syncDays);
+  let backfillTo = bf[shopId] ?? null;
+  if (backfillTo != null) {
+    // the regular read already covers syncDays; continue from whichever is older
+    const from = Math.min(backfillTo, now - S.api.syncDays * DAY);
+    if (from > limit) {
+      const endDaysAgo = (now - from) / DAY;
+      raw.push(...(await K.listOrders(token, Math.min(S.api.windowDays, (from - limit) / DAY), { states: ['ARCHIVE'], endDaysAgo })));
+      backfillTo = Math.max(limit, from - S.api.windowDays * DAY);
+    } else backfillTo = limit;
+  }
+  return { raw, days: S.api.syncDays, first: false, backfillTo };
+}
+
+async function saveBackfill(shopId, backfillTo) {
+  await lock(async () => {
+    const { [BACKFILL_KEY]: bf = {} } = await chrome.storage.local.get(BACKFILL_KEY);
+    if (backfillTo == null || backfillTo <= Date.now() - S.api.firstSyncDays * DAY + 60000) delete bf[shopId]; // done
+    else bf[shopId] = backfillTo;
+    await chrome.storage.local.set({ [BACKFILL_KEY]: bf });
+  });
+}
+
 async function apiSnapshot(shopId, token, prevSnap, store) {
   const prevItems = prevSnap?.sections?.orders?.items || [];
   const hadApi = prevItems.some((i) => i.api);
-  const days = hadApi ? S.api.syncDays : S.api.firstSyncDays;
-  const raw = await K.listOrders(token, days);
+  const { raw, days, first, backfillTo } = await ordersToRead(shopId, token, hadApi);
   const fresh = raw.map(K.toOrderItem);
   const freshIds = new Set(fresh.map((i) => i.id));
   const windowStart = Date.now() - days * DAY;
   const keepFrom = Date.now() - S.api.firstSyncDays * DAY;
   const kept = prevItems.filter((i) => i.api && !freshIds.has(i.id) && i.date && new Date(i.date).getTime() < windowStart && new Date(i.date).getTime() >= keepFrom);
-  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept]);
+  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept], first ? S.api.quickStartEntries || 30 : S.api.entriesPerSync || 60);
+  // progress is saved only after a good read: a failed sync repeats the same window
+  await saveBackfill(shopId, backfillTo);
   // Order contents travel with the order: needed for profit and the pick list.
   const all = [...fresh, ...kept].map((i) => ({ ...i, entries: entriesOf(i.id) || i.entries }));
   const section = (items) => ({ status: 'ok', source: 'api', items });
@@ -714,13 +759,13 @@ async function apiSnapshot(shopId, token, prevSnap, store) {
  * and newest orders first. 5 000 orders of history fill in within ~17 syncs (≈ 1.5 h);
  * with 60 per sync it took ~7 h, so profit and «Себестоимость» stayed incomplete.
  */
-async function apiTopProducts(shopId, token, items) {
+async function apiTopProducts(shopId, token, items, limit = S.api.entriesPerSync || 60) {
   const cache = await getApiEntries();
   const key = (code) => `${shopId}::${code}`;
   const todo = items
     .filter((i) => i.api?.entriesUrl && !cache[key(i.id)])
     .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
-    .slice(0, S.api.entriesPerSync || 60);
+    .slice(0, limit);
   let stop = null;
   const worker = async () => {
     while (todo.length && !stop) {
@@ -1116,8 +1161,19 @@ export function syncInterval(now = Date.now()) {
   const h = kzParts(now).hours;
   return (h >= 8 && h < 22 ? 2 : 10) * 60000;
 }
+/**
+ * A stable random offset per install (0–60 s): when hundreds of sellers start at the same minute
+ * (mass onboarding, browsers opened at 9:00) their syncs drift apart instead of hitting Kaspi together.
+ */
+async function installOffset() {
+  const { 'ksh.installSeed': seed } = await chrome.storage.local.get('ksh.installSeed');
+  if (Number.isFinite(seed)) return seed;
+  const v = Math.floor(Math.random() * 60000);
+  await chrome.storage.local.set({ 'ksh.installSeed': v });
+  return v;
+}
 async function syncDue() {
-  return Date.now() - ((await getLastSync()) || 0) >= syncInterval() - 15000; // alarms are not exact
+  return Date.now() - ((await getLastSync()) || 0) >= syncInterval() - 15000 + (await installOffset()); // alarms are not exact
 }
 
 /**
@@ -1135,6 +1191,10 @@ export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) 
 /* ===================================================================== */
 
 /** UI → worker message handlers. */
+// ui:connectApi guards (worker memory; a restart simply clears them)
+const connecting = new Set();
+const connectFailedAt = new Map();
+
 const uiHandlers = {
   /** Errors of extension pages go to the same journal. */
   'ui:logError': async ({ where, message }) => {
@@ -1184,12 +1244,24 @@ const uiHandlers = {
     token = String(token || '').trim();
     if (!token) return { ok: false, error: 'tokenEmpty' };
     if (!shopId && !String(name || '').trim()) return { ok: false, error: 'storeNameEmpty' };
+    // the same token already connected as another store would double the requests to Kaspi
+    const dup = Object.entries(await getApiTokens()).find(([sid, tk]) => tk === token && sid !== shopId);
+    if (dup) return { ok: false, error: 'tokenAlreadyConnected' };
+    // repeated clicks: one check at a time per token; after a refused token, 10 s before the next try
+    if (connecting.has(token)) return { ok: false, error: 'connectBusy' };
+    if (Date.now() - (connectFailedAt.get(token) || 0) < 10000) return { ok: false, error: 'connectWait' };
+    connecting.add(token);
     try {
       await K.verifyToken(token);
     } catch (e) {
+      connectFailedAt.set(token, Date.now());
       return { ok: false, error: e.code || e.message };
+    } finally {
+      connecting.delete(token);
     }
     const id = await lock(async () => {
+      // checked again under the lock: two connects of one token a moment apart
+      if (Object.entries(await getApiTokens()).some(([s2, tk]) => tk === token && s2 !== shopId)) return null;
       const settings = await getSettings();
       const sid = shopId && settings.stores[shopId] ? shopId : `api-${uid('s').slice(-8)}`;
       const existing = settings.stores[sid];
@@ -1212,6 +1284,7 @@ const uiHandlers = {
       await setApiTokens(tokens);
       return sid;
     });
+    if (!id) return { ok: false, error: 'tokenAlreadyConnected' };
     sync().catch((e) => console.warn(LOG, 'sync after connect', e)); // first load runs in the background
     return { ok: true, shopId: id };
   },

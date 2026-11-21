@@ -265,6 +265,12 @@
       pageSize: 100, // documented maximum
       concurrency: 3, // parallel requests per store
       entriesPerSync: 300, // order contents (one request each) fetched per sync and store
+      // Quick start: the first sync reads orders in progress + the archive of the last few days and
+      // shows them at once; older archive is read one window per sync (backfill) up to firstSyncDays.
+      quickStartDays: 7,
+      quickStartEntries: 30, // order contents on the first sync (the rest come with later syncs)
+      requestTimeoutMs: 25000, // one request
+      storeSyncMs: 180000, // one store in one sync: a store that hangs does not hold the others
       cabinetOrderUrl: 'https://kaspi.kz/mc/#/orders/{code}', // TODO: link to the order in the cabinet
     },
 
