@@ -12,3 +12,5 @@ relcopy/
 photoprof*/
 interprof*/
 roprof*/
+loadcopy/
+relmock/
