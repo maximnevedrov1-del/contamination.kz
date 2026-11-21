@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seller Hub — все магазины Kaspi в одном окне</title>
+  <meta name="description" content="Расширение для продавцов Kaspi.kz с 2–5 магазинами: заказы, горящие сроки, сборка с фото, накладные на любой принтер и прибыль — на одном экране. 30 дней бесплатно.">
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://{{domain}}/" data-requires="domain">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_KZ">
+  <meta property="og:site_name" content="Seller Hub">
+  <meta property="og:title" content="Seller Hub — все магазины Kaspi в одном окне">
+  <meta property="og:description" content="Заказы, горящие сроки, сборка, накладные и прибыль 2–5 магазинов Kaspi на одном экране. 30 дней бесплатно.">
+  <meta property="og:url" content="https://{{domain}}/" data-requires="domain">
+  <meta property="og:image" content="https://{{domain}}/assets/og.png" data-requires="domain">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/icon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icon-128.png">
+  <link rel="preload" as="image" href="assets/home.webp" fetchpriority="high">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Seller Hub",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Windows, macOS, Linux (Chrome, Яндекс Браузер, Edge, Opera)",
+    "inLanguage": ["ru", "kk"],
+    "description": "Расширение для продавцов Kaspi.kz: заказы, сроки, сборка, накладные и прибыль нескольких магазинов в одном окне.",
+    "offers": [
+      { "@type": "Offer", "name": "Старт — 1 магазин", "price": "12000", "priceCurrency": "KZT" },
+      { "@type": "Offer", "name": "Мульти — до 3 магазинов", "price": "20000", "priceCurrency": "KZT" },
+      { "@type": "Offer", "name": "Мульти — 4 магазина", "price": "25000", "priceCurrency": "KZT" }
+    ],
+    "provider": { "@type": "Organization", "name": "ИП «НЕВЕДРОВ»" }
+  }
+  </script>
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+<a class="skip" href="#main">Перейти к содержимому</a>
+
+<header class="top" id="top">
+  <div class="wrap top__in">
+    <a class="logo" href="#top" aria-label="Seller Hub — в начало">
+      <img src="assets/icon-128.png" alt="" width="28" height="28">
+      <span>Seller Hub</span>
+    </a>
+    <nav class="top__nav" aria-label="Разделы">
+      <a href="#features">Возможности</a>
+      <a href="#how">Как начать</a>
+      <a href="#price">Цены</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <a class="btn btn--primary btn--sm top__cta" href="#support">Скоро в Chrome Web Store</a>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- 1. First screen -->
+  <section class="hero">
+    <div class="wrap hero__in">
+      <div class="hero__text">
+        <p class="eyebrow">Расширение для браузера · для продавцов Kaspi.kz</p>
+        <h1>Все магазины Kaspi — в&nbsp;одном окне</h1>
+        <p class="lead">Заказы, горящие сроки, сборка, накладные и прибыль 2–5 магазинов на одном экране. Не нужно переключаться между кабинетами и бояться пропустить заказ.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="#support">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Скоро в Chrome Web Store
+          </a>
+          <a class="btn btn--ghost" href="#features">Как это работает ↓</a>
+        </div>
+        <ul class="trust" aria-label="Коротко о главном">
+          <li>Официальный API Kaspi</li>
+          <li>Токены остаются на вашем компьютере</li>
+          <li>30 дней бесплатно</li>
+        </ul>
+      </div>
+      <div class="hero__shot">
+        <figure class="frame tilt" data-tilt>
+          <div class="frame__bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="assets/home.webp" width="1600" height="1000" alt="Главная Seller Hub: что сделать сейчас — 9 горящих и 9 новых заказов, выручка за сегодня, неделю и месяц, три магазина" fetchpriority="high">
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Five cabinets → one window -->
+  <section class="merge" aria-labelledby="merge-title">
+    <div class="wrap merge__in">
+      <div class="merge__text reveal">
+        <h2 id="merge-title">Пять кабинетов → одно окно</h2>
+        <p>Каждый магазин Kaspi — отдельный кабинет и отдельный вход. Seller Hub собирает заказы всех магазинов в одну таблицу: цвет точки показывает, из какого магазина заказ.</p>
+      </div>
+      <div class="merge__stage" data-merge aria-hidden="true">
+        <div class="merge__store" style="--c:#2a78d6;--i:0"><b></b>Автозапчасти<span>12 заказов</span></div>
+        <div class="merge__store" style="--c:#e8643c;--i:1"><b></b>Шины Астана<span>7 заказов</span></div>
+        <div class="merge__store" style="--c:#1f9d6b;--i:2"><b></b>Масла и фильтры<span>9 заказов</span></div>
+        <div class="merge__store" style="--c:#7c5cd6;--i:3"><b></b>Аксессуары<span>4 заказа</span></div>
+        <div class="merge__store" style="--c:#d99a1b;--i:4"><b></b>Электрика<span>6 заказов</span></div>
+        <div class="merge__table">
+          <div class="merge__head"><span>Заказ</span><span>Магазин</span><span>Срок</span></div>
+          <div class="merge__row" style="--c:#2a78d6"><span>803102001</span><span><b></b>Автозапчасти</span><em class="hot">через 1 ч</em></div>
+          <div class="merge__row" style="--c:#e8643c"><span>806202002</span><span><b></b>Шины Астана</span><em class="late">просрочен</em></div>
+          <div class="merge__row" style="--c:#1f9d6b"><span>809302003</span><span><b></b>Масла и фильтры</span><em class="hot">через 30 мин</em></div>
+          <div class="merge__row" style="--c:#7c5cd6"><span>812402004</span><span><b></b>Аксессуары</span><em>—</em></div>
+          <div class="merge__row" style="--c:#d99a1b"><span>815502005</span><span><b></b>Электрика</span><em>—</em></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Features: scroll story -->
+  <section class="story" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title" class="section-title reveal">Что умеет Seller Hub</h2>
+      <div class="story__grid">
+        <ol class="story__steps">
+          <li class="story__step" data-step="orders">
+            <span class="story__num">01</span>
+            <h3>Горящие заказы — первыми</h3>
+            <p>Срок принятия и передачи курьеру считается для каждого заказа. Вкладка «Горящие» и уведомление напомнят, пока не поздно. Принять или упаковать — прямо из списка.</p>
+            <img class="story__inline" src="assets/orders.webp" width="1600" height="1000" loading="lazy" alt="Таблица заказов трёх магазинов: вкладки Горящие, Новые, В работе, сроки «принять через 1 ч»">
+          </li>
+          <li class="story__step" data-step="pick">
+            <span class="story__num">02</span>
+            <h3>Сборка без ошибок</h3>
+            <p>В карточке заказа — фото товара, артикул и крупное «× 2». Сборочный лист по всем магазинам сразу: что взять с полки, сколько штук и для каких заказов.</p>
+            <img class="story__inline" src="assets/order-card.webp" width="1000" height="508" loading="lazy" alt="Карточка заказа: фото товара, название, артикул, количество, кнопки Принять и Упаковать">
+          </li>
+          <li class="story__step" data-step="print">
+            <span class="story__num">03</span>
+            <h3>Накладные на любой принтер</h3>
+            <p>Оригинальные накладные Kaspi — пачкой из всех магазинов. Термопринтер 100×150, 75×120, 58×100 или обычный A4, по одной или по четыре на лист. Печать в 300 dpi — штрихкод читается сканером.</p>
+            <img class="story__inline" src="assets/print-card.webp" width="1200" height="278" loading="lazy" alt="Настройки печати накладных: Как в накладной Kaspi, Термопринтер, A4 — 1 на лист, A4 — 4 на лист, размер этикетки">
+          </li>
+          <li class="story__step" data-step="profit">
+            <span class="story__num">04</span>
+            <h3>Прибыль, а не только выручка</h3>
+            <p>Укажите себестоимость и комиссию — и увидите прибыль по каждому заказу, товару и магазину. Нажмите на день в графике — откроются заказы этого дня.</p>
+            <img class="story__inline" src="assets/analytics.webp" width="1600" height="1000" loading="lazy" alt="Аналитика: выручка, заказы, средний чек, доля возвратов, графики по дням и по магазинам">
+          </li>
+          <li class="story__step" data-step="catalog">
+            <span class="story__num">05</span>
+            <h3>Товар — сразу во все магазины</h3>
+            <p>Добавьте товар один раз и выберите: во все магазины или только в нужные. Цены и остатки обновляются через прайс-лист по ссылке — Kaspi забирает его сам.</p>
+            <img class="story__inline" src="assets/catalog.webp" width="1600" height="1000" loading="lazy" alt="Выгрузка товаров: таблица товаров с отметками, в каких магазинах товар в продаже">
+          </li>
+        </ol>
+        <div class="story__screen" aria-hidden="true">
+          <figure class="frame">
+            <div class="frame__bar"><i></i><i></i><i></i></div>
+            <div class="story__pics">
+              <img data-pic="orders" src="assets/orders.webp" width="1600" height="1000" alt="" loading="lazy" class="is-on">
+              <img data-pic="pick" src="assets/order-card.webp" width="1000" height="508" alt="" loading="lazy" class="pic--card">
+              <img data-pic="print" src="assets/print-card.webp" width="1200" height="278" alt="" loading="lazy" class="pic--card">
+              <img data-pic="profit" src="assets/analytics.webp" width="1600" height="1000" alt="" loading="lazy">
+              <img data-pic="catalog" src="assets/catalog.webp" width="1600" height="1000" alt="" loading="lazy">
+            </div>
+          </figure>
+          <img class="story__extra" data-extra="pick" src="assets/picklist.webp" width="1000" height="283" alt="" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. How to start -->
+  <section class="how" id="how" aria-labelledby="how-title">
+    <div class="wrap how__in">
+      <div>
+        <h2 id="how-title" class="section-title reveal">Как начать — 3 шага</h2>
+        <ol class="how__steps">
+          <li class="reveal"><b>Установите расширение</b><span>Chrome, Яндекс Браузер, Edge или Opera на компьютере.</span></li>
+          <li class="reveal"><b>Вставьте токен API</b><span>В кабинете Kaspi: Настройки → Токен API. Скопировали, вставили — магазин подключён.</span></li>
+          <li class="reveal"><b>Работайте</b><span>Заказы всех магазинов уже на Главной. Остальные магазины подключаются так же.</span></li>
+        </ol>
+      </div>
+      <figure class="frame reveal">
+        <div class="frame__bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="assets/connect.gif" width="840" height="525" loading="lazy" alt="Подключение магазина: «Подключить магазин», название, токен API, «Подключить» — и заказы на Главной">
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5. Security -->
+  <section class="safe" aria-labelledby="safe-title">
+    <div class="wrap">
+      <h2 id="safe-title" class="section-title reveal">Ваши данные — у вас</h2>
+      <ul class="safe__grid">
+        <li class="reveal"><b>Без паролей</b><span>Не храним пароли от кабинета и не входим в него за вас.</span></li>
+        <li class="reveal"><b>Токен — только на вашем компьютере</b><span>Токен API хранится в браузере и не отправляется на наш сервер.</span></li>
+        <li class="reveal"><b>Официальный API Kaspi</b><span>Тот же, что описан в документации Kaspi для продавцов.</span></li>
+        <li class="reveal"><b>Ничего без вашего клика</b><span>Принять и упаковать — только после вашего подтверждения.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6. Reviews / cases: hidden until there are REAL ones (never invent them).
+       To show: remove the «hidden» attribute and fill in name, store, quote, photo. -->
+  <section class="reviews" id="reviews" hidden aria-labelledby="reviews-title">
+    <div class="wrap">
+      <h2 id="reviews-title" class="section-title">Продавцы о Seller Hub</h2>
+      <div class="reviews__grid">
+        <blockquote class="review"><p>[Отзыв продавца]</p><footer>[Имя], [магазин на Kaspi]</footer></blockquote>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Pricing -->
+  <section class="price" id="price" aria-labelledby="price-title">
+    <div class="wrap">
+      <h2 id="price-title" class="section-title reveal">Цены</h2>
+      <p class="section-lead reveal">Все функции в каждом тарифе. Первые 30 дней — бесплатно.</p>
+      <div class="price__grid">
+        <div class="plan reveal"><h3>«Старт» — 1 магазин</h3><p class="plan__sum"><b>12 000 ₸</b> в месяц</p></div>
+        <div class="plan plan--main reveal"><h3>«Мульти» — до 3 магазинов</h3><p class="plan__sum"><b>20 000 ₸</b> в месяц</p></div>
+        <div class="plan reveal"><h3>Каждый следующий магазин</h3><p class="plan__sum"><b>+5 000 ₸</b> в месяц</p></div>
+      </div>
+      <ul class="price__notes reveal">
+        <li>Пробный период — 30 дней, до 3 магазинов</li>
+        <li>Оплата по Kaspi QR, можно сразу за несколько месяцев</li>
+        <li>Переход со «Старт» на «Мульти» в середине месяца — доплата только за оставшиеся дни</li>
+        <li>Утренняя сводка и срочные сообщения о заказах — в Telegram</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 8. FAQ -->
+  <section class="faq" id="faq" aria-labelledby="faq-title">
+    <div class="wrap faq__in">
+      <h2 id="faq-title" class="section-title">Частые вопросы</h2>
+      <div class="faq__list">
+        <details>
+          <summary>Безопасно ли давать токен API?</summary>
+          <p>Токен хранится только в браузере на вашем компьютере и используется для запросов напрямую к Kaspi. На наш сервер он не отправляется. Токен можно в любой момент перевыпустить в кабинете Kaspi — старый сразу перестанет работать.</p>
+        </details>
+        <details>
+          <summary>Нужно держать кабинет Kaspi открытым?</summary>
+          <p>Нет. Заказы приходят по токену API напрямую от Kaspi, даже когда кабинет закрыт. Чтобы приходили уведомления о новых и горящих заказах, браузер с расширением должен быть запущен.</p>
+        </details>
+        <details>
+          <summary>В каких браузерах работает?</summary>
+          <p>Google Chrome, Яндекс Браузер, Microsoft Edge, Opera и Brave на компьютере с Windows или macOS. На телефонах расширения пока не работают.</p>
+        </details>
+        <details>
+          <summary>Подойдёт мой принтер?</summary>
+          <p>Да. В настройках выберите свой: термопринтер (100×150, 100×100, 75×120, 58×100 или свой размер) или обычный A4 — по одной или по четыре накладные на лист. «Пробная печать» покажет, всё ли настроено.</p>
+        </details>
+        <details>
+          <summary>Что будет после 30 дней?</summary>
+          <p>Чтобы продолжить, оплатите подписку по Kaspi QR — на месяц или сразу на несколько. Без оплаты обновление заказов остановится, а ваши настройки, себестоимость и товары сохранятся.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. Support -->
+  <section class="support" id="support" aria-labelledby="support-title">
+    <div class="wrap support__in reveal">
+      <h2 id="support-title">Скоро в Chrome Web Store</h2>
+      <p class="support__lead" data-requires="contacts">Напишите нам — сообщим о запуске и поможем подключить магазины. <span data-requires="responseTime">Отвечаем за {{responseTime}}</span><span data-requires="hours">, {{hours}}</span>.</p>
+      <p class="support__lead" data-unless="contacts">Расширение проходит проверку. Контакты поддержки появятся здесь к запуску.</p>
+      <div class="support__btns" data-requires="contacts">
+        <a class="btn btn--primary" data-requires="whatsapp" href="https://wa.me/{{whatsappDigits}}" rel="noopener">WhatsApp</a>
+        <a class="btn" data-requires="telegram" href="https://t.me/{{telegramName}}" rel="noopener">Telegram</a>
+        <a class="btn" data-requires="email" href="mailto:{{email}}">{{email}}</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div>
+      <a class="logo" href="#top"><img src="assets/icon-128.png" alt="" width="24" height="24"><span>Seller Hub</span></a>
+      <p class="foot__small">ИП «НЕВЕДРОВ», ИИН 900327302429<br>Республика Казахстан, Алматинская область, Енбекшиказахский район, с. Космос, ул. Шанырак, д. 15, кв./офис 1</p>
+    </div>
+    <nav class="foot__links" aria-label="Документы">
+      <a href="legal/terms.html#offer">Публичная оферта</a>
+      <a href="legal/terms.html#privacy">Политика конфиденциальности</a>
+      <a data-requires="email" href="mailto:{{email}}">{{email}}</a>
+    </nav>
+  </div>
+  <p class="wrap foot__note">Kaspi и Kaspi.kz — товарные знаки их правообладателя. Seller Hub — независимый сервис и не связан с Kaspi.</p>
+</footer>
+
+<div class="mcta" aria-hidden="true">
+  <a class="btn btn--primary" href="#support" tabindex="-1">Скоро в Chrome Web Store</a>
+  <a class="btn" href="#price" tabindex="-1">Цены</a>
+</div>
+
+<script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+# Seller Hub: daily encrypted dump of the billing database (Supabase) kept 30 days as a workflow artifact.
+# Secrets: SUPABASE_DB_URL (Supabase → Project Settings → Database → connection string, session pooler),
+# BACKUP_PASSPHRASE (any long random string, keep a copy outside GitHub — without it the dump cannot be read).
+# Restore: gpg -d billing-*.dump.gpg > db.dump && pg_restore --no-owner -d "$TARGET_DB_URL" db.dump  (the «schema "public" already exists» error is harmless)
+name: seller-hub-db-backup
+
+on:
+  schedule:
+    - cron: '17 21 * * *' # 02:17 Almaty
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Fail if secrets are missing
+        if: env.SUPABASE_DB_URL == '' || env.BACKUP_PASSPHRASE == ''
+        run: echo "::error::SUPABASE_DB_URL / BACKUP_PASSPHRASE secrets are not set" && exit 1
+      - name: Install pg_dump 17 (must not be older than the server)
+        run: |
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+      - name: Dump and encrypt
+        run: |
+          f="billing-$(date -u +%Y%m%d-%H%M).dump"
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges --schema=public --schema=auth -f "$f"
+          test "$(stat -c %s "$f")" -gt 1024
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o "$f.gpg" "$f"
+          rm -f "$f"
+          echo "FILE=$f.gpg" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FILE }}
+          path: ${{ env.FILE }}
+          retention-days: 30
+          if-no-files-found: error
+      - name: Tell the owner the backup failed
+        if: failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -sS --retry 3 --max-time 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=⚠️ seller-hub-db-backup failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > /dev/null

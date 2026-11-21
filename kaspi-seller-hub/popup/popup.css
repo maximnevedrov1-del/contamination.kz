@@ -1,0 +1,73 @@
+body {
+  width: 380px;
+  min-height: 300px;
+  background: var(--bg);
+}
+
+.pp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pp-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+.pp-brand img { border-radius: 5px; }
+.pp-header__actions { display: flex; align-items: center; gap: 6px; }
+
+.pp-totals {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  padding: 16px;
+}
+.pp-total {
+  padding: 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.pp-total__value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.pp-total__label { font-size: 11px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.pp-urgent {
+  display: block; width: calc(100% - 32px); margin: 0 16px 12px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border)); border-radius: var(--radius);
+  background: var(--danger-bg); color: var(--danger); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+}
+.pp-stores { padding: 0 16px 8px; }
+.pp-section-title {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--text-3);
+}
+.pp-store-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pp-store {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface);
+}
+.pp-store__name { display: flex; align-items: center; gap: 8px; font-weight: 500; min-width: 0; }
+.pp-store__name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-store__name .dot { background: var(--store-color); }
+.pp-store__counts { display: flex; gap: 10px; font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pp-store__counts b { color: var(--text); font-weight: 600; }
+.pp-store__status { grid-column: 1 / -1; font-size: 12px; }
+.pp-store--off { opacity: .85; }
+.pp-store button.linklike {
+  border: 0; background: none; padding: 0; color: var(--info); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline;
+}
+
+.pp-empty { padding: 16px; border: 1px dashed var(--border-strong); border-radius: var(--radius); color: var(--text-2); font-size: 13px; text-align: center; }
+
+.pp-footer {
+  position: sticky; bottom: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface);
+}
+.pp-updated { font-size: 12px; color: var(--text-3); }
+
+/* every number opens its list */
+.pp-total { font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.pp-total:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.pp-total:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* line icons instead of emoji / «₸?» */
+.ico { flex: none; vertical-align: -3px; }
+.pp-urgent { display: flex; align-items: center; gap: 6px; }
+.pp-store__counts span { display: inline-flex; align-items: center; gap: 3px; }
+.pp-store__counts .ico { color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .pp-total { transition: none; } .pp-total:hover { transform: none; } }

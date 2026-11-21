@@ -1,0 +1,40 @@
+# Seller Hub: Telegram alerts for the owner — API outages, new support questions, new invoices.
+# Runs only when the secrets are set (see kaspi-seller-hub/billing/README.md → «Уведомления в Telegram»).
+name: seller-hub-ops-alert
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      OPS_KEY: ${{ secrets.OPS_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: kaspi-seller-hub/tools
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fail if secrets are missing
+        if: env.OPS_KEY == '' || env.TELEGRAM_BOT_TOKEN == ''
+        run: echo "::error::OPS_KEY / TELEGRAM_BOT_TOKEN secrets are not set" && exit 1
+      - name: Send the digest (one retry)
+        run: node kaspi-seller-hub/tools/ops-alert.mjs || (sleep 30 && node kaspi-seller-hub/tools/ops-alert.mjs)
+      - name: Tell the owner the alerting itself failed
+        if: failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -sS --retry 3 --max-time 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=⚠️ seller-hub-ops-alert failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > /dev/null

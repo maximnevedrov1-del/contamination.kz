@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Seller Hub — админка</title>
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Seller Hub · админка</h1>
+      <span id="who" class="muted"></span>
+      <button type="button" id="logout" class="btn btn--ghost" hidden>Выйти</button>
+    </header>
+
+    <main>
+      <!-- 1. Supabase connection (stored in this browser only) -->
+      <section class="card" id="connCard">
+        <h2>Подключение к Supabase</h2>
+        <p class="muted">Supabase → Project Settings → API. Нужны «Project URL» и ключ «anon public» — те же, что в расширении. Ключ service_role сюда не вставляйте.</p>
+        <div class="row">
+          <input id="url" class="input" placeholder="https://xxxx.supabase.co" />
+          <input id="key" class="input" placeholder="anon public key" />
+          <button type="button" id="saveConn" class="btn btn--primary">Сохранить</button>
+        </div>
+      </section>
+
+      <!-- 2. Login -->
+      <section class="card" id="loginCard" hidden>
+        <h2>Вход администратора</h2>
+        <div class="row">
+          <input id="email" class="input" type="email" placeholder="ваш email" />
+          <button type="button" id="sendCode" class="btn btn--primary">Получить код</button>
+        </div>
+        <div class="row" id="codeRow" hidden>
+          <input id="code" class="input" inputmode="numeric" placeholder="код из письма" />
+          <button type="button" id="verify" class="btn btn--primary">Войти</button>
+        </div>
+      </section>
+
+      <!-- 3. Work area -->
+      <section id="app" hidden>
+        <nav class="tabs" role="tablist">
+          <button type="button" role="tab" data-tab="insights">Пульт</button>
+          <button type="button" role="tab" data-tab="pending" aria-selected="true">Ждут оплаты <span id="pendingCount" class="pill"></span></button>
+          <button type="button" role="tab" data-tab="paid">Оплаченные</button>
+          <button type="button" role="tab" data-tab="all">Все счета</button>
+          <button type="button" role="tab" data-tab="accounts">Клиенты</button>
+          <button type="button" role="tab" data-tab="tickets">Вопросы <span id="ticketCount" class="pill"></span></button>
+          <button type="button" role="tab" data-tab="status">Состояние</button>
+          <button type="button" role="tab" data-tab="config">Цены и QR</button>
+          <button type="button" id="reload" class="btn btn--ghost">Обновить</button>
+        </nav>
+        <div id="panel" class="card"></div>
+      </section>
+
+      <div id="msg" role="status" aria-live="polite"></div>
+    </main>
+    <script src="admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,135 @@
+# Checks of the Kaspi Seller Hub extension on every push / pull request that touches it.
+name: kaspi-seller-hub
+
+on:
+  push:
+    paths: ['kaspi-seller-hub/**', '.github/workflows/kaspi-seller-hub.yml']
+  pull_request:
+    paths: ['kaspi-seller-hub/**', '.github/workflows/kaspi-seller-hub.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: kaspi-seller-hub
+
+jobs:
+  unit:
+    name: Unit tests, syntax, translations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax of every script
+        run: |
+          find background dashboard popup shared content tools -name '*.js' -o -name '*.mjs' | grep -v vendor | while read -r f; do
+            node --check "$f" || exit 1
+          done
+      - name: manifest.json and translations are valid JSON
+        run: for f in manifest.json locales/*.json; do node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" || exit 1; done
+      - name: Unit tests (Kazakhstan time, retries, price-list guard, migrations, error journal)
+        run: TZ=America/New_York node tests/unit/robust.test.mjs
+      - name: Russian and Kazakh texts match
+        run: node tests/unit/locales.test.mjs
+      - name: Unit tests (storage split, token encryption, licence signature, bot run and lock)
+        run: |
+          for t in storage-split token-crypto license-signature bot-run; do
+            node tests/unit/$t.test.mjs || exit 1
+          done
+      - name: No eval / remote code in the extension
+        run: |
+          if grep -rnE '\beval\s*\(|new Function\s*\(' background dashboard popup shared content --include=*.js; then
+            echo 'eval / new Function found'; exit 1
+          fi
+      - name: Release build works with the real config and refuses an unconfigured one
+        run: |
+          node tools/build-release.mjs
+          mkdir -p /tmp/emptycfg && tar --exclude=./tests --exclude=./dist -cf - . | tar -C /tmp/emptycfg -xf -
+          sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" /tmp/emptycfg/shared/billing-config.js
+          if (cd /tmp/emptycfg && node tools/build-release.mjs); then echo 'release build must refuse an empty subscription config'; exit 1; fi
+          rm -rf /tmp/nokeys && mkdir -p /tmp/nokeys && tar --exclude=./tests --exclude=./dist -cf - . | tar -C /tmp/nokeys -xf -
+          perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m" /tmp/nokeys/shared/billing-config.js
+          if (cd /tmp/nokeys && node tools/build-release.mjs); then echo 'release build must refuse a config without signing keys'; exit 1; fi
+
+  sql:
+    name: Database (billing, consent, attacks, price lists)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql 16
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: SQL tests
+        run: tests/sql/run.sh
+
+  catalog:
+    name: Price list / Excel import (in Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright + Chromium
+        working-directory: kaspi-seller-hub/tests/e2e
+        run: npm install --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Catalog unit tests
+        working-directory: kaspi-seller-hub/tests/e2e
+        run: |
+          node catunit.js | tee out.txt
+          grep -q '^ALL' out.txt
+
+  browser:
+    name: Extension in Chromium (API mode, features, photo print)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: kaspi-seller-hub/tests/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright + Chromium
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Test copy of the extension pointed at the mock Kaspi API (as in regress.sh)
+        run: |
+          mkdir -p ../apicopy && tar -C ../.. --exclude=./tests --exclude=./dist -cf - . | tar -C ../apicopy -xf -
+          sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" ../apicopy/shared/selectors.js
+          grep -q "localhost:8099" ../apicopy/shared/selectors.js
+          # Tests run the extension in developer mode (no login), never against the real Supabase.
+          sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" ../apicopy/shared/billing-config.js
+          perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m" ../apicopy/shared/billing-config.js
+          grep -q "supabaseUrl: ''," ../apicopy/shared/billing-config.js && grep -q "^  licenseKeys: \[\]" ../apicopy/shared/billing-config.js
+      - name: apitest, feat, photoprint (fresh mock API and profile each)
+        run: |
+          rc=0
+          for t in apitest feat photoprint; do
+            pkill -f "node mockapi.js" || true
+            node mockapi.js > mock.log 2>&1 &
+            sleep 1; rm -rf apiprof profile2
+            timeout 600 node $t.js > $t.out 2>&1 || true
+            grep -E '^(FAIL|CRASH)' $t.out || true
+            grep -q '^ALL' $t.out && echo "$t: ALL PASS" || { echo "$t: FAILED"; tail -20 $t.out; rc=1; }
+          done
+          exit $rc
