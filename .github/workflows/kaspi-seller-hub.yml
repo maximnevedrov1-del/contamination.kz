@@ -36,6 +36,11 @@ jobs:
         run: TZ=America/New_York node tests/unit/robust.test.mjs
       - name: Russian and Kazakh texts match
         run: node tests/unit/locales.test.mjs
+      - name: Unit tests (storage split, token encryption, licence signature, bot run and lock)
+        run: |
+          for t in storage-split token-crypto license-signature bot-run; do
+            node tests/unit/$t.test.mjs || exit 1
+          done
       - name: No eval / remote code in the extension
         run: |
           if grep -rnE '\beval\s*\(|new Function\s*\(' background dashboard popup shared content --include=*.js; then
@@ -86,3 +91,35 @@ jobs:
         run: |
           node catunit.js | tee out.txt
           grep -q '^ALL' out.txt
+
+  browser:
+    name: Extension in Chromium (API mode, features, photo print)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: kaspi-seller-hub/tests/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright + Chromium
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Test copy of the extension pointed at the mock Kaspi API (as in regress.sh)
+        run: |
+          mkdir -p ../apicopy && tar -C ../.. --exclude=./tests --exclude=./dist -cf - . | tar -C ../apicopy -xf -
+          sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" ../apicopy/shared/selectors.js
+          grep -q "localhost:8099" ../apicopy/shared/selectors.js
+      - name: apitest, feat, photoprint (fresh mock API and profile each)
+        run: |
+          rc=0
+          for t in apitest feat photoprint; do
+            pkill -f "node mockapi.js" || true
+            node mockapi.js > mock.log 2>&1 &
+            sleep 1; rm -rf apiprof profile2
+            timeout 600 node $t.js > $t.out 2>&1 || true
+            grep -E '^(FAIL|CRASH)' $t.out || true
+            grep -q '^ALL' $t.out && echo "$t: ALL PASS" || { echo "$t: FAILED"; tail -20 $t.out; rc=1; }
+          done
+          exit $rc

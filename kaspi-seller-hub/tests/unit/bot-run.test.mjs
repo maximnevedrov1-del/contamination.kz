@@ -13,6 +13,16 @@ function fake(total, batch) {
   const all = Array.from({ length: total }, (_, i) => item(i));
   const f = async (url, opts) => {
     const body = JSON.parse(opts.body);
+    if (url.endsWith('/rpc/bot_lock')) {
+      log.locks = (log.locks || 0) + 1;
+      const free = !log.holder || log.holder === body.p_holder;
+      if (free) log.holder = body.p_holder;
+      return new Response(JSON.stringify(free), { status: 200 });
+    }
+    if (url.endsWith('/rpc/bot_unlock')) {
+      if (log.holder === body.p_holder) log.holder = null;
+      return new Response('null', { status: 200 });
+    }
     if (url.endsWith('/rpc/bot_jobs')) {
       log.jobs++;
       const items = all.filter((i) => !sent.has(i.user_id)).slice(0, batch ?? Infinity);
@@ -53,6 +63,22 @@ await t('time budget: stops with more:true, what was sent is recorded', async ()
   assert.equal(r.more, true);
   assert.ok(r.sent > 0 && r.sent < 100);
   assert.equal(log.sentCalls.reduce((a, b) => a + b, 0), r.sent); // nothing sent without a record
+});
+
+await t('two runs at once: the second is busy, every message goes once', async () => {
+  const { f, log } = fake(20, 300);
+  const [a, b] = await Promise.all([run(env, f, 1), run(env, f, 1)]);
+  assert.equal(a.sent + b.sent, 20);
+  assert.equal(log.messages, 20);
+  assert.ok(a.busy !== b.busy);
+  assert.equal(log.holder, null); // freed at the end
+});
+await t('lock is freed when the run fails', async () => {
+  const { f, log } = fake(3, 300);
+  const broken = (url, opts) => (url.endsWith('/rpc/bot_jobs') ? Promise.resolve(new Response('{"message":"db down"}', { status: 500 })) : f(url, opts));
+  await assert.rejects(run(env, broken, 0), /db down/);
+  assert.equal(log.holder, null);
+  assert.equal((await run(env, f, 0)).sent, 3);
 });
 
 console.log(`\n${n} passed`);

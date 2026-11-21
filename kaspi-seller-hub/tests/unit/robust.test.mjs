@@ -111,6 +111,20 @@ await test('hung POST: apiTimeout, never repeated (Kaspi may have applied it)', 
   K._setTimeoutMs();
   clearInterval(alive);
 });
+await test('all Kaspi requests share one in-flight limit (many stores)', async () => {
+  K._setMaxInFlight(2);
+  let now = 0, peak = 0;
+  globalThis.fetch = async () => {
+    peak = Math.max(peak, ++now);
+    await new Promise((r) => setTimeout(r, 5));
+    now--;
+    return new Response('{}', { status: 200 });
+  };
+  const res = await Promise.all(Array.from({ length: 7 }, (_, i) => K.apiRequest('t' + i, '/orders')));
+  assert.equal(res.length, 7);
+  assert.equal(peak, 2);
+  K._setMaxInFlight();
+});
 await test('GET: 503 then 200 → retried, succeeds', async () => {
   const calls = fakeFetch([{ status: 503 }, { status: 200 }]);
   const res = await K.apiRequest('t', '/orders');

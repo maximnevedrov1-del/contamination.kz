@@ -133,8 +133,23 @@ async function webhook(update, env, f) {
  * function's time limit or a caller timeout never sends the same message again next time.
  * The run stops after `budgetMs` and reports `more: true`; the caller calls again.
  * bot_jobs returns at most a batch (007_bot_batch.sql); sent items drop out of the next batch.
+ * Only one run at a time (008_bot_lock.sql): a second run gets `busy: true` and sends nothing.
+ * The lease outlives the time budget (+ a 30 s Telegram wait); a crashed run's lease just expires.
  */
 export async function run(env, f = fetch, pause = 40, { chunk = 50, budgetMs = 45000, now = Date.now } = {}) {
+  const holder = crypto.randomUUID();
+  const ttl = Math.ceil(budgetMs / 1000) + 90;
+  if ((await rpc(env, 'bot_lock', { p_key: env.BOT_KEY, p_holder: holder, p_ttl: ttl }, null, f)) !== true) {
+    return { due: 0, sent: 0, blocked: 0, failed: 0, more: false, busy: true };
+  }
+  try {
+    return await send(env, f, pause, { chunk, budgetMs, now });
+  } finally {
+    await rpc(env, 'bot_unlock', { p_key: env.BOT_KEY, p_holder: holder }, null, f).catch(() => {}); // else it expires
+  }
+}
+
+async function send(env, f, pause, { chunk, budgetMs, now }) {
   const t0 = now();
   const stats = { due: 0, sent: 0, blocked: 0, failed: 0, more: false };
   let pending = [];

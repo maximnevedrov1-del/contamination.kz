@@ -52,6 +52,29 @@ let timeoutMs = API_TIMEOUT_MS;
 export const _setTimeoutMs = (ms) => (timeoutMs = ms || API_TIMEOUT_MS);
 const isTimeout = (e) => e?.name === 'TimeoutError' || e?.name === 'AbortError';
 
+/**
+ * One limit for the whole extension: at most this many Kaspi requests in flight, whatever the
+ * number of stores (each store's own pool() would otherwise multiply). A slot is held for one
+ * attempt only and freed before a retry pause, so a waiting retry never blocks other requests.
+ */
+export const MAX_IN_FLIGHT = 4;
+let maxInFlight = MAX_IN_FLIGHT;
+let inFlight = 0;
+const waiting = [];
+/** Tests change the limit and read the peak. */
+export const _setMaxInFlight = (n) => (maxInFlight = n || MAX_IN_FLIGHT);
+async function slot(fn) {
+  if (inFlight >= maxInFlight) await new Promise((r) => waiting.push(r));
+  else inFlight++;
+  try {
+    return await fn();
+  } finally {
+    const next = waiting.shift();
+    if (next) next(); // the slot passes straight to the next waiter
+    else inFlight--;
+  }
+}
+
 /** Seconds from a Retry-After header, capped so a UI action never hangs for long. */
 function retryAfter(res, fallback) {
   const s = Number(res.headers.get('Retry-After'));
@@ -81,13 +104,15 @@ export async function apiRequest(token, pathOrUrl, { method = 'GET', params, bod
     const last = attempt >= RETRY_DELAYS.length;
     let res;
     try {
-      res = await fetch(url.href, {
-        method,
-        headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': contentType },
-        body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
-        credentials: 'omit', // the token is the only credential; never send cabinet cookies
-        signal: AbortSignal.timeout(timeoutMs), // also covers reading the body later
-      });
+      res = await slot(() =>
+        fetch(url.href, {
+          method,
+          headers: { 'X-Auth-Token': token, Accept: accept, 'Content-Type': contentType },
+          body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+          credentials: 'omit', // the token is the only credential; never send cabinet cookies
+          signal: AbortSignal.timeout(timeoutMs), // also covers reading the body later
+        }),
+      );
     } catch (e) {
       if (idempotent && !last) {
         await sleeper(RETRY_DELAYS[attempt]);
