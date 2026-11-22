@@ -48,7 +48,7 @@ do $$ begin perform get_license(1); raise notice 'FAIL anon got a license'; exce
 reset role; set role authenticated; set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select pg_temp.ok('admin sees pending invoice with email', (select jsonb_array_length(a) = 1 and a->0->>'email' = 'seller@example.kz' from (select (admin_invoices('pending')->'rows') a) x));
 select pg_temp.ok('confirm: paid period starts after the trial (trial not lost)',
-  (select (r->>'period_from')::timestamptz >= now() + interval '29 days' and (r->>'period_to')::timestamptz > (r->>'period_from')::timestamptz + interval '58 days'
+  (select (r->>'period_from')::timestamptz >= now() + interval '13 days' and (r->>'period_to')::timestamptz > (r->>'period_from')::timestamptz + interval '58 days'
    from (select admin_confirm_invoice((select ((admin_invoices('pending')->'rows'))->0->>'id')::bigint, 'Kaspi #123') r) x));
 do $$ begin perform admin_confirm_invoice((select (((admin_invoices('paid')->'rows'))->0->>'id')::bigint), null); raise notice 'FAIL double confirm'; exception when others then raise notice 'PASS double confirm rejected (%)', sqlerrm; end $$;
 select pg_temp.ok('config update by admin', (select (c->>'kaspi_qr_url') = 'https://example.kz/qr.png' from (select admin_update_config('{"kaspi_qr_url":"https://example.kz/qr.png","payment_instructions":"Оплатите по QR"}') c) x));

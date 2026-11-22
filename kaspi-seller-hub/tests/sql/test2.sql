@@ -6,6 +6,7 @@ insert into auth.users (id, email) values ('33333333-3333-3333-3333-333333333333
 insert into public.admins values ('88888888-8888-8888-8888-888888888888');
 
 -- ===== trial, 30 days left =====
+reset role; update accounts set trial_ends_at = now() + interval '30 days' where email = 'big@example.kz';
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('no renewal invoice 30 days before the end', ensure_renewal_invoice(3) is null);
 select pg_temp.ok('4th store in trial → add-on 5 000 ₸ (30 days left)', (select i->>'kind' = 'addon' and (i->>'amount')::int = 5000 and (i->>'stores')::int = 4 and (i->>'months')::int = 0 from (select request_store_addon(4) i) x));
