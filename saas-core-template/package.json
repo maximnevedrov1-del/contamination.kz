@@ -1,0 +1,9 @@
+{
+  "name": "saas-core-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:sql": "bash tests/sql/run.sh"
+  }
+}
