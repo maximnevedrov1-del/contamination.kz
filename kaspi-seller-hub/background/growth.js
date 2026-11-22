@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — growth features in the worker:
+ * SaudaPulse — growth features in the worker:
  *   - Telegram: «Подключить Telegram» (one-time link), status, switches; the numbers for the 09:00
  *     digest (yesterday and today: orders, sum, shipped, orders at risk); instant «order at risk»
  *     alerts through the bot function, once per order;

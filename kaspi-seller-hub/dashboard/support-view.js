@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — support inside the extension: the owner's service notice (banner on every
+ * SaudaPulse — support inside the extension: the owner's service notice (banner on every
  * page), «Написать в поддержку» with the technical report attached, «Мои вопросы» with answers.
  * The seller never has to explain the version, browser or what failed — it is in the report.
  */

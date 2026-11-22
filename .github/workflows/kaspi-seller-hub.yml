@@ -1,4 +1,4 @@
-# Checks of the Kaspi Seller Hub extension on every push / pull request that touches it.
+# Checks of the SaudaPulse extension on every push / pull request that touches it.
 name: kaspi-seller-hub
 
 on:

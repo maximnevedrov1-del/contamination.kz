@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — typed wrapper around chrome.storage.
+ * SaudaPulse — typed wrapper around chrome.storage.
  *
  * local   : settings, per-store snapshots, chat cache, invoices (persistent)
  * session : tab registry, print queue (cleared when the browser closes)

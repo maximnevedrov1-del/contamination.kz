@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — versioned local data.
+ * SaudaPulse — versioned local data.
  *
  * Everything the seller entered (cost prices, catalog, price-list settings, store
  * names and colours) lives in chrome.storage.local and must survive every update

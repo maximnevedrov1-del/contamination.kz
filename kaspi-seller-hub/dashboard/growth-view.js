@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — plans and retention in the dashboard:
+ * SaudaPulse — plans and retention in the dashboard:
  *   storeMeter      «Магазин: Все (1/1)  + Добавить магазин» in the top bar
  *   openUpsell      soft paywall on «Старт»: +8 000 ₸/мес for 3 stores, 24 hours free, upgrade now
  *   openCancelFlow  «Отменить подписку»: reason → offer (30 % / «Старт» / freeze / feedback) → cancel

@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — usage counts for the owner's control panel (service worker).
+ * SaudaPulse — usage counts for the owner's control panel (service worker).
  *
  * Counted per day (Kazakhstan time), numbers only:
  *   sections — how many times each dashboard section was opened;

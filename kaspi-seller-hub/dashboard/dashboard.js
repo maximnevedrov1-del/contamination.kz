@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — dashboard (Screen 2).
+ * SaudaPulse — dashboard (Screen 2).
  *
  * Routes (location.hash): orders · returns · refusals · payments · analytics · chat · settings
  * Data comes from the service worker (ui:* messages) and chrome.storage; nothing
@@ -1949,7 +1949,7 @@ function renderSidebar() {
 }
 
 /** Per-store "unavailable" banners — never block the other stores. */
-const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
+const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://mc.shop.kaspi.kz/*', 'https://idmc.shop.kaspi.kz/*'];
 
 function renderBanners() {
   const box = clear($('banners'));

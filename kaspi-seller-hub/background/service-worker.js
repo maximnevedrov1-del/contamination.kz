@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — background service worker (MV3, ES module).
+ * SaudaPulse — background service worker (MV3, ES module).
  *
  *  - Tab registry: which open Kaspi tab belongs to which store (chrome.storage.session,
  *    because the worker itself can be stopped at any time).
@@ -1430,7 +1430,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => unregisterTab(tabId));
-/** Chrome match pattern → RegExp ("https://*.kaspi.kz/*" also matches kaspi.kz itself). */
+/** Chrome match pattern → RegExp (a leading "*." also matches the bare domain; current patterns are exact hosts). */
 const patternToRegExp = (p) => {
   const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]*)(\/.*)$/); // host is empty for file:///
   const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&');

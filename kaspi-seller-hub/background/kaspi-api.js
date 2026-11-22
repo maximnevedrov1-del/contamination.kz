@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — client for the official Kaspi Shop API (JSON:API).
+ * SaudaPulse — client for the official Kaspi Shop API (JSON:API).
  *
  * One token per store (cabinet › Настройки › Токен API). Used only by the service
  * worker; tokens never reach extension pages. Endpoints and formats follow
@@ -96,6 +96,8 @@ function retryAfter(res, fallback) {
 export async function apiRequest(token, pathOrUrl, { method = 'GET', params, body, accept = 'application/vnd.api+json', contentType = 'application/vnd.api+json' } = {}) {
   const url = new URL(/^https?:/.test(pathOrUrl) ? pathOrUrl : A().base + pathOrUrl);
   Object.entries(params || {}).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  // The token goes only to kaspi.kz: a `links.related` URL from a response must not be able to redirect it elsewhere.
+  if (url.origin !== 'https://kaspi.kz') throw new ApiError('badUrl', 0);
   // «Только чтение» (settings.readOnly, set by the worker): only reads ever leave the extension.
   // Last line of defence: the worker also refuses the actions before they get here.
   if (method !== 'GET' && globalThis.KSH_READONLY) throw new ApiError('readOnly', 0);

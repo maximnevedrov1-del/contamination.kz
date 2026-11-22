@@ -1,7 +1,7 @@
 // Telegram bot scheduled run: results recorded in chunks, batches fetched until done, time budget.
 //   node tests/unit/bot-run.test.mjs
 import assert from 'node:assert/strict';
-const { run } = await import('../../billing/supabase/functions/telegram-bot/bot.js');
+const { run, handle } = await import('../../billing/supabase/functions/telegram-bot/bot.js');
 
 const env = { SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon', BOT_KEY: 'k', BOT_TOKEN: 't', TELEGRAM_API: 'https://tg.test' };
 const item = (n) => ({ user_id: `u${n}`, chat_id: n, kind: 'care', key: 'w1', data: { name: 'A' } });
@@ -79,6 +79,26 @@ await t('lock is freed when the run fails', async () => {
   await assert.rejects(run(env, broken, 0), /db down/);
   assert.equal(log.holder, null);
   assert.equal((await run(env, f, 0)).sent, 3);
+});
+
+const hook = (body, secret = 'secret-secret-0123') => new Request('https://x.test/telegram-bot/webhook', { method: 'POST', headers: { 'x-telegram-bot-api-secret-token': secret }, body });
+const henv = { ...env, WEBHOOK_SECRET: 'secret-secret-0123' };
+const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
+await t('webhook: wrong secret stays 401', async () => {
+  assert.equal((await handle(hook('{}', 'bad'), henv, async () => new Response('{}'))).status, 401);
+});
+await t('webhook: invalid JSON and malformed update → 200 ok', async () => {
+  for (const body of ['{not json', 'null', '[]']) {
+    const r = await quiet(() => handle(hook(body), henv, async () => new Response('{}')));
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true });
+  }
+});
+await t('webhook: RPC failure → 200 ok', async () => {
+  const upd = JSON.stringify({ message: { chat: { id: 5 }, from: { id: 5 }, text: '/stop' } });
+  const r = await quiet(() => handle(hook(upd), henv, async () => { throw new Error('rpc down'); }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true });
 });
 
 console.log(`\n${n} passed`);

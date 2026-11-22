@@ -1,4 +1,4 @@
--- Kaspi Seller Hub — support without the owner sitting at the computer (run after 001 and 002).
+-- SaudaPulse — support without the owner sitting at the computer (run after 001 and 002).
 -- Safe to re-run.
 --
 -- 1. Service status: one message the owner writes in the admin page («Kaspi не отвечает,

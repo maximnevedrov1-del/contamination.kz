@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — product photos for picking (order card, pick list, cost prices).
+ * SaudaPulse — product photos for picking (order card, pick list, cost prices).
  *
  * Kaspi's order API gives name, SKU and quantity, but no picture. A photo is found by SKU:
  *   1. the photo the seller set for that SKU (link from the Kaspi product page, or a file);

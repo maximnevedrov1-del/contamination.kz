@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — short surveys for the owner's control panel.
+ * SaudaPulse — short surveys for the owner's control panel.
  *  - NPS: «Насколько вероятно, что вы порекомендуете …» 0–10 + one open question. A card on Home,
  *    never a blocking window; the server decides when (after 14 days, then every 90 days).
  *  - «Почему не продлеваете?»: when the trial or subscription has ended.

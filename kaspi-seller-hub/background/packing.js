@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — packing journal and product barcodes (used by the packer panel).
+ * SaudaPulse — packing journal and product barcodes (used by the packer panel).
  *
  * Journal (local, this computer): who packed which order and when, how each line was checked
  * (scanner or by hand), wrong scans, problems. Order numbers stay on this computer; the server

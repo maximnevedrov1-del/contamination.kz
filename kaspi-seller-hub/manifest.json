@@ -32,16 +32,18 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://kaspi.kz/mc/*",
-    "https://*.kaspi.kz/*",
+    "https://kaspi.kz/*",
+    "https://mc.shop.kaspi.kz/*",
+    "https://idmc.shop.kaspi.kz/*",
     "http://localhost/*",
     "file:///*/mc/store-*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://kaspi.kz/mc/*",
-        "https://*.kaspi.kz/*",
+        "https://kaspi.kz/*",
+        "https://mc.shop.kaspi.kz/*",
+        "https://idmc.shop.kaspi.kz/*",
         "http://localhost/*",
         "file:///*/mc/store-*"
       ],
@@ -53,8 +55,9 @@
     },
     {
       "matches": [
-        "https://kaspi.kz/mc/*",
-        "https://*.kaspi.kz/*",
+        "https://kaspi.kz/*",
+        "https://mc.shop.kaspi.kz/*",
+        "https://idmc.shop.kaspi.kz/*",
         "http://localhost/*",
         "file:///*/mc/store-*"
       ],

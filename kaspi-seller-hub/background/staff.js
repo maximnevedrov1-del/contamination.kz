@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — staff (packers) on the owner's warehouse computer.
+ * SaudaPulse — staff (packers) on the owner's warehouse computer.
  *
  *  - The owner invites a packer by e-mail (billing/supabase/002_team.sql) and turns this
  *    computer into a «Компьютер склада»: the owner's dashboard is locked with the owner's PIN.

@@ -197,8 +197,13 @@ export async function handle(req, env, f = fetch) {
   try {
     if (path.endsWith('/webhook')) {
       if (!sameSecret(req.headers.get('x-telegram-bot-api-secret-token'), env.WEBHOOK_SECRET)) return json({ error: 'forbidden' }, 401);
-      await webhook(await req.json(), env, f);
-      return json({ ok: true }); // always 200: Telegram would resend the update otherwise
+      // After the secret check always answer 200: Telegram would resend (and retry forever) the update otherwise.
+      try {
+        await webhook(await req.json(), env, f);
+      } catch (e) {
+        console.error('[telegram-bot] webhook update dropped:', String(e?.message || e).slice(0, 200));
+      }
+      return json({ ok: true });
     }
     if (path.endsWith('/alert')) {
       const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');

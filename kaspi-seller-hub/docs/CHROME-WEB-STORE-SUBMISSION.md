@@ -2,7 +2,7 @@
 
 Тексты на английском готовы к вставке (форма CWS на английском). Всё взято из `legal/privacy.html` и релизного манифеста (`node tools/build-release.mjs` → `dist/kaspi-seller-hub/manifest.json`). Политика конфиденциальности: **https://saudapulse.kz/privacy**
 
-Релизный манифест: permissions `tabs`, `storage`, `unlimitedStorage`, `notifications`, `alarms`; hosts `https://kaspi.kz/mc/*`, `https://*.kaspi.kz/*`. `activeTab` убран (в коде не используется); `scripting`, content scripts, localhost и `file:` релизная сборка вырезает.
+Релизный манифест: permissions `tabs`, `storage`, `unlimitedStorage`, `notifications`, `alarms`; hosts `https://kaspi.kz/*`, `https://mc.shop.kaspi.kz/*`, `https://idmc.shop.kaspi.kz/*` (подстановочный `*.kaspi.kz` удалён). `activeTab` убран (в коде не используется); `scripting`, content scripts, localhost и `file:` релизная сборка вырезает.
 
 ## 1. Single purpose
 
@@ -37,16 +37,21 @@ Shows desktop notifications about new orders and urgent events (opt-in settings)
 Schedules periodic background sync of orders and reminders in the Manifest V3 service worker.
 ```
 
-**Host permission `https://kaspi.kz/mc/*`**
+**Host permission `https://kaspi.kz/*`**
 ```
-The extension calls the Kaspi Merchant Cabinet API on behalf of the seller (with the seller's own token) to read orders, catalog and update prices/stock, and opens the seller's cabinet pages. No other site is accessed.
+The extension calls the Kaspi Merchant API (https://kaspi.kz/shop/api/v2 and /shop/api/products) on behalf of the seller, using the seller's own API token, to read orders, catalog and update prices/stock, and opens the seller's cabinet pages (https://kaspi.kz/mc/). No other site is accessed.
 ```
 
-**Host permission `https://*.kaspi.kz/*`**
+**Host permission `https://mc.shop.kaspi.kz/*`**
 ```
-Kaspi serves the merchant API and product images from several kaspi.kz subdomains (the seller cabinet and API hosts). The wildcard covers only subdomains of kaspi.kz that the seller's own cabinet uses. No other domains are accessed.
+The Kaspi Merchant Cabinet host. Needed to recognise the seller's open cabinet tab and to link to cabinet pages from the extension.
 ```
-Заметка: подстановочный `*.kaspi.kz` ревьюер может спросить. Если известен точный список поддоменов API, сузить до них (проверить в `shared/selectors.js` → `tabMatchPatterns` и в CSP `connect-src`) и поправить `manifest.json` + `tools/build-release.mjs`.
+
+**Host permission `https://idmc.shop.kaspi.kz/*`**
+```
+The Kaspi Merchant Cabinet login (identity) host. Needed only to detect that the seller is on the login page, so the extension can show a "sign in to the cabinet" hint instead of failing silently.
+```
+Заметка: подстановочный `https://*.kaspi.kz/*` удалён из `host_permissions`, `content_scripts.matches`, `tabMatchPatterns`, CSP `connect-src` и запроса разрешений в дашборде; остались три точных хоста. Токен X-Auth-Token отправляется только на origin `https://kaspi.kz`. Картинки товаров: `img-src https://*.cdn-kaspi.kz` (только изображения, не host permission).
 
 **Remote code: No.** Весь код в пакете, `script-src 'self'`, нет `eval`/`new Function` (CI это проверяет). Отметить «No, I am not using remote code».
 

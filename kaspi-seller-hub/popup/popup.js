@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — popup (Screen 1): quick status across stores.
+ * SaudaPulse — popup (Screen 1): quick status across stores.
  * Shows cached data instantly, then asks the worker for a fresh sync.
  */
 import { initI18n, t, setLang, getLang, applyI18n, formatNumber, formatRelative, formatMoney } from '../shared/i18n.js';

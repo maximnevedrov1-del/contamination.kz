@@ -1,5 +1,5 @@
 -- =====================================================================
--- Kaspi Seller Hub — subscriptions & Kaspi invoices (Supabase / Postgres)
+-- SaudaPulse — subscriptions & Kaspi invoices (Supabase / Postgres)
 --
 -- Run once in Supabase: Dashboard → SQL Editor → paste → Run.
 --

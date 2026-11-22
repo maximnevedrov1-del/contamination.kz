@@ -1,5 +1,5 @@
 /*
- * Kaspi Seller Hub — DEMO store page (NOT Kaspi). Builds a fake seller cabinet
+ * SaudaPulse — DEMO store page (NOT Kaspi). Builds a fake seller cabinet
  * that matches the placeholder selectors in shared/selectors.js, with dates
  * relative to today. Used only for manual testing — see README › Demo.
  */

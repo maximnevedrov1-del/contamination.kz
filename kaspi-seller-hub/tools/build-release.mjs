@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Kaspi Seller Hub — release build for the Chrome Web Store.
+ * SaudaPulse — release build for the Chrome Web Store.
  *
  *   node tools/build-release.mjs                    → dist/kaspi-seller-hub-<version>.zip   (Chrome, Yandex, Edge, Opera, Brave)
  *   node tools/build-release.mjs --target=firefox   → dist/kaspi-seller-hub-<version>-firefox.zip (Firefox desktop & Android, addons.mozilla.org)
@@ -130,9 +130,9 @@ manifest.content_security_policy = {
     "script-src 'self'",
     "object-src 'self'",
     "frame-src 'self' blob:",
-    `connect-src 'self' https://kaspi.kz https://*.kaspi.kz ${supa}`,
+    `connect-src 'self' https://kaspi.kz https://mc.shop.kaspi.kz https://idmc.shop.kaspi.kz ${supa}`,
     // product photos: Kaspi's own image hosts only (shared/photos.js → PHOTO_HOSTS)
-    `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.kaspi.kz https://*.cdn-kaspi.kz`,
+    `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.cdn-kaspi.kz`,
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; '),

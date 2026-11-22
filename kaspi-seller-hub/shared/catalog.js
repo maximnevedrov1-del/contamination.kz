@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — product catalog: validation, Kaspi XML price list, import of the
+ * SaudaPulse — product catalog: validation, Kaspi XML price list, import of the
  * price list downloaded from the Kaspi cabinet (XML or Excel). Pure functions, no
  * chrome.* calls, so they run in the worker, the dashboard and unit tests alike.
  *

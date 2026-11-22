@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — product upload ("Выгрузка товаров"), service-worker side.
+ * SaudaPulse — product upload ("Выгрузка товаров"), service-worker side.
  *
  *  - Catalog: the seller's whole assortment, with price/stock per store (shared/catalog.js).
  *  - Card upload: new product cards go to Kaspi through the official Content API, with

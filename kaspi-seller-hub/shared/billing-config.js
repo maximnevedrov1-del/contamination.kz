@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — subscription server (Supabase project).
+ * SaudaPulse — subscription server (Supabase project).
  *
  * Fill these two values from Supabase → Project Settings → API:
  *   - Project URL        → supabaseUrl

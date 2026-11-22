@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — subscription client (service worker only).
+ * SaudaPulse — subscription client (service worker only).
  *
  * Login: email + one-time code (Supabase Auth, /auth/v1/otp + /auth/v1/verify).
  * Licence: RPC get_license() → status trial | active | expired, store limit,
