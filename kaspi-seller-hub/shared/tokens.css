@@ -1,47 +1,48 @@
 /*
  * Kaspi Seller Hub — design tokens shared by popup, dashboard and print.
- * Light is the default; dark applies from the OS setting unless the user picked
- * a theme in Settings (html[data-theme="light"|"dark"]).
+ * Dark is the default (SaudaPulse brand palette). Light applies only when the OS
+ * is set to light and the user has not picked a theme, or when
+ * html[data-theme="light"] is set in Settings.
  */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --surface-hover: #f4f4f5;
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --text: #0a0a0a;
-  --text-2: #52525b;
-  --text-3: #71717a;
-  --accent: #0a0a0a;
-  --accent-text: #ffffff;
-  --focus: #2a78d6;
-  --selected: #eef4fd;
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --surface-2: #273449;
+  --surface-hover: #273449;
+  --border: #334155;
+  --border-strong: #475569;
+  --text: #F8FAFC;
+  --text-2: #CBD5E1;
+  --text-3: #94A3B8;
+  --accent: #10B981;
+  --accent-text: #0F172A;
+  --focus: #38BDF8;
+  --selected: #0F2E44;
 
-  --ok: #0f7b3f;
-  --ok-bg: #e8f5ee;
-  --warn: #9a5b00;
-  --warn-bg: #fdf3e1;
-  --danger: #c0262d;
-  --danger-bg: #fdecec;
-  --info: #1f5fae;
-  --info-bg: #e9f1fc;
-  --neutral-bg: #f1f1f3;
+  --ok: #10B981;
+  --ok-bg: #0B3B2E;
+  --warn: #e6a23c;
+  --warn-bg: #2d210d;
+  --danger: #F43F5E;
+  --danger-bg: #3B1622;
+  --info: #38BDF8;
+  --info-bg: #0C2A3D;
+  --neutral-bg: #1E293B;
 
-  --chart-grid: #ececef;
-  --chart-axis: #a1a1aa;
-  --series-1: #2a78d6;
+  --chart-grid: #334155;
+  --chart-axis: #94A3B8;
+  --series-1: #3987e5;
 
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
   --ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
 
   --space-1: 4px;
@@ -53,70 +54,103 @@
   --space-8: 32px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #0a0a0b;
-    --surface: #111113;
-    --surface-2: #18181b;
-    --surface-hover: #1c1c20;
-    --border: #26262b;
-    --border-strong: #34343a;
-    --text: #f4f4f5;
-    --text-2: #b4b4bb;
-    --text-3: #8b8b94;
-    --accent: #f4f4f5;
-    --accent-text: #0a0a0a;
-    --focus: #5598e7;
-    --selected: #14233a;
-    --ok: #4fc483;
-    --ok-bg: #0f2a1b;
-    --warn: #e6a23c;
-    --warn-bg: #2d210d;
-    --danger: #f07178;
-    --danger-bg: #301417;
-    --info: #79aef0;
-    --info-bg: #122339;
-    --neutral-bg: #1f1f23;
-    --chart-grid: #232328;
-    --chart-axis: #6b6b74;
-    --series-1: #3987e5;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+/* Light: used only when the OS prefers light and no theme is chosen. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f5;
+    --surface-hover: #f4f4f5;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --text: #0a0a0a;
+    --text-2: #52525b;
+    --text-3: #71717a;
+    --accent: #047857;
+    --accent-text: #ffffff;
+    --focus: #0284C7;
+    --selected: #eef4fd;
+    --ok: #047857;
+    --ok-bg: #e8f5ee;
+    --warn: #9a5b00;
+    --warn-bg: #fdf3e1;
+    --danger: #E11D48;
+    --danger-bg: #fdecec;
+    --info: #2563EB;
+    --info-bg: #e9f1fc;
+    --neutral-bg: #f1f1f3;
+    --chart-grid: #ececef;
+    --chart-axis: #a1a1aa;
+    --series-1: #2a78d6;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0a0a0b;
-  --surface: #111113;
-  --surface-2: #18181b;
-  --surface-hover: #1c1c20;
-  --border: #26262b;
-  --border-strong: #34343a;
-  --text: #f4f4f5;
-  --text-2: #b4b4bb;
-  --text-3: #8b8b94;
-  --accent: #f4f4f5;
-  --accent-text: #0a0a0a;
-  --focus: #5598e7;
-  --selected: #14233a;
-  --ok: #4fc483;
-  --ok-bg: #0f2a1b;
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --surface-2: #273449;
+  --surface-hover: #273449;
+  --border: #334155;
+  --border-strong: #475569;
+  --text: #F8FAFC;
+  --text-2: #CBD5E1;
+  --text-3: #94A3B8;
+  --accent: #10B981;
+  --accent-text: #0F172A;
+  --focus: #38BDF8;
+  --selected: #0F2E44;
+  --ok: #10B981;
+  --ok-bg: #0B3B2E;
   --warn: #e6a23c;
   --warn-bg: #2d210d;
-  --danger: #f07178;
-  --danger-bg: #301417;
-  --info: #79aef0;
-  --info-bg: #122339;
-  --neutral-bg: #1f1f23;
-  --chart-grid: #232328;
-  --chart-axis: #6b6b74;
+  --danger: #F43F5E;
+  --danger-bg: #3B1622;
+  --info: #38BDF8;
+  --info-bg: #0C2A3D;
+  --neutral-bg: #1E293B;
+  --chart-grid: #334155;
+  --chart-axis: #94A3B8;
   --series-1: #3987e5;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-hover: #f4f4f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #0a0a0a;
+  --text-2: #52525b;
+  --text-3: #71717a;
+  --accent: #047857;
+  --accent-text: #ffffff;
+  --focus: #0284C7;
+  --selected: #eef4fd;
+  --ok: #047857;
+  --ok-bg: #e8f5ee;
+  --warn: #9a5b00;
+  --warn-bg: #fdf3e1;
+  --danger: #E11D48;
+  --danger-bg: #fdecec;
+  --info: #2563EB;
+  --info-bg: #e9f1fc;
+  --neutral-bg: #f1f1f3;
+  --chart-grid: #ececef;
+  --chart-axis: #a1a1aa;
+  --series-1: #2a78d6;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -212,3 +246,12 @@ html, body {
   .spin, .skeleton { animation: none; }
 }
 .seg--wrap { flex-wrap: wrap; height: auto; }
+
+/* Brand logo: white wordmark on dark, dark wordmark on light */
+.logo-on-light { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .logo-on-dark { display: none; }
+  :root:not([data-theme="dark"]) .logo-on-light { display: inline; }
+}
+:root[data-theme="light"] .logo-on-dark { display: none; }
+:root[data-theme="light"] .logo-on-light { display: inline; }
