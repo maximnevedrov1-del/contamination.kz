@@ -2618,8 +2618,70 @@ function viewAccount() {
       : h('p', { class: 'muted' }, t('account.noInvoices')),
   );
 
+  // ---- referral: invite a friend (+14 days for you, +7 days trial for them) ----
+  if (state.refInfo === undefined && !state.refLoading) {
+    state.refLoading = true;
+    send('ui:billingReferral').then((r) => {
+      state.refInfo = r?.ok ? r.referral : null;
+      state.refPending = r?.pending || '';
+    }).catch(() => { state.refInfo = null; }).finally(() => { state.refLoading = false; if (state.route === 'account') renderView(); });
+  }
+  const ref = state.refInfo;
+  const refLink = ref ? `https://saudapulse.kz/?ref=${ref.code}` : '';
+  const refState = (state.refUi ??= { msg: '', ok: false, copied: false, code: null });
+  const refApply = async (code) => {
+    const res = await send('ui:billingApplyReferral', { code });
+    if (res?.ok) {
+      refState.ok = true; refState.msg = t('account.referral.applied', { days: res.result?.bonus_days || 7 });
+      state.refInfo = { ...state.refInfo, applied: true, can_apply: false }; state.refPending = '';
+    } else {
+      const k = `account.referral.err.${res?.error}`;
+      refState.ok = false; refState.msg = hasKey(k) ? t(k) : errorText(res?.error);
+    }
+    renderView();
+  };
+  const refCodeInput = h('input', { class: 'input', placeholder: 'SP-XXXXXX', 'aria-label': t('account.referral.codeLabel'), maxlength: '12', value: refState.code ?? state.refPending ?? '', dataset: { fkey: 'ref-code' }, style: { width: '160px' }, oninput: (e) => (refState.code = e.target.value) });
+  const referralCard = ref && h(
+    'section',
+    { class: 'card' },
+    h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('account.referral.title')), h('div', { class: 'card__sub' }, t('account.referral.sub')))),
+    h(
+      'div',
+      { class: 'card__body' },
+      h(
+        'div',
+        { class: 'field', style: { justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' } },
+        h('input', { class: 'input', readonly: true, value: refLink, 'aria-label': t('account.referral.linkLabel'), style: { flex: '1 1 260px', minWidth: '0' }, onfocus: (e) => e.target.select() }),
+        h('button', {
+          type: 'button',
+          class: 'btn btn--sm',
+          onclick: async () => {
+            try { await navigator.clipboard.writeText(refLink); refState.copied = true; } catch { refState.copied = false; }
+            refState.msg = refState.copied ? '' : refState.msg;
+            renderView();
+            if (refState.copied) setTimeout(() => { refState.copied = false; renderView(); }, 2000);
+          },
+        }, refState.copied ? t('account.referral.copied') : t('account.referral.copy')),
+      ),
+      h('p', { class: 'muted' }, t('account.referral.stats', { count: ref.count || 0, days: ref.bonus_days || 0 })),
+      ref.can_apply &&
+        h(
+          'form',
+          {
+            class: 'field',
+            style: { justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' },
+            onsubmit: async (e) => { e.preventDefault(); if (!ui.busy) await refApply(refCodeInput.value); },
+          },
+          h('span', { class: 'muted' }, t('account.referral.haveCode')),
+          refCodeInput,
+          h('button', { type: 'submit', class: 'btn btn--sm btn--primary', disabled: ui.busy }, t('account.referral.apply')),
+        ),
+      refState.msg && h('p', { class: refState.ok ? 'badge badge--ok' : 'muted', role: 'status' }, refState.msg),
+    ),
+  );
+
   // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
-  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, planCard, historyCard);
+  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, referralCard, planCard, historyCard);
 }
 
 /* ===================================================================== */

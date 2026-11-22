@@ -547,6 +547,8 @@ export const upgradeQuote = (stores) => rpc('upgrade_quote', { p_stores: stores 
 export const trialBoost = () => rpc('start_trial_boost', {});
 export const cancelFlow = ({ reason, outcome, comment }) => rpc('cancel_flow', { p_reason: String(reason), p_outcome: String(outcome), p_comment: comment ? String(comment).slice(0, 1000) : null });
 export const resumeSubscription = () => rpc('resume_subscription', {});
+export const referralInfo = () => rpc('my_referral', {});
+export const applyReferral = (code) => rpc('apply_referral_code', { p_code: String(code || '').slice(0, 32) });
 export const tgStatus = () => rpc('tg_status', {});
 export const tgLinkCreate = () => rpc('tg_link_create', {});
 export const tgSettings = ({ digest, alerts }) => rpc('tg_settings', { p_digest: digest, p_alerts: alerts });

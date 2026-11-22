@@ -1347,6 +1347,18 @@ const uiHandlers = {
       sync().catch((e) => console.warn(LOG, 'sync after login', e));
       return { ok: true, license: lic };
     }),
+  'ui:billingReferral': () =>
+    billingCall(async () => {
+      const info = await B.referralInfo();
+      const { pendingRefCode } = await chrome.storage.local.get('pendingRefCode');
+      return { ok: true, referral: info, pending: pendingRefCode || '' };
+    }),
+  'ui:billingApplyReferral': ({ code }) =>
+    billingCall(async () => {
+      const r = await B.applyReferral(code);
+      await chrome.storage.local.remove('pendingRefCode').catch(() => {});
+      return { ok: true, result: r };
+    }),
   'ui:billingCreateInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.createInvoice(p) })),
   'ui:billingCancelInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.cancelInvoice(p) })),
   'ui:billingLogout': async () => {
@@ -1503,6 +1515,8 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   if (!isSaudaPulseOrigin(sender?.origin || sender?.url)) { sendResponse({ ok: false }); return false; }
   if (msg?.type === 'PING') { sendResponse({ ok: true, version: chrome.runtime.getManifest().version }); return false; }
   if (msg?.type === 'OPEN_DASHBOARD') {
+    const ref = typeof msg.ref === 'string' ? msg.ref.trim().toUpperCase() : '';
+    if (/^SP-[A-Z0-9]{6}$/.test(ref)) chrome.storage.local.set({ pendingRefCode: ref }).catch(() => {});
     openDashboard('').then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true; // async response
   }

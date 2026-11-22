@@ -55,6 +55,7 @@ export function format(item) {
   if (item.kind === 'grace') return `⏳ Оплаченный период закончился. Кабинет работает ещё ${d.days_left} ${plural(d.days_left, 'день', 'дня', 'дней')} — оплатите продление, чтобы не потерять доступ к заказам и истории.`;
   if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в SaudaPulse за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
   if (item.kind === 'winback60') return `🎁 Вернитесь в SaudaPulse со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
+  if (item.kind === 'referral') return `🎉 Ваш друг оплатил подписку — вам начислено +${d.days || 14} дней SaudaPulse!`;
   if (item.kind === 'alert') {
     if (d.kind === 'cancelled') return `❌ Заказ №${d.code} в магазине ${d.shop} отменён.`;
     const m = Math.max(0, Math.round(d.minutes || 0));
