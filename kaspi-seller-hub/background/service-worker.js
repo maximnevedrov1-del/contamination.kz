@@ -1509,6 +1509,10 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+/* Toolbar click: only fires when no popup is set (action.default_popup); with the popup it is inert.
+   Focuses the existing dashboard tab instead of opening a duplicate. */
+chrome.action?.onClicked?.addListener(() => { openDashboard('').catch(() => {}); });
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details?.reason === 'install') openDashboard('home', 'welcome=1').catch(() => {});
   // Order contents now live only in the snapshots: drop the old duplicate cache (one-off, idempotent).

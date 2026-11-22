@@ -53,6 +53,12 @@ The Kaspi Merchant Cabinet login (identity) host. Needed only to detect that the
 ```
 Заметка: подстановочный `https://*.kaspi.kz/*` удалён из `host_permissions`, `content_scripts.matches`, `tabMatchPatterns`, CSP `connect-src` и запроса разрешений в дашборде; остались три точных хоста. Токен X-Auth-Token отправляется только на origin `https://kaspi.kz`. Картинки товаров: `img-src https://*.cdn-kaspi.kz` (только изображения, не host permission).
 
+**externally_connectable (`https://saudapulse.kz/*`, `https://*.saudapulse.kz/*`)**
+```
+Lets only the SaudaPulse website send two messages to the extension: PING (returns the version) and OPEN_DASHBOARD (opens or focuses the user's own dashboard tab). No page data is read and nothing is transferred; any other origin or message type is rejected.
+```
+
+
 **Remote code: No.** Весь код в пакете, `script-src 'self'`, нет `eval`/`new Function` (CI это проверяет). Отметить «No, I am not using remote code».
 
 ## 3. Privacy practices (Data usage)
