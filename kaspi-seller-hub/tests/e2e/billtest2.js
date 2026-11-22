@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const fs = require('fs');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');

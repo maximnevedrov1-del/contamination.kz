@@ -3,7 +3,7 @@
 // lock — everything must keep working together: no logout, no lost data, no errors.
 // Uses ../billcopy (mock Supabase :8098 with the real SQL — refresh tokens are single-use there,
 // like Supabase — and mock Kaspi :8099).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const { Client } = require('pg');
 const EXT = path.join(__dirname, '../billcopy');

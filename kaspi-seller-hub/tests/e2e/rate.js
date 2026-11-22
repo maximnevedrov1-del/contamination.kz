@@ -1,5 +1,5 @@
 // Counts server calls made by ONE user in each mode during 3 minutes.
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

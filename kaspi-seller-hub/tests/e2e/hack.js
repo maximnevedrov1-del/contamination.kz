@@ -1,5 +1,5 @@
 // Attempts to get the subscription for free the ways a user with DevTools could.
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
@@ -36,6 +36,7 @@ const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const genuine = await read('ksh.session');
 
   // ---------- subscription over (server truth) ----------
+  await sql('update billing_config set grace_days = 0 where id = 1'); // hard expiry, no renewal grace
   await sql("update accounts set paid_until = now() - interval '1 day', trial_ends_at = now() - interval '40 days' where email = 'payer@example.kz'");
   lic = await state(true);
   check('1 server says expired → extension expired', lic.status === 'expired' && !lic.canUse, lic.status);

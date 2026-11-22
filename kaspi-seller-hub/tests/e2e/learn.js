@@ -1,5 +1,5 @@
 // Learning in the interface: page guides, «?» button, help list, tour (desktop + phone).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../apicopy');
 let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', n, i); };

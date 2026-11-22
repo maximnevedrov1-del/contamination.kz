@@ -4,7 +4,7 @@ S="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$(cd "$S/.." && pwd)"
 copyext() { mkdir -p "$1" && tar -C "$SRC" --exclude=./tests --exclude=./dist -cf - . | tar -C "$1" -xf - \
   && sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" "$1/shared/billing-config.js" \
-  && perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m" "$1/shared/billing-config.js"; }  # the extension without tests/ and dist/, in developer mode
+  && perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m; s/offerUrl: '[^']*'/offerUrl: ''/; s/privacyUrl: '[^']*'/privacyUrl: ''/" "$1/shared/billing-config.js"; }  # the extension without tests/ and dist/, in developer mode
 cd $S/e2e
 # the container may have restarted: make sure PostgreSQL is up
 psql -h /tmp -p 5499 -U postgres -Atc 'select 1' >/dev/null 2>&1 || su pgt -c "/usr/lib/postgresql/16/bin/pg_ctl -D /tmp/pgdata -o '-p 5499 -k /tmp' -l /tmp/pg.log start" >/dev/null; sleep 2

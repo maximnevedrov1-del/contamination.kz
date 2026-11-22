@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');
 let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', n, i); };
@@ -143,6 +143,7 @@ const OUT = __dirname;
   check('6b orders back after accepting', !(await d.locator('#view').innerText()).includes('Примите условия'));
 
   // 7. expiry → paywall + actions refused (clock moved in the database)
+  await sql('update billing_config set grace_days = 0 where id = 1'); // no renewal grace: this step tests the hard expiry
   await sql("update accounts set paid_until = now() - interval '1 minute', trial_ends_at = now() - interval '2 days' where email='seller@example.kz'");
   await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:billingState', payload: { force: true } }));
   await d.evaluate(() => (location.hash = 'orders')); await refresh();

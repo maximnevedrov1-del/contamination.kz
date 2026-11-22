@@ -101,7 +101,7 @@ http.createServer((req, res) => {
       // Edge Function «telegram-bot»: the real billing/supabase/functions/telegram-bot/bot.js, Telegram = :8095
       if (u.pathname.startsWith('/functions/v1/telegram-bot/')) {
         const { handle } = await import(require('path').join(__dirname, '../../billing/supabase/functions/telegram-bot/bot.js'));
-        const env = { SUPABASE_URL: `http://localhost:${PORT}`, SUPABASE_ANON_KEY: ANON, BOT_TOKEN: '123:abc', BOT_KEY: 'bot-key-0123456789abcdef0123456789abcdef', WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
+        const env = { SUPABASE_URL: `http://localhost:${PORT}`, SUPABASE_ANON_KEY: ANON, SUPABASE_SERVICE_ROLE_KEY: ANON, BOT_TOKEN: '123:abc', BOT_KEY: 'bot-key-0123456789abcdef0123456789abcdef', WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
         const r = await handle(new Request(`http://localhost:${PORT}${u.pathname}`, { method: req.method, headers: req.headers, body: req.method === 'POST' ? bodyBuf : undefined }), env);
         log.push({ fn: u.pathname.split('/').pop(), status: r.status });
         res.writeHead(r.status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });

@@ -1,7 +1,7 @@
 // Support without the owner at the computer: notice for every client, questions with the report
 // attached, answers back in the extension, API health counts, Telegram digest (tools/ops-alert.mjs).
 // Uses ../billcopy (mock Supabase on :8098 with the REAL 001+002+003 SQL, mock Kaspi on :8099).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const http = require('http');
 const { Client } = require('pg');
@@ -115,7 +115,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const sent = [];
   const tg = http.createServer((req, res) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { sent.push({ url: req.url, body: JSON.parse(b) }); res.end('{"ok":true}'); }); }).listen(8097);
   const { run } = await import(path.join(__dirname, '../../tools/ops-alert.mjs'));
-  const env = { SUPABASE_URL: 'http://localhost:8098', SUPABASE_ANON_KEY: 'test-anon-key', OPS_KEY: key, TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_CHAT_ID: '42', TELEGRAM_API: 'http://localhost:8097' };
+  const env = { SUPABASE_URL: 'http://localhost:8098', SUPABASE_ANON_KEY: 'test-anon-key', SUPABASE_SERVICE_ROLE_KEY: 'test-anon-key', OPS_KEY: key, TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_CHAT_ID: '42', TELEGRAM_API: 'http://localhost:8097' };
   await q('update ops_settings set last_digest_at = now() - interval \'1 hour\'');
   await run(env, () => {});
   const text = sent[0]?.body?.text || '';

@@ -1,7 +1,7 @@
 // Release build without cabinet mode (node tools/build-release.mjs, no --with-cabinet):
 // no chat, no content scripts, a Kaspi page never creates a store, no page errors.
 //   node apionly.js <path to dist/kaspi-seller-hub>
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = process.argv[2];
 let fails = 0;

@@ -1,5 +1,5 @@
 // «Только чтение»: with the switch on nothing is sent to Kaspi except reads.
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../apicopy');
 let fails = 0;

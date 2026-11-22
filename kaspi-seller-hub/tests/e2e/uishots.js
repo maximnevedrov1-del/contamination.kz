@@ -1,5 +1,5 @@
 // Screenshots of every screen (developer mode copy + mock Kaspi API + demo store tabs).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = process.argv[2] || path.join(__dirname, '../apicopy');
 const OUT = process.argv[3] || path.join(__dirname, '../ui-before');

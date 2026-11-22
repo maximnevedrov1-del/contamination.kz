@@ -4,7 +4,7 @@
 // through the bot function, Kaspi circuit breaker banner, smart polling alarm.
 // Uses ../billcopy (mock Supabase :8098 with the real SQL and the real bot function, mock Kaspi :8099,
 // mock Telegram :8095).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const http = require('http');
 const { Client } = require('pg');

@@ -1,5 +1,5 @@
 // Order card + backup/restore (developer-mode copy, mock Kaspi API).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path'); const fs = require('fs');
 const EXT = path.join(__dirname, '../apicopy');
 let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', n, i); };

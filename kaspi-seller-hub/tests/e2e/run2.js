@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const fixture = require('./fixture');
 const EXT = require('path').join(__dirname, '../..');

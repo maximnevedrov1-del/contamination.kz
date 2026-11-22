@@ -1,5 +1,5 @@
 // Unit tests of shared/catalog.js, run inside Chromium (DOMParser, DecompressionStream).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
