@@ -309,7 +309,7 @@ Some Chromium builds advertise `kk-KZ` but ship no data for it, which produces "
 
 | Permission | Why |
 |---|---|
-| `tabs`, `scripting`, `activeTab` | find Kaspi tabs, inject the content script into tabs opened before install, focus or navigate a store tab after a click |
+| `tabs`, `scripting` | find Kaspi tabs, inject the content script into tabs opened before install, focus or navigate a store tab after a click (`activeTab` is not requested) |
 | `storage`, `unlimitedStorage` | cached snapshots, chat, settings, captured PDF invoices |
 | `notifications` | new orders / returns / messages |
 | `alarms` | chat polling and background refresh. The worker sleeps, so `setInterval` isn't reliable. Chrome's minimum period is **30 s**, so the setting is clamped to ≥ 30 s. |

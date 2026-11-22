@@ -651,7 +651,12 @@
   }
 
   async function renderFlags(panel) {
-    const flags = await rpc('admin_list_feature_flags');
+    const [flags, bn] = await Promise.all([rpc('admin_list_feature_flags'), rpc('admin_get_system_banner')]);
+    const banner = {
+      on: el('input', { type: 'checkbox', checked: !!bn.active }),
+      type: el('select', { class: 'input' }, ...[['info', 'Информация'], ['warn', 'Предупреждение'], ['danger', 'Авария']].map(([v, l]) => el('option', { value: v, selected: v === (bn.type || 'info') }, l))),
+      text: el('input', { class: 'input', maxlength: 300, value: bn.text || '', placeholder: 'Например: Kaspi изменил вёрстку, часть данных может не загружаться — чиним', style: 'min-width:420px' }),
+    };
     const parseEmails = (t) => t.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
     const save = async (key, v) => {
       await rpc('admin_set_feature_flag', { p_key: key, p_enabled: v.enabled, p_rollout_percent: Number(v.rollout) || 0, p_allow_emails: v.emails, p_description: v.description || null });
@@ -712,6 +717,17 @@
       mails: el('textarea', { rows: 2, placeholder: 'тестовые email, по одному в строке или через запятую' }),
     };
     panel.replaceChildren(
+      el('h2', null, 'Объявление в расширении'),
+      el('p', { class: 'muted' }, 'Показывается всем клиентам вверху панели (приходит вместе с лицензией, обновляется в течение нескольких часов). Только текст, до 300 символов.'),
+      el('div', { class: 'grid2' }, 'Показывать', el('label', null, banner.on, ' Включено'), 'Тип', banner.type, 'Текст', banner.text),
+      el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+        try {
+          await rpc('admin_set_system_banner', { p_active: banner.on.checked, p_text: banner.text.value.trim() || null, p_type: banner.type.value });
+          toast(banner.on.checked ? 'Объявление включено' : 'Объявление выключено');
+        } catch (e) {
+          toast(e.message, true);
+        }
+      } }, 'Сохранить')),
       el('h2', null, 'Фича-флаги'),
       el('p', { class: 'muted' }, 'Включают новые функции у части клиентов без выпуска новой версии. Флаг — только про интерфейс: он не подписан и не защищает платные функции. Клиент получает флаги вместе с лицензией (обновляются в течение нескольких часов).'),
       rows.length

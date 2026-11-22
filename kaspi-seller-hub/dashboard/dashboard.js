@@ -56,6 +56,7 @@ import {
   productKey,
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
+import { bannerFrom, expiryNotice } from '../shared/notices.js';
 import { statusBanner, supportCard, unreadAnswers, getCsat } from './support-view.js';
 import { npsCard, exitCard } from './feedback-view.js';
 import { storeMeter, needsUpsell, openUpsell, openCancelFlow, planNotice, telegramCard } from './growth-view.js';
@@ -1952,6 +1953,19 @@ const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
 
 function renderBanners() {
   const box = clear($('banners'));
+  // the owner's announcement from the licence (incidents, Kaspi layout changes): plain text only
+  const sys = bannerFrom(state.data?.license);
+  if (sys)
+    box.append(h('div', { class: `banner banner--${sys.type}`, role: sys.type === 'info' ? 'status' : 'alert', dataset: { banner: 'system' } },
+      h('span', { class: 'banner__icon' }, icon(sys.type === 'info' ? 'info' : 'warn')),
+      h('span', { class: 'banner__text' }, sys.text)));
+  // 1–3 days left: a soft reminder (the pay dialog and the Home to-do cover the earlier days)
+  const exp = expiryNotice(state.data?.license);
+  if (exp)
+    box.append(h('div', { class: 'banner banner--warn', role: 'status', dataset: { banner: 'expiry' } },
+      h('span', { class: 'banner__icon' }, icon('warn')),
+      h('span', { class: 'banner__text' }, t(exp.kind === 'trial' ? 'notices.expiryTrial' : 'notices.expiryPaid', { days: exp.days })),
+      h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'renew' }, onclick: () => (location.hash = state.data.license.pendingInvoice ? 'pay' : 'account') }, t('notices.renew'))));
   // the owner's notice for everyone («Kaspi не отвечает, чиним»)
   const notice = statusBanner(state.serviceStatus);
   if (notice) box.append(notice);
@@ -2206,6 +2220,16 @@ async function checkPayment(manual = false) {
   } else if (pay.open) renderPay();
 }
 
+/** «Номер счёта: № N» + Copy — the number the seller quotes when paying or writing to support. */
+function invoiceNumber(id) {
+  return h('div', { class: 'invoice-no', dataset: { block: 'invoice-no' }, style: { display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0' } },
+    h('b', { style: { fontSize: '1.15em' } }, t('notices.invoiceNo', { id })),
+    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'copy-invoice-no' }, onclick: async () => {
+      await copyText(String(id));
+      toast(t('notices.copied'), 'ok');
+    } }, t('notices.copy')));
+}
+
 function renderPay() {
   const dlg = $('payDialog');
   const lic = state.data.license || {};
@@ -2234,6 +2258,8 @@ function renderPay() {
       ? [
           h('div', { class: 'pay__amount' }, formatMoney(inv.amount)),
           h('div', { class: 'pay__details' }, t('pay.details', { id: inv.id, stores: inv.stores })),
+          invoiceNumber(inv.id),
+          h('p', { class: 'muted pay__hint', dataset: { block: 'pay-hint' } }, t('notices.payHint')),
           lic.payment?.qr_url
             ? h('img', { class: 'pay__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })
             : h('div', { class: 'pay__noqr' }, t('pay.noQr')),
@@ -2550,7 +2576,9 @@ function viewAccount() {
         h(
           'div',
           null,
+          invoiceNumber(inv.id),
           h('p', null, t('account.pendingText', { phone: fmtPhone(inv.phone) })),
+          h('p', { class: 'muted', dataset: { block: 'pay-hint' } }, t('notices.payHint')),
           lic.payment?.instructions && h('p', { class: 'pending-invoice__instr' }, lic.payment.instructions),
           h('p', { class: 'muted' }, t('account.pendingDetails', { stores: inv.stores, months: inv.months, date: formatDate(inv.created_at, 'datetime') })),
           h(

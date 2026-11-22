@@ -333,6 +333,11 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
   }
 }
 
+function normalizeBanner(b) {
+  if (!b || typeof b !== 'object' || Array.isArray(b) || b.active !== true || typeof b.text !== 'string' || !b.text.trim()) return { active: false };
+  return { active: true, text: b.text.trim().slice(0, 300), type: ['info', 'warn', 'danger'].includes(b.type) ? b.type : 'info' };
+}
+
 /**
  * What the rest of the extension needs to know — safe to send to pages.
  * status: 'unconfigured' (developer mode) | 'loggedOut' | 'trial' | 'active' | 'expired' | 'offline'
@@ -421,6 +426,7 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     termsVersion: lic.terms_required || null,
     termsAcceptedAt: lic.terms_accepted_at || null,
     features: lic.features && typeof lic.features === 'object' && !Array.isArray(lic.features) ? lic.features : {},
+    systemBanner: normalizeBanner(lic.system_banner),
     storeLimit,
     sharedStores,
     coverageEnd,

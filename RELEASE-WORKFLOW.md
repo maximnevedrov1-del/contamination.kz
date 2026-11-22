@@ -26,7 +26,27 @@ cd kaspi-seller-hub
 bash tests/sql/run.sh
 TZ=America/New_York node tests/unit/robust.test.mjs
 node tests/unit/locales.test.mjs
-for t in storage-split token-crypto license-signature license-flow bot-run feature-flags; do node tests/unit/$t.test.mjs || break; done
+for t in storage-split token-crypto license-signature license-flow bot-run feature-flags notices; do node tests/unit/$t.test.mjs || break; done
 node tools/build-release.mjs
 ```
 Миграции применяем только к проекту Supabase `kaspi-seller-hub` (`zraktrilvwrfpcbmkqwi`).
+
+## 4. Почта: DNS перед запуском SMTP
+Делаем до подключения своего SMTP в Supabase Auth, иначе коды входа уйдут в спам.
+- **SPF.** TXT на `saudapulse.kz`: `v=spf1 include:<провайдер> ~all`. Запись SPF должна быть ровно одна: две записи ломают проверку — объединяем `include` в одну.
+- **DKIM.** CNAME или TXT, которые выдаёт SMTP-провайдер (имя зависит от селектора, например `selector1._domainkey`). Копируем как есть, дожидаемся статуса «verified» в панели провайдера.
+- **DMARC.** TXT на `_dmarc.saudapulse.kz`: `"v=DMARC1; p=none; rua=mailto:dmarc@saudapulse.kz"`. Через 2–4 недели, когда отчёты чистые, меняем на `p=quarantine`.
+- **Проверка.** Отправляем письмо на mail-tester.com (цель 9–10 из 10) и проверяем записи в MXToolbox (SPF, DKIM, DMARC, blacklist).
+- **Прогрев.** Начинаем с малого объёма и наращиваем 1–2 недели: первые дни — десятки писем, затем удваиваем, пока не выйдем на рабочий объём. Следим за жалобами и отказами.
+- **Supabase Auth.** Authentication → SMTP Settings: включить Custom SMTP (адрес отправителя на `saudapulse.kz`). Затем Authentication → Rate Limits: поставить лимит писем в час под ожидаемую нагрузку, чтобы не упереться в встроенный лимит и не дать злоупотребить отправкой.
+
+## 5. Безопасный релиз для 1000+ клиентов
+1. **Staging.** Ветка Supabase (Branch) или отдельный проект; миграция и клиент сначала проверяются там.
+2. **SQL без простоя (expand).** Только добавляем: колонки, функции, аргументы со значениями по умолчанию (см. раздел 2). Старые клиенты продолжают работать.
+3. **Выпуск расширения.** Новая функция спрятана за `isFeatureEnabled`, по умолчанию выключена.
+4. **Включение для своих.** Флаг включаем для `allow_emails` (наши тестовые аккаунты), проверяем на живых данных.
+5. **Поэтапно.** Доля клиентов 10% → 50% → 100%; между шагами смотрим алерты и обращения в поддержку.
+6. **Contract позже.** Старое удаляем отдельной миграцией, когда старых версий расширения не осталось.
+7. **Откат.** Выключаем флаг в админке («Фича-флаги»): действует у клиентов в течение нескольких часов, без нового выпуска.
+8. **Инциденты.** Для сообщения клиентам (например, Kaspi поменял вёрстку) включаем системное объявление: админка → «Фича-флаги» → «Объявление в расширении».
+9. **Мониторинг.** Следим за алертами `ops-alert` (Telegram) и вкладкой «Состояние» в админке.

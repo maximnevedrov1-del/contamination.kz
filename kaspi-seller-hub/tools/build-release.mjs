@@ -78,7 +78,9 @@ if (errors.length) {
 // ---------- copy ----------
 fs.rmSync(PKG, { recursive: true, force: true });
 fs.mkdirSync(PKG, { recursive: true });
-for (const item of SHIP) fs.cpSync(path.join(ROOT, item), path.join(PKG, item), { recursive: true });
+// Source maps and test folders never ship.
+const shipFilter = (src) => !/\.map$/.test(src) && !/[\\/](tests?|__tests__)([\\/]|$)/.test(src);
+for (const item of SHIP) fs.cpSync(path.join(ROOT, item), path.join(PKG, item), { recursive: true, filter: shipFilter });
 
 // Demo tab patterns (localhost, file://) are not shipped.
 const selPath = path.join(PKG, 'shared/selectors.js');
@@ -143,10 +145,12 @@ const walk = (dir) => {
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, f.name);
     if (f.isDirectory()) walk(p);
+    else if (/\.map$/.test(f.name)) leaks.push(`${path.relative(PKG, p)}: source map`);
     else if (/\.(js|json|html|css)$/.test(f.name) && !p.includes(`${path.sep}vendor${path.sep}`)) {
       const txt = stripComments(fs.readFileSync(p, 'utf8'));
       if (/https?:\/\/localhost|127\.0\.0\.1/.test(txt)) leaks.push(`${path.relative(PKG, p)}: test address`);
       if (/sb_secret_|service_role"?\s*[:=]\s*['"]ey/.test(txt)) leaks.push(`${path.relative(PKG, p)}: secret key`);
+      if (/\bconsole\.(log|debug)\s*\(/.test(txt)) leaks.push(`${path.relative(PKG, p)}: console.log/debug (use console.warn/error)`);
       if (/\beval\s*\(|new Function\s*\(/.test(txt)) leaks.push(`${path.relative(PKG, p)}: eval`);
     }
   }
