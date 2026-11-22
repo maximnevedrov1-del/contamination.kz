@@ -12,8 +12,8 @@ insert into auth.users (id, email) values
 insert into public.admins values ('a1000000-0000-0000-0000-00000000000a');
 -- «stuck» signed up 3 days ago, never connected a store; «gone» had a trial that ended 2 days ago
 update public.accounts set created_at = now() - interval '3 days' where email = 'stuck@example.kz';
-update public.accounts set created_at = now() - interval '20 days', trial_ends_at = now() - interval '2 days' where email = 'gone@example.kz';
-update public.accounts set created_at = now() - interval '20 days' where email = 'active@example.kz';
+update public.accounts set created_at = date_trunc('week', now()) - interval '21 days' + interval '3 hours', trial_ends_at = now() - interval '2 days' where email = 'gone@example.kz';
+update public.accounts set created_at = date_trunc('week', now()) - interval '21 days' + interval '3 hours' where email = 'active@example.kz';
 
 set role authenticated;
 -- 1. usage report
@@ -34,8 +34,8 @@ do $$ declare t1 text; t2 text; begin
   select steps->>'store' into t2 from user_progress where user_id = 'a1000000-0000-0000-0000-00000000000b';
   raise notice '% earliest step time kept', case when t1 = t2 then 'PASS' else 'FAIL' end;
 end $$;
--- 20 more active days for «active» (NPS needs 5+)
-insert into usage_daily (user_id, day, sections) select 'a1000000-0000-0000-0000-00000000000b', current_date - g, '{"orders": 3}' from generate_series(1, 6) g;
+-- 6 more active days for «active» (NPS needs 5+)
+insert into usage_daily (user_id, day, sections) select 'a1000000-0000-0000-0000-00000000000b', date_trunc('week', current_date)::date - g, '{"orders": 3}' from generate_series(1, 6) g;  -- all in cohort week 2 (the Monday-based week before this one); today's report is week 3, so weekday-independent
 set role anon;
 do $$ begin perform usage_report('{}', '[]'); raise notice 'FAIL anonymous reported usage'; exception when others then raise notice 'PASS anonymous cannot report (%)', sqlerrm; end $$;
 reset role; set role authenticated;
