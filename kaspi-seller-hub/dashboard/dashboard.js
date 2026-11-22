@@ -1712,6 +1712,7 @@ function viewSettings() {
           const file = e.target.files[0];
           e.target.value = '';
           if (!file) return;
+          if (file.size > 100 * 1024 * 1024) return toast(errorText('backupTooBig'), 'error');
           let backup;
           try {
             backup = JSON.parse(await file.text());
