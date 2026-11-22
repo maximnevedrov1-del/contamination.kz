@@ -38,6 +38,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // 2. seller opens the extension (not signed in yet): the notice is already there
   const d = await ctx.newPage(); d.on('pageerror', (e) => errs.push(e.message));
   const msg = (type, payload) => d.evaluate(([t, p]) => chrome.runtime.sendMessage({ type: t, payload: p }), [type, payload]);
+  // the extension's first-run tab may already have cached «ok» (5 min TTL) before the notice was published: drop that cache
+  await sw.evaluate(() => chrome.storage.session.remove('ksh.serviceStatus'));
   await d.goto(url('help'));
   await d.evaluate(() => { ['home', 'orders', 'settings', 'account', 'help'].forEach((r) => localStorage.setItem(`ksh.guide.${r}`, '1')); localStorage.setItem('ksh.tourDone', '1'); });
   await d.reload(); await sleep(1500);
@@ -115,7 +117,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const sent = [];
   const tg = http.createServer((req, res) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { sent.push({ url: req.url, body: JSON.parse(b) }); res.end('{"ok":true}'); }); }).listen(8097);
   const { run } = await import(path.join(__dirname, '../../tools/ops-alert.mjs'));
-  const env = { SUPABASE_URL: 'http://localhost:8098', SUPABASE_ANON_KEY: 'test-anon-key', SUPABASE_SERVICE_ROLE_KEY: 'test-anon-key', OPS_KEY: key, TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_CHAT_ID: '42', TELEGRAM_API: 'http://localhost:8097' };
+  const env = { SUPABASE_URL: 'http://localhost:8098', SUPABASE_ANON_KEY: 'test-anon-key', SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key', OPS_KEY: key, TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_CHAT_ID: '42', TELEGRAM_API: 'http://localhost:8097' };
   await q('update ops_settings set last_digest_at = now() - interval \'1 hour\'');
   await run(env, () => {});
   const text = sent[0]?.body?.text || '';

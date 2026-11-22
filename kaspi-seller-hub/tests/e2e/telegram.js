@@ -22,7 +22,7 @@ const BOT_KEY = 'bot-key-0123456789abcdef0123456789abcdef';
     if (body.chat_id === 999) { res.writeHead(403); return res.end(JSON.stringify({ ok: false, error_code: 403, description: 'Forbidden: bot was blocked by the user' })); }
     res.end(JSON.stringify({ ok: true, result: {} }));
   }); }).listen(8095);
-  const env = { SUPABASE_URL: SUPA, SUPABASE_ANON_KEY: 'test-anon-key', BOT_TOKEN: '123:abc', BOT_KEY, WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
+  const env = { SUPABASE_URL: SUPA, SUPABASE_ANON_KEY: 'test-anon-key', SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key', BOT_TOKEN: '123:abc', BOT_KEY, WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
   const call = (route, body, headers = {}) => handle(new Request(`${SUPA}/functions/v1/telegram-bot/${route}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }), env).then(async (r) => ({ status: r.status, body: await r.json() }));
   const login = async (email) => {
     await fetch(`${SUPA}/auth/v1/otp`, { method: 'POST', headers: { apikey: 'test-anon-key', 'content-type': 'application/json' }, body: JSON.stringify({ email, create_user: true }) });

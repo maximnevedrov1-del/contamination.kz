@@ -25,7 +25,9 @@ for t in apitest run2 demofile feat uxtest learn photoprint interactive readonly
   echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
 done
 # Release build without cabinet mode (fake but well-formed subscription config; the build refuses an empty one)
-rm -rf $S/relcopy && copyext $S/relcopy && python3 - "$S/relcopy/shared/billing-config.js" <<'PY'
+# NOTE: build-release.mjs drops every path containing a tests/ folder, so the copy must live outside tests/
+REL=/tmp/kaspi-relcopy
+rm -rf $REL && copyext $REL && python3 - "$REL/shared/billing-config.js" <<'PY'
 import base64, json, sys
 p = sys.argv[1]; s = open(p).read()
 b = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).decode().rstrip('=')
@@ -34,4 +36,4 @@ s = s.replace("supabaseAnonKey: ''", "supabaseAnonKey: '%s.%s.sig'" % (b({'alg':
 s = s.replace("licenseKeys: []", "licenseKeys: [{ kty: 'EC', crv: 'P-256', x: 'AAAA', y: 'BBBB', kid: 'k1', alg: 'ES256' }]")
 open(p, 'w').write(s)
 PY
-(cd $S/relcopy && node tools/build-release.mjs >/dev/null) && echo "apionly: $(timeout 300 node apionly.js $S/relcopy/dist/kaspi-seller-hub 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | tr '\n' ' ')"
+(cd $REL && node tools/build-release.mjs >/dev/null) && echo "apionly: $(timeout 300 node apionly.js $REL/dist/kaspi-seller-hub 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | tr '\n' ' ')"
