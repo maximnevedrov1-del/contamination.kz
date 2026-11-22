@@ -8,14 +8,16 @@
  *                           (the database decides whether to send: linked, alerts on, once per order).
  *   …/telegram-bot/run      scheduled at 09:00 Almaty with X-Bot-Key: morning digest, «6 days away»,
  *                           grace reminders, win-back at 30 / 60 days.
- * The bot reaches the database only through the bot_* functions with its own key (BOT_KEY);
- * the service_role key is not used. Messages are plain text (no HTML/Markdown parsing).
+ * The bot reaches the database only through the bot_* functions: EXECUTE on them is granted to
+ * service_role only (migration 017), so calls without a seller token use SUPABASE_SERVICE_ROLE_KEY
+ * (auto-provided by the Edge runtime), and every call also carries its own key (BOT_KEY → p_key).
+ * Messages are plain text (no HTML/Markdown parsing).
  *
- * Environment: SUPABASE_URL, SUPABASE_ANON_KEY (set by Supabase), BOT_TOKEN (@BotFather),
+ * Environment: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (all set by Supabase), BOT_TOKEN (@BotFather),
  * BOT_KEY (admin page → «Состояние» → «Ключ бота»), WEBHOOK_SECRET (any long random string).
  */
 
-const money = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0)).replace(/ /g, ' ') + ' ₸';
+const money = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0)).replace(/\u00a0/g, ' ') + ' ₸';
 const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many; };
 const ddmm = (day) => { const [, m, d] = String(day).split('-'); return `${d}.${m}`; };
 const hhmmAlmaty = (iso) => new Date(new Date(iso).getTime() + 5 * 3600000).toISOString().slice(11, 16);
@@ -84,7 +86,9 @@ export async function tg(env, method, body, f = fetch) {
 async function rpc(env, fn, args, token, f = fetch) {
   const res = await f(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token || env.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    headers: token
+      ? { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      : { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(args),
   });
   const text = await res.text();

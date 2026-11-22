@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 const { run, handle } = await import('../../billing/supabase/functions/telegram-bot/bot.js');
 
-const env = { SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon', BOT_KEY: 'k', BOT_TOKEN: 't', TELEGRAM_API: 'https://tg.test' };
+const env = { SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'svc', BOT_KEY: 'k', BOT_TOKEN: 't', TELEGRAM_API: 'https://tg.test' };
 const item = (n) => ({ user_id: `u${n}`, chat_id: n, kind: 'care', key: 'w1', data: { name: 'A' } });
 
 /** Fake database: bot_jobs returns up to `batch` items not yet recorded by bot_sent. */

@@ -54,7 +54,7 @@ Compared with the requested tree, four things were added:
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Click **Load unpacked** and select the `kaspi-seller-hub/` folder.
 3. Open the Kaspi seller cabinet in a separate tab for each store and log in. If tabs were already open before you installed the extension, they're picked up on the first **Refresh**: scripts are injected on demand.
-4. Click the toolbar icon to open the popup, then **Open dashboard**.
+4. Click the toolbar icon: it opens the dashboard.
 
 Minimum Chrome version is 116 (MV3 module service worker, `world: "MAIN"` content scripts).
 

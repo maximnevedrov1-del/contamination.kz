@@ -1509,7 +1509,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
-/* Toolbar click: only fires when no popup is set (action.default_popup); with the popup it is inert.
+/* Toolbar click: no default_popup is set in the manifest, so the click opens the dashboard.
    Focuses the existing dashboard tab instead of opening a duplicate. */
 chrome.action?.onClicked?.addListener(() => { openDashboard('').catch(() => {}); });
 

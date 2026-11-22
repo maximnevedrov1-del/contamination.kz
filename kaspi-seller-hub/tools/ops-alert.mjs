@@ -9,7 +9,7 @@
  * The digest holds only counts and market names — nothing about clients.
  *
  * Environment (GitHub → Settings → Secrets and variables → Actions):
- *   SUPABASE_URL, SUPABASE_ANON_KEY  — the same public values as in the extension;
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — the project URL and the service_role key (ops_digest is executable by service_role only, migration 017);
  *   OPS_KEY                          — created in the admin page («Состояние» → «Создать ключ»);
  *   TELEGRAM_BOT_TOKEN               — from @BotFather;
  *   TELEGRAM_CHAT_ID                 — your chat id (see billing/README.md).
@@ -33,11 +33,11 @@ export function formatDigest(d) {
 }
 
 export async function run(env = process.env, log = console.log) {
-  const need = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'OPS_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].filter((k) => !env[k]);
+  const need = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPS_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].filter((k) => !env[k]);
   if (need.length) throw new Error(`missing settings: ${need.join(', ')}`);
   const res = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/ops_digest`, {
     method: 'POST',
-    headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_key: env.OPS_KEY }),
   });
   const body = await res.text();

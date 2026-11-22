@@ -74,6 +74,6 @@ select pg_temp.ok('last_purge_at recorded', (select last_purge_at > now() - inte
 -- ops_digest runs the purge at most once a day
 update public.ops_settings set key_hash = encode(sha256(convert_to(repeat('k', 40), 'utf8')), 'hex'), last_purge_at = now() - interval '2 days' where id = 1;
 set role anon;
-select pg_temp.ok('ops_digest runs the daily purge when it is due', (select r ? 'purged' and r->'purged' <> 'null'::jsonb from (select public.ops_digest(repeat('k', 40)) r) x));
-select pg_temp.ok('ops_digest does not purge again the same day', (select r->'purged' = 'null'::jsonb from (select public.ops_digest(repeat('k', 40)) r) x));
+set role service_role; select pg_temp.ok('ops_digest runs the daily purge when it is due', (select r ? 'purged' and r->'purged' <> 'null'::jsonb from (select public.ops_digest(repeat('k', 40)) r) x)); set role anon;
+set role service_role; select pg_temp.ok('ops_digest does not purge again the same day', (select r->'purged' = 'null'::jsonb from (select public.ops_digest(repeat('k', 40)) r) x)); set role anon;
 reset role;
