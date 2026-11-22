@@ -8,16 +8,17 @@ modules. Product identity is parameterized; nothing here belongs to one brand.
 
 | Path | What |
 |---|---|
-| `supabase/migrations/001…022_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, security hardening. Apply in order. |
-| `supabase/functions/telegram-bot/` | Edge Function (`bot.js` logic, `index.js` Deno entry): digest, alerts, win-back, `/start` linking; reads/writes only via `bot_*` RPCs. |
+| `supabase/migrations/001…023_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, client error telemetry, Telegram retention nudges, security hardening. Apply in order. |
+| `supabase/functions/telegram-bot/` | Edge Function (`bot.js` logic, `index.js` Deno entry): digest, alerts, win-back, retention nudges (`enqueue_retention_nudges`: no first sync, trial ending, trial expired), `/start` linking; reads/writes only via `bot_*` RPCs. |
 | `admin/` | Static owner panel (`index.html`, `admin.js`, `admin.css`): invoices, config, tickets, status/banner, bot settings. Payment is generic (`payment_url` + `payment_instructions`). |
 | `extension-core/billing.js` | Licence client (OTP login, cached licence, offline grace, invoices, support RPCs). |
 | `extension-core/license-signature.js` | ES256/RS256 JWT verification against public JWKs (`createLicenseVerifier`). |
 | `extension-core/token-crypto.js` | AES-GCM secrets at rest, non-extractable key in IndexedDB, `scopeId` bound as AAD. |
 | `extension-core/storage-split.js` | `createSplitCollection` (one key per record + index, only changed records written), `createSecretStore` (encrypted), `safeSet`. |
 | `extension-core/backup-atomic.js` | `runAtomicMigration`: snapshot → migrate → verify → rollback on error; `restoreSnapshot`. |
+| `extension-core/error-telemetry.js` | `reportClientError(code, context)`: anonymous, 10-min per-key throttle, fire-and-forget; server (`report_client_error`) sanitizes and aggregates, admin tab «Ошибки» shows it. |
 | `extension-core/billing-config.js`, `feature-flags.js`, `notices.js` | Config (URL, anon key, public JWKs, legal/support), remote flags, banners. |
-| `tests/sql/` | 19 PostgreSQL test files on a Supabase stub (`run.sh`, `stub.sql`, `test.sql`, `test2…test19.sql`). There is no `test1.sql`: `test.sql` is the first one. |
+| `tests/sql/` | 20 PostgreSQL test files on a Supabase stub (`run.sh`, `stub.sql`, `test.sql`, `test2…test20.sql`). There is no `test1.sql`: `test.sql` is the first one. |
 | `tests/unit/` | Node tests for the extension-core and the bot. |
 | `scripts/init-new-saas.mjs` | Bootstrap CLI (not copied into generated projects). |
 | `saas.config.example.json` | Values for the placeholders. |

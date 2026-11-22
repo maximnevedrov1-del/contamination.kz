@@ -19,6 +19,7 @@ function fake(total, batch) {
       if (free) log.holder = body.p_holder;
       return new Response(JSON.stringify(free), { status: 200 });
     }
+    if (url.endsWith('/rpc/enqueue_retention_nudges')) { log.enqueued = (log.enqueued || 0) + 1; return new Response('0', { status: 200 }); }
     if (url.endsWith('/rpc/bot_unlock')) {
       if (log.holder === body.p_holder) log.holder = null;
       return new Response('null', { status: 200 });
@@ -49,6 +50,13 @@ await t('results are recorded every chunk, all batches are fetched', async () =>
   assert.equal(log.messages, 130);
   assert.deepEqual(log.sentCalls, [50, 10, 50, 10, 10]);
   assert.equal(r.more, false);
+  assert.equal(log.enqueued, 1, 'nudges are queued once per run');
+});
+await t('enqueue failure does not break the run', async () => {
+  const { f: inner } = fake(3, 10);
+  const f = async (url, opts) => (url.endsWith('/rpc/enqueue_retention_nudges') ? new Response('{"message":"boom"}', { status: 500 }) : inner(url, opts));
+  const r = await run(env, f, 0);
+  assert.equal(r.sent, 3);
 });
 await t('old database without batch: one pass, as before', async () => {
   const { f, log } = fake(7);
@@ -67,6 +75,7 @@ await t('unknown kind / hostile text: acknowledged as skipped, never starves the
     const body = JSON.parse(opts.body);
     if (url.endsWith('/rpc/bot_lock')) return new Response('true', { status: 200 });
     if (url.endsWith('/rpc/bot_unlock')) return new Response('null', { status: 200 });
+    if (url.endsWith('/rpc/enqueue_retention_nudges')) return new Response('0', { status: 200 });
     if (url.endsWith('/rpc/bot_jobs')) return new Response(JSON.stringify({ items: items.filter((i) => !sent.has(i.user_id)), batch: 300 }), { status: 200 });
     if (url.endsWith('/rpc/bot_sent')) { body.p_results.forEach((r) => sent.set(r.user_id, r)); return new Response('1', { status: 200 }); }
     msgs.push(body.text);
