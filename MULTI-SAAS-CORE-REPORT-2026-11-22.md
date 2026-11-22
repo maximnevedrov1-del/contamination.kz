@@ -113,7 +113,7 @@ kaspi-seller-hub/: 0 modified
 
 | Поле | Значение |
 |---|---|
-| Коммит | PENDING_HASH |
+| Коммит | `0306965` |
 | Состав | `saas-core-template/`, `MULTI-SAAS-CORE-REPORT-2026-11-22.md` |
 | Сообщение | `feat(architecture): extract reusable Multi-SaaS core template and bootstrap CLI` |
 | Ветка | `claude/magical-maxwell-6yq76b` (в `main` не пушилось) |
