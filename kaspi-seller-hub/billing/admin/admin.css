@@ -74,3 +74,6 @@ code.mono { background: var(--surface-2); padding: 4px 8px; border-radius: 6px; 
 @media (max-width: 600px) { main { padding: 12px; } .top { padding: 12px 16px; flex-wrap: wrap; } .input, select { min-width: 0; max-width: 100%; } }
 main > * { min-width: 0; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+.refnote { margin-top: 4px; font-size: 12px; color: var(--text-3); }
+.refnote--on { color: var(--ok); font-weight: 600; }

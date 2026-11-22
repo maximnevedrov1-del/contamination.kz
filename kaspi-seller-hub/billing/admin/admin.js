@@ -189,7 +189,7 @@
         null,
         el('td', { class: 'mono' }, '№ ' + i.id, el('div', { class: 'muted' }, { renewal: 'продление', addon: 'доп. магазины', manual: 'выбран клиентом' }[i.kind] || '')),
         el('td', null, date(i.created_at, true)),
-        el('td', null, i.email || '—', el('div', { class: 'muted mono' }, phone(i.phone))),
+        el('td', null, i.email || '—', el('div', { class: 'muted mono' }, phone(i.phone)), i.status === 'pending' && referralNote(i)),
         el('td', null, i.kind === 'addon' ? `до ${i.stores} маг., доплата до конца периода` : `${i.stores} маг. × ${i.months} мес.`, el('div', { class: 'muted' }, `подключено магазинов: ${i.last_store_count ?? '—'}`)),
         el('td', { class: 'num big' }, money(i.amount)),
         el(
@@ -218,6 +218,20 @@
       el('table', null, el('thead', null, el('tr', null, ['Счёт', 'Создан', 'Клиент', 'Тариф', 'Сумма', 'Статус', ''].map((h, n) => el('th', { class: n === 4 ? 'num' : null }, h)))), el('tbody', null, rows)),
       moreButton(page.total, list.length),
     );
+  }
+
+  // referral hint on a pending invoice (fields come from admin_invoices, migration 021; absent before it)
+  function referralNote(i) {
+    if (!i.referred) return null;
+    const who = i.referrer_email || 'пользователь удалён';
+    const tail = i.referral_will_reward
+      ? 'пригласившему +14 дн. при подтверждении'
+      : i.referral_rewarded
+        ? 'бонус уже начислен'
+        : i.kind === 'addon'
+          ? 'бонус не положен (доп. магазины)'
+          : 'бонус не положен';
+    return el('div', { class: 'refnote' + (i.referral_will_reward ? ' refnote--on' : '') }, `Реферал: ${who} · ${tail}`);
   }
 
   async function confirmInvoice(i) {
@@ -251,7 +265,9 @@
         'tr',
         null,
         el('td', null, a.email || '—', el('div', { class: 'muted mono' }, phone(a.phone))),
-        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1]), a.trial_blocked && el('div', { class: 'muted' }, 'пробный уже был на этом магазине')),
+        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1]), a.trial_blocked && el('div', { class: 'muted' }, 'пробный уже был на этом магазине'),
+          a.referral_code && el('div', { class: 'muted' }, `Код: ${a.referral_code} · приглашено: ${a.referrals_count || 0} · бонус: ${a.referral_bonus_days || 0} дн.`),
+          a.referred && el('div', { class: 'muted' }, `пришёл по ссылке ${a.referrer_email || '(пользователь удалён)'}`)),
         el('td', null, a.status === 'active' ? 'до ' + date(a.paid_until) : 'пробный до ' + date(a.trial_ends_at)),
         el('td', { class: 'num' }, `${a.last_store_count ?? '—'} / ${a.status === 'active' ? a.store_limit : '—'}`),
         el('td', null, date(a.last_seen_at, true)),
