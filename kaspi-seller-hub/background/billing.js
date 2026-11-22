@@ -19,10 +19,11 @@ export const isConfigured = () => !!(BILLING.supabaseUrl && BILLING.supabaseAnon
 
 /** Error with a code the UI can translate (errors.<code>). */
 class BillingError extends Error {
-  constructor(code, detail = '') {
+  constructor(code, detail = '', status = 0) {
     super(code);
     this.code = code;
     this.detail = detail;
+    this.status = status; // HTTP status of the server answer (0 = no answer)
   }
 }
 
@@ -67,11 +68,11 @@ async function http(path, { method = 'POST', body, token } = {}) {
       'owner_subscription_required', 'not_invited', 'access_disabled', 'invite_self', 'team_limit', 'not_found', 'ticket_limit',
       'boost_used', 'boost_not_needed', 'offer_used', 'invalid_choice', 'bot_not_configured'];
     const hit = known.find((k) => msg.includes(k));
-    if (hit) throw new BillingError(`billing_${hit}`);
-    if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg);
-    if (res.status === 429) throw new BillingError('billingRateLimit', msg);
-    if (res.status === 401 || res.status === 403) throw new BillingError('billingAuth', msg);
-    throw new BillingError('billingHttp', `${res.status} ${msg}`.trim());
+    if (hit) throw new BillingError(`billing_${hit}`, msg, res.status);
+    if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg, res.status);
+    if (res.status === 429) throw new BillingError('billingRateLimit', msg, res.status);
+    if (res.status === 401 || res.status === 403) throw new BillingError('billingAuth', msg, res.status);
+    throw new BillingError('billingHttp', `${res.status} ${msg}`.trim(), res.status);
   }
   return data;
 }
@@ -182,11 +183,18 @@ async function accessTokenOnce(force) {
     await saveSession(fresh, { email: s.email, id: s.user_id });
     return fresh.access_token;
   } catch (e) {
-    if (e.code === 'billingNetwork') return s.access_token; // try again later
-    await chrome.storage.local.remove([SESSION_KEY]); // refresh token revoked/expired → log in again
-    return null;
+    if (refreshRefused(e)) {
+      await chrome.storage.local.remove([SESSION_KEY]); // refresh token revoked/expired → log in again
+      return null;
+    }
+    // No answer, timeout, 5xx or 429: the session is fine, the server is not. Keep it and try
+    // again later. A still-valid token can be used; an expired one would only bring a 401 → offline.
+    if (s.expires_at > Date.now()) return s.access_token;
+    throw new BillingError('billingNetwork', `refresh failed: ${e.code} ${e.status || ''}`.trim());
   }
 }
+/** Supabase Auth refused the refresh token itself (revoked, expired, unknown): 400/401/403. */
+const refreshRefused = (e) => e?.status === 400 || e?.status === 401 || e?.status === 403;
 
 /* ---------- signed licence ----------
  * With BILLING.licenseKeys set, the subscription dates and limits are taken ONLY from
@@ -267,7 +275,7 @@ async function trustedLicence(lic, fresh) {
   const state = JSON.stringify([lic.paid_until, lic.trial_ends_at, lic.paid_store_limit, lic.terms_version, lic.terms_required, lic.boost_until, lic.frozen_until, lic.grace_until]);
   if (fresh && claimsStale(claims?.ksh, lic) && refreshedFor !== state) {
     refreshedFor = state;
-    await accessToken(true);
+    await accessToken(true).catch(() => null); // server down: keep the token we have
     s = await get(SESSION_KEY);
     claims = await verifiedClaims(s?.access_token, s?.user_id);
   }
@@ -294,8 +302,22 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
   const fresh = usable && age < BILLING.refreshMinutes * 60000 * REFRESH_JITTER;
   if (cache && fresh && !force) return cache.data;
   if (!(await get(SESSION_KEY))) return null;
+  const args = { p_store_count: storeCount ?? null, p_store_keys: storeKeys?.length ? storeKeys : null };
   try {
-    const data = await rpc('get_license', { p_store_count: storeCount ?? null, p_store_keys: storeKeys?.length ? storeKeys : null });
+    let data;
+    try {
+      data = await rpc('get_license', args);
+    } catch (e) {
+      if (e.code !== 'billingAuth') throw e;
+      // 401/403 on the licence call: the access token was rejected. Refresh it once and retry;
+      // only a refused refresh (accessTokenOnce removes the session) or a second 401 logs out.
+      const rejected = (await get(SESSION_KEY))?.access_token;
+      const token = await accessToken(true);
+      if (!token) throw new BillingError('billingLoggedOut');
+      // refresh had no answer and handed back the same token: do not log out over a server hiccup
+      if (token === rejected) throw new BillingError('billingNetwork', 'token not refreshed');
+      data = await rpc('get_license', args);
+    }
     // Server clock offset, so a wrong local clock cannot stretch a licence.
     const skew = data.server_time ? new Date(data.server_time).getTime() - Date.now() : 0;
     await set(LICENSE_KEY, { data, fetchedAt: Date.now(), skew });

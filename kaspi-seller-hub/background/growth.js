@@ -74,7 +74,7 @@ export async function alertDeadlines(fresh) {
   if (!fresh?.length || !B.isConfigured() || !(await B.signedIn())) return 0;
   const tg = await tgStatus().catch(() => null);
   if (!tg?.linked || tg.alerts === false) return 0;
-  const token = await B.currentToken();
+  const token = await B.currentToken().catch(() => null);
   if (!token) return 0;
   let n = 0;
   for (const f of fresh.slice(0, 10)) {

@@ -38,7 +38,7 @@ jobs:
         run: node tests/unit/locales.test.mjs
       - name: Unit tests (storage split, token encryption, licence signature, bot run and lock)
         run: |
-          for t in storage-split token-crypto license-signature bot-run; do
+          for t in storage-split token-crypto license-signature license-flow bot-run; do
             node tests/unit/$t.test.mjs || exit 1
           done
       - name: No eval / remote code in the extension
