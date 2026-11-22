@@ -65,6 +65,31 @@
     if (REF_RE.test(q)) localStorage.setItem('sp_ref_code', q);
   } catch { /* storage blocked */ }
   const storedRef = () => { try { const v = localStorage.getItem('sp_ref_code'); return v && REF_RE.test(v) ? v : undefined; } catch { return undefined; } };
+  // Referral banner: show the stored promo code with a copy button (labels come from HTML attributes).
+  (() => {
+    const code = storedRef();
+    const banner = document.getElementById('sp-ref-banner');
+    if (!code || !banner) return;
+    banner.querySelectorAll('.ref-banner__code').forEach((el) => { el.textContent = code; });
+    banner.hidden = false;
+    const btn = banner.querySelector('.ref-banner__copy');
+    if (!btn) return;
+    const fallbackCopy = () => {
+      const el = banner.querySelector('.ref-banner__code');
+      const r = document.createRange(); r.selectNodeContents(el);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      sel.removeAllRanges();
+    };
+    let timer;
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(code); } catch { fallbackCopy(); }
+      const orig = btn.dataset.label || (btn.dataset.label = btn.textContent);
+      btn.textContent = btn.dataset.copied || orig;
+      clearTimeout(timer);
+      timer = setTimeout(() => { btn.textContent = orig; }, 2000);
+    });
+  })();
   const extId = document.querySelector('meta[name="sp-extension-id"]')?.content?.trim();
   document.querySelectorAll('[data-sp-open]').forEach((a) => {
     a.addEventListener('click', (ev) => {

@@ -243,3 +243,10 @@ html:not(.js) .story__pics img:first-child { opacity: 1; }
   .tilt { transform: none; }
   .js .reveal { opacity: 1; transform: none; }
 }
+
+/* Referral promo banner (fixed green so it stays green in light mode) */
+.ref-banner { margin: 0 0 18px; padding: 12px 16px; border: 1px solid #10B981; border-left-width: 4px; border-radius: var(--r-card); background: rgba(16,185,129,.12); color: var(--text); font-size: 15px; line-height: 1.5; }
+.ref-banner[hidden] { display: none; }
+.ref-banner__text { margin: 0; }
+.ref-banner__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.ref-banner__copy { margin: 2px 4px; vertical-align: middle; min-height: 32px; padding: 0 12px; font-size: 13px; background: transparent; border: 1px solid #10B981; color: var(--text); }
