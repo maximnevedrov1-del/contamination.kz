@@ -168,7 +168,7 @@ Stores connect by API token only. Once the selectors are verified on a real cabi
 
 1. Load the extension unpacked (see above).
 2. **Easiest:** open `demo/mc/store-a.html`, `store-b.html`, `store-c.html` by double-click (in Chrome).
-   If the dashboard finds no stores, open `chrome://extensions` → Selleros → **Details** and turn on **Allow access to file URLs**. Then continue with step 4.
+   If the dashboard finds no stores, open `chrome://extensions` → SaudaPulse → **Details** and turn on **Allow access to file URLs**. Then continue with step 4.
    **Alternative** — serve the demo folder:
 
 ```bash

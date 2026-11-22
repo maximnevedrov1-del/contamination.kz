@@ -18,7 +18,7 @@ const data = (f, type) => `data:${type};base64,${require('fs').readFileSync(path
     .bar{height:30px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;display:flex;gap:6px;align-items:center;padding:0 12px}.bar i{width:9px;height:9px;border-radius:50%;background:#e4e4e7}
     .f img{display:block;width:100%}
   </style></head><body><div class="glow"></div>
-    <div class="t"><div class="logo"><img src="${data('icon-128.png', 'image/png')}">Selleros</div>
+    <div class="t"><div class="logo"><img src="${data('icon-128.png', 'image/png')}">SaudaPulse</div>
     <h1>Все магазины Kaspi — в одном окне</h1>
     <p>Заказы, сроки, сборка, накладные и прибыль 2–5 магазинов. 30 дней бесплатно.</p></div>
     <div class="f"><div class="bar"><i></i><i></i><i></i></div><img src="${data('home.webp', 'image/webp')}"></div>

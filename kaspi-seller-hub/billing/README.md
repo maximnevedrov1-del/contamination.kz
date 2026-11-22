@@ -85,7 +85,7 @@ Workflow `seller-hub-db-backup` каждую ночь делает зашифр�
 2. **Authentication → Emails (Email Templates)**: в шаблонах **Magic Link** и **Confirm signup** замените текст на:
 
    ```
-   <h2>Код для входа в Selleros</h2>
+   <h2>Код для входа в SaudaPulse</h2>
    <p>Ваш код: <b style="font-size:22px">{{ .Token }}</b></p>
    <p>Если вы не запрашивали код — просто проигнорируйте письмо.</p>
    ```

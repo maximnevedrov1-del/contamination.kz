@@ -1,5 +1,5 @@
 /*
- * Selleros — owner's admin page for subscriptions.
+ * SaudaPulse — owner's admin page for subscriptions.
  * Plain script (works when opened as a local file). Talks to Supabase with the
  * public anon key + the admin's own login; every admin action is checked again
  * in the database (public.is_admin()). Client data is rendered as text only.
@@ -384,7 +384,7 @@
             el('td', null, el('span', { class: 'badge ' + (RISK[x.reason]?.[1] || '') }, RISK[x.reason]?.[0] || x.reason)),
             el('td', null, x.last_active_at ? date(x.last_active_at, true) : 'не заходил'),
             el('td', null, date(x.created_at)),
-            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('Selleros — чем помочь?')}` }, 'Написать'))))))
+            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('SaudaPulse — чем помочь?')}` }, 'Написать'))))))
       : el('p', { class: 'muted' }, 'Сейчас никого — все в порядке.');
     const riskMore = risk.length > 10 && !riskAll && el('button', { type: 'button', class: 'btn', 'data-action': 'risk-all', onclick: () => ((riskAll = true), render()) }, `Показать всех (${risk.length})`);
     const section = (title, hint, ...body) => el('section', { class: 'block' }, el('h2', null, title), hint && el('p', { class: 'muted' }, hint), ...body);
@@ -697,13 +697,13 @@
       const page = await rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 20, p_offset: 0 });
       const pending = page.rows; // newest first: enough to spot new invoices
       $('pendingCount').textContent = page.total || '';
-      document.title = (page.total ? `(${page.total}) ` : '') + 'Selleros — админка';
+      document.title = (page.total ? `(${page.total}) ` : '') + 'SaudaPulse — админка';
       const open = await rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).catch(() => null);
       if (open) {
         if (knownTickets != null && open.open > knownTickets) {
           toast('Новый вопрос в поддержку');
           try {
-            if (window.Notification && Notification.permission === 'granted') new Notification('Новый вопрос Selleros', { body: 'Откройте вкладку «Вопросы»' });
+            if (window.Notification && Notification.permission === 'granted') new Notification('Новый вопрос SaudaPulse', { body: 'Откройте вкладку «Вопросы»' });
           } catch {
             /* notifications unavailable */
           }
@@ -718,7 +718,7 @@
       if (fresh.length) {
         toast(`Новый счёт: ${money(fresh[0].amount)} — ${fresh[0].email || phone(fresh[0].phone)}`);
         try {
-          if (window.Notification && Notification.permission === 'granted') new Notification('Новый счёт Selleros', { body: `${money(fresh[0].amount)} — ${fresh[0].email || ''}` });
+          if (window.Notification && Notification.permission === 'granted') new Notification('Новый счёт SaudaPulse', { body: `${money(fresh[0].amount)} — ${fresh[0].email || ''}` });
         } catch {
           /* notifications unavailable */
         }

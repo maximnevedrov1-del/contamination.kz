@@ -1,4 +1,4 @@
-// Selleros landing page: small enhancements only. Without this file every section is
+// SaudaPulse landing page: small enhancements only. Without this file every section is
 // still readable (the <html class="js"> switch turns the effects on).
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;

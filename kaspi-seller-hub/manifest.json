@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Selleros",
-  "short_name": "Selleros",
+  "name": "SaudaPulse",
+  "short_name": "SaudaPulse",
   "version": "0.1.0",
   "description": "Orders, returns, refusals, payments, analytics and customer chat from all your Kaspi.kz stores in one place.",
   "minimum_chrome_version": "120",
@@ -12,7 +12,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Selleros",
+    "default_title": "SaudaPulse",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
