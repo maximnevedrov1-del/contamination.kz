@@ -76,6 +76,10 @@ p { margin: 0; }
 .top__nav { display: flex; gap: 22px; margin-left: auto; }
 .top__nav a { color: var(--text-2); text-decoration: none; font-size: 15px; }
 .top__nav a:hover { color: var(--text); }
+.lang { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.lang a { color: var(--text-2); text-decoration: none; }
+.lang a:hover, .lang a[aria-current] { color: var(--text); }
+.lang a[aria-current] { font-weight: 600; }
 
 /* hero */
 .hero { position: relative; padding: 72px 0 96px; overflow: hidden; }
@@ -215,7 +219,8 @@ html:not(.js) .story__pics img:first-child { opacity: 1; }
   section { padding: 64px 0; }
   .wrap { padding: 0 16px; }
   .top__nav { display: none; }
-  .top__cta { margin-left: auto; }
+  .lang { margin-left: auto; }
+  .top__cta { display: none; } /* the sticky bottom bar and the hero already carry this CTA */
   .lead { font-size: 17px; }
   .hero__cta .btn { flex: 1 1 100%; }
   .merge__stage { height: 300px; }

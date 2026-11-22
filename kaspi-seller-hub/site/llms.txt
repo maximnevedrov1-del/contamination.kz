@@ -33,6 +33,7 @@ SaudaPulse — независимое программное обеспечен�
 ## Документы
 
 - [Сайт](https://saudapulse.kz/)
+- Қазақша нұсқа: https://saudapulse.kz/kk/
 - [Публичная оферта](https://saudapulse.kz/offer)
 - [Политика конфиденциальности](https://saudapulse.kz/privacy)
 
