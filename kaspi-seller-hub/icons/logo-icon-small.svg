@@ -1,8 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#10B981"/><stop offset="1" stop-color="#38BDF8"/></linearGradient></defs>
-  <rect x="2" y="2" width="42" height="42" rx="10" fill="url(#g)" opacity="0.6"/>
-  <rect x="18" y="18" width="44" height="44" rx="10" fill="url(#g)"/>
-  <path d="M3 48H17L26 32L34 52L58 8" stroke="#0F172A" stroke-opacity="0.6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M3 48H17L26 32L34 52L58 8" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="56" cy="10" r="8" fill="#F43F5E" stroke="#0F172A" stroke-opacity="0.6" stroke-width="2"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="245 330 480 480" width="64" height="64" role="img" aria-label="SaudaPulse"><title>SaudaPulse</title><defs>
+    <linearGradient id="sp-line" gradientUnits="userSpaceOnUse" x1="268" y1="742" x2="664" y2="426"><stop offset="0" stop-color="#34E89E"/><stop offset="1" stop-color="#38D3F5"/></linearGradient>
+    <clipPath id="sp-front"><rect x="343" y="358" width="310" height="310" rx="38"/></clipPath>
+    <filter id="sp-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  
+  <rect x="280" y="390" width="320" height="320" rx="40" fill="#0F172A" stroke="#1BA0DC" stroke-width="26"/>
+  <rect x="343" y="358" width="310" height="310" rx="38" fill="#1BA6E0"/>
+  <g clip-path="url(#sp-front)"><path d="M330 345 H670 V420 L530 574 Q522 582 516 572 L472 500 Q466 492 460 500 L330 664 Z" fill="#169A78"/></g>
+  <rect x="343" y="358" width="310" height="310" rx="38" fill="none" stroke="#22B585" stroke-width="9"/>
+  <path d="M268 742 L460 500 Q466 492 472 500 L516 572 Q522 582 530 574 L664 426" fill="none" stroke="#0F172A" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <path d="M268 742 L460 500 Q466 492 472 500 L516 572 Q522 582 530 574 L664 426" fill="none" stroke="url(#sp-line)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <circle cx="689" cy="394" r="30" fill="#F43F5E"/></svg>
