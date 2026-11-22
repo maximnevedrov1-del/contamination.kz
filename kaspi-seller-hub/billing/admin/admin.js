@@ -167,6 +167,7 @@
     if (tab === 'status') return renderStatus(panel);
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
+    if (tab === 'flags') return renderFlags(panel);
     const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
     renderInvoices(panel, page);
   }
@@ -646,6 +647,87 @@
         ),
         el('span', { class: 'muted' }, 'Изменение цен не меняет уже выставленные счета.'),
       ),
+    );
+  }
+
+  async function renderFlags(panel) {
+    const flags = await rpc('admin_list_feature_flags');
+    const parseEmails = (t) => t.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+    const save = async (key, v) => {
+      await rpc('admin_set_feature_flag', { p_key: key, p_enabled: v.enabled, p_rollout_percent: Number(v.rollout) || 0, p_allow_emails: v.emails, p_description: v.description || null });
+    };
+    const reload = () => renderFlags(panel);
+    const rows = flags.map((f) => {
+      const on = el('input', { type: 'checkbox', checked: f.enabled });
+      const pct = el('input', { class: 'input', type: 'number', min: 0, max: 100, value: f.rollout_percent, style: 'width:80px' });
+      const mails = el('textarea', { rows: 2, placeholder: 'по одному в строке' }, (f.allow_emails || []).join('\n'));
+      const cur = () => ({ enabled: on.checked, rollout: pct.value, emails: parseEmails(mails.value), description: f.description });
+      on.addEventListener('change', async () => {
+        try {
+          await save(f.flag_key, cur());
+          toast(on.checked ? `«${f.flag_key}» включён` : `«${f.flag_key}» выключен`);
+        } catch (e) {
+          on.checked = !on.checked;
+          toast(e.message, true);
+        }
+      });
+      return el(
+        'tr',
+        null,
+        el('td', null, el('b', null, f.flag_key), f.description && el('div', { class: 'muted' }, f.description)),
+        el('td', null, el('label', null, on, ' Включён')),
+        el('td', null, pct, ' %'),
+        el('td', null, mails),
+        el(
+          'td',
+          null,
+          el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+            try {
+              await save(f.flag_key, cur());
+              toast('Сохранено');
+              reload();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Сохранить'),
+          ' ',
+          el('button', { type: 'button', class: 'btn', onclick: async () => {
+            if (!confirm(`Удалить флаг «${f.flag_key}»?`)) return;
+            try {
+              await rpc('admin_delete_feature_flag', { p_key: f.flag_key });
+              toast('Удалено');
+              reload();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Удалить'),
+        ),
+      );
+    });
+    const n = {
+      key: el('input', { class: 'input', placeholder: 'new_feature', maxlength: 63 }),
+      desc: el('input', { class: 'input', placeholder: 'Что включает', style: 'min-width:280px' }),
+      on: el('input', { type: 'checkbox' }),
+      pct: el('input', { class: 'input', type: 'number', min: 0, max: 100, value: 0, style: 'width:80px' }),
+      mails: el('textarea', { rows: 2, placeholder: 'тестовые email, по одному в строке или через запятую' }),
+    };
+    panel.replaceChildren(
+      el('h2', null, 'Фича-флаги'),
+      el('p', { class: 'muted' }, 'Включают новые функции у части клиентов без выпуска новой версии. Флаг — только про интерфейс: он не подписан и не защищает платные функции. Клиент получает флаги вместе с лицензией (обновляются в течение нескольких часов).'),
+      rows.length
+        ? el('table', null, el('thead', null, el('tr', null, ...['Флаг', 'Состояние', 'Доля клиентов', 'Тестовые email', ''].map((h) => el('th', null, h)))), el('tbody', null, ...rows))
+        : el('p', { class: 'muted' }, 'Флагов пока нет.'),
+      el('h2', { style: 'margin-top:20px' }, 'Новый флаг'),
+      el('div', { class: 'grid2' }, 'Ключ (a-z, 0-9, _)', n.key, 'Описание', n.desc, 'Включён для всех', n.on, 'Доля клиентов, %', n.pct, 'Тестовые email', n.mails),
+      el('div', { class: 'row', style: 'margin-top:16px' }, el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+        try {
+          await save(n.key.value.trim(), { enabled: n.on.checked, rollout: n.pct.value, emails: parseEmails(n.mails.value), description: n.desc.value.trim() });
+          toast('Флаг создан');
+          reload();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      } }, 'Создать')),
     );
   }
 

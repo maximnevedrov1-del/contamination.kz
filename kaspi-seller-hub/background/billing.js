@@ -319,6 +319,7 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
       data = await rpc('get_license', args);
     }
     // Server clock offset, so a wrong local clock cannot stretch a licence.
+    if (data.features !== undefined && (!data.features || typeof data.features !== 'object' || Array.isArray(data.features))) data.features = {};
     const skew = data.server_time ? new Date(data.server_time).getTime() - Date.now() : 0;
     await set(LICENSE_KEY, { data, fetchedAt: Date.now(), skew });
     return data;
@@ -419,6 +420,7 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     trialBlocked: !!lic.trial_blocked,
     termsVersion: lic.terms_required || null,
     termsAcceptedAt: lic.terms_accepted_at || null,
+    features: lic.features && typeof lic.features === 'object' && !Array.isArray(lic.features) ? lic.features : {},
     storeLimit,
     sharedStores,
     coverageEnd,
