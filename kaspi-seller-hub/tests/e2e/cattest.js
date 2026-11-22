@@ -159,7 +159,7 @@ const supaLog = async () => (await fetch('http://localhost:8098/__log')).json();
   const xmlEmpty = await (await fetch(urlA)).text();
   check('9b after explicit confirmation the empty price list is uploaded', !/<offer /.test(xmlEmpty) && (await feedRow(A).locator('.feed__drop').count()) === 0);
   const rep = await msg('ui:diagnostics');
-  check('9b support report: plain text, no tokens', rep?.ok && rep.text.includes('Kaspi Seller Hub') && !/GOOD-TOKEN/.test(rep.text), rep?.text?.slice(0, 200));
+  check('9b support report: plain text, no tokens', rep?.ok && rep.text.includes('Selleros') && !/GOOD-TOKEN/.test(rep.text), rep?.text?.slice(0, 200));
 
   // 10. subscription over → publishing refused by the worker
   await sql("update accounts set trial_ends_at = now() - interval '1 minute' where email = 'cat@example.kz'");

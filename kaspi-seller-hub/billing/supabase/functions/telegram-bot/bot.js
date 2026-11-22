@@ -1,5 +1,5 @@
 /**
- * Seller Hub — the seller's Telegram bot (Supabase Edge Function, also runs in Node for tests).
+ * Selleros — the seller's Telegram bot (Supabase Edge Function, also runs in Node for tests).
  *
  * Routes (POST):
  *   …/telegram-bot/webhook  Telegram updates: /start <token> links the chat, /stop unlinks;
@@ -51,8 +51,8 @@ export function format(item) {
   }
   if (item.kind === 'care') return `${d.name || 'Здравствуйте'}, мы заметили, что вы пару дней не заходили в кабинет. Всё в порядке? Если нужна помощь с синхронизацией Kaspi, мы на связи 🙌`;
   if (item.kind === 'grace') return `⏳ Оплаченный период закончился. Кабинет работает ещё ${d.days_left} ${plural(d.days_left, 'день', 'дня', 'дней')} — оплатите продление, чтобы не потерять доступ к заказам и истории.`;
-  if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в Seller Hub за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
-  if (item.kind === 'winback60') return `🎁 Вернитесь в Seller Hub со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
+  if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в Selleros за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
+  if (item.kind === 'winback60') return `🎁 Вернитесь в Selleros со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
   if (item.kind === 'alert') {
     if (d.kind === 'cancelled') return `❌ Заказ №${d.code} в магазине ${d.shop} отменён.`;
     const m = Math.max(0, Math.round(d.minutes || 0));
@@ -112,7 +112,7 @@ async function webhook(update, env, f) {
   const start = /^\/start(?:@\w+)?\s+([0-9a-f]{64})$/.exec(text);
   if (start) {
     const r = await rpc(env, 'bot_link', { p_key: env.BOT_KEY, p_token: start[1], p_chat_id: chat, p_name: String(msg.from?.first_name || '').slice(0, 64) }, null, f);
-    if (!r?.ok) return tg(env, 'sendMessage', { chat_id: chat, text: 'Ссылка устарела. Откройте Seller Hub → Настройки → «Подключить Telegram» и нажмите ещё раз.' }, f);
+    if (!r?.ok) return tg(env, 'sendMessage', { chat_id: chat, text: 'Ссылка устарела. Откройте Selleros → Настройки → «Подключить Telegram» и нажмите ещё раз.' }, f);
     const shops = (r.shops || []).filter(Boolean);
     return tg(env, 'sendMessage', {
       chat_id: chat,
@@ -122,9 +122,9 @@ async function webhook(update, env, f) {
   }
   if (/^\/stop/.test(text)) {
     await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: chat, p_blocked: false }, null, f);
-    return tg(env, 'sendMessage', { chat_id: chat, text: 'Уведомления отключены. Подключить снова: Seller Hub → Настройки → «Подключить Telegram».' }, f);
+    return tg(env, 'sendMessage', { chat_id: chat, text: 'Уведомления отключены. Подключить снова: Selleros → Настройки → «Подключить Telegram».' }, f);
   }
-  return tg(env, 'sendMessage', { chat_id: chat, text: 'Это бот уведомлений Seller Hub. Чтобы подключить его, откройте Seller Hub → Настройки → «Подключить Telegram».' }, f);
+  return tg(env, 'sendMessage', { chat_id: chat, text: 'Это бот уведомлений Selleros. Чтобы подключить его, откройте Selleros → Настройки → «Подключить Telegram».' }, f);
 }
 
 /**

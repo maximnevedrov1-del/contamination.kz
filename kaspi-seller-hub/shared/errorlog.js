@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — local error journal for support.
+ * Selleros — local error journal for support.
  *
  * The last errors of the worker and the pages are kept on this computer only
  * (nothing is sent anywhere automatically). In «Помощь» the seller copies a short
@@ -73,7 +73,7 @@ export function formatReport(info) {
     return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
   };
   const lines = [
-    'Kaspi Seller Hub — отчёт для поддержки',
+    'Selleros — отчёт для поддержки',
     `Версия: ${info.version} (данные v${info.dataVersion})`,
     `Браузер: ${info.browser}`,
     `Магазинов: ${info.stores}, по токену API: ${info.apiStores}`,
