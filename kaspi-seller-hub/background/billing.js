@@ -445,8 +445,32 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   };
 }
 
+const FUNNEL_EVENTS = new Set(['onboarding_completed', 'first_sync_done', 'trial_expired_view', 'invoice_created', 'referral_shared']);
+const FUNNEL_KEY = 'ksh.funnelSent';
+const funnelPending = new Set();
+/**
+ * Product funnel milestone, sent at most once per event (the server also dedups). Fire-and-forget:
+ * callers do not await it; never throws, skips silently when signed out or offline (retried next time).
+ */
+export function trackFunnel(event) {
+  (async () => {
+    try {
+      if (!FUNNEL_EVENTS.has(event) || funnelPending.has(event) || !isConfigured()) return;
+      funnelPending.add(event);
+      try {
+        const sent = (await get(FUNNEL_KEY)) || [];
+        if (sent.includes(event)) return;
+        if (!(await accessToken())) return;
+        await rpc('track_funnel_event', { p_event: event });
+        await set(FUNNEL_KEY, [...new Set([...sent, event])]);
+      } finally { funnelPending.delete(event); }
+    } catch { /* telemetry must never break anything */ }
+  })();
+}
+
 export async function createInvoice({ stores, months, phone }) {
   await rpc('create_invoice', { p_stores: Number(stores), p_months: Number(months), p_phone: String(phone || '') });
+  trackFunnel('invoice_created');
   return licenseView({ force: true });
 }
 

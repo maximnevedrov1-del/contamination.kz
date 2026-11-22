@@ -12,7 +12,7 @@
  */
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos, getSnapshots, setSnapshots } from '../shared/storage.js';
+import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos, getSnapshots, setSnapshots, KEYS } from '../shared/storage.js';
 import { isAllowedPhoto, photosDataSize, MAX_PHOTOS_DATA } from '../shared/photos.js';
 import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
@@ -416,10 +416,16 @@ export function catalogHandlers({ allowedShopIds }) {
       const touched = new Set();
       // storage writes return {ok:false, kind} instead of throwing (quota): any failure = not a full restore
       const chk = (r) => { if (r && r.ok === false) failed = true; };
+      let rolledBack = false;
+      const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
       await lock(async () => {
+        // all-or-nothing: remember the current state of every section, restore it if any write fails
+        const rawSettings = (await chrome.storage.local.get(KEYS.settings))[KEYS.settings];
+        const rollbackSnapshot = { costs: await getCosts(), photos: await getPhotos(), catalog: await getCatalog(), snapshots: await getSnapshots(), feeds: await getFeeds(), settings: structuredClone(rawSettings) };
+        const put = async (setter, before, after) => { if (!failed && !same(before, after)) chk(await setter(after)); };
         const costs = await getCosts();
         for (const [k, v] of Object.entries(b.costs || {}).slice(0, 50000)) if (typeof k === 'string' && k.length <= 200 && num(v) != null) (costs[k] = num(v)), costsN++;
-        chk(await setCosts(costs));
+        await put(setCosts, rollbackSnapshot.costs, costs);
         const photos = await getPhotos();
         let photoBytes = photosDataSize(photos);
         for (const [k, v] of Object.entries(b.photos || {}).slice(0, 20000)) {
@@ -429,7 +435,7 @@ export function catalogHandlers({ allowedShopIds }) {
           photoBytes += add;
           photos[k] = v;
         }
-        chk(await setPhotos(photos));
+        await put(setPhotos, rollbackSnapshot.photos, photos);
         const catalog = await getCatalog();
         for (const raw of Object.values(b.catalog || {}).slice(0, 50000)) {
           const stores = Object.fromEntries(Object.entries(raw?.stores || {}).filter(([id]) => idMap[id]).map(([id, o]) => [idMap[id], o]));
@@ -440,7 +446,7 @@ export function catalogHandlers({ allowedShopIds }) {
           Object.entries(product.stores).forEach(([id, o]) => o.on && touched.add(id));
           products++;
         }
-        chk(await setCatalog(catalog));
+        await put(setCatalog, rollbackSnapshot.catalog, catalog);
         // orders: only for stores present in the file and here; a store that already has a snapshot keeps it
         if (b.snapshots && typeof b.snapshots === 'object') {
           const snaps = await getSnapshots();
@@ -451,7 +457,7 @@ export function catalogHandlers({ allowedShopIds }) {
             snaps[id] = sn;
             added = true;
           }
-          if (added) chk(await setSnapshots(snaps));
+          if (added) await put(setSnapshots, rollbackSnapshot.snapshots, snaps);
         }
         const feeds = await getFeeds();
         for (const [oldId, f] of Object.entries(b.feeds || {})) {
@@ -459,7 +465,7 @@ export function catalogHandlers({ allowedShopIds }) {
           if (!id || feeds[id]?.merchantId) continue; // keep what is already set up here
           feeds[id] = { ...feeds[id], merchantId: String(f?.merchantId || '').slice(0, 64), company: String(f?.company || '').slice(0, 200), warehouses: (f?.warehouses || []).filter((w) => WAREHOUSE_RE.test(w)), confirmed: false };
         }
-        chk(await setFeeds(feeds));
+        await put(setFeeds, rollbackSnapshot.feeds, feeds);
         const st = b.settings || {};
         const patch = {};
         if (['ru', 'kk'].includes(st.lang)) patch.lang = st.lang;
@@ -473,10 +479,23 @@ export function catalogHandlers({ allowedShopIds }) {
           const id = idMap[oldId];
           if (id && fresh.stores[id]) fresh.stores[id] = { ...fresh.stores[id], alias: String(stx.alias || fresh.stores[id].alias || '').slice(0, 100), color: /^#[0-9a-f]{6}$/i.test(stx.color) ? stx.color : fresh.stores[id].color };
         }
-        chk(await saveSettings({ ...patch, stores: fresh.stores }));
+        if (!failed) {
+          const next = { ...fresh, ...patch, stores: fresh.stores };
+          if (!same(next, fresh)) chk(await saveSettings({ ...patch, stores: fresh.stores }));
+        }
+        if (failed) {
+          rolledBack = true;
+          const rs = async (f) => { try { await f(); } catch { /* best effort */ } };
+          await rs(() => setCosts(rollbackSnapshot.costs));
+          await rs(() => setPhotos(rollbackSnapshot.photos));
+          await rs(() => setCatalog(rollbackSnapshot.catalog));
+          await rs(() => setSnapshots(rollbackSnapshot.snapshots));
+          await rs(() => setFeeds(rollbackSnapshot.feeds));
+          await rs(() => (rollbackSnapshot.settings === undefined ? chrome.storage.local.remove(KEYS.settings) : chrome.storage.local.set({ [KEYS.settings]: rollbackSnapshot.settings })));
+        }
       });
+      if (failed) return { ok: false, error: 'quota', rolledBack };
       scheduleFeedSync([...touched]);
-      if (failed) return { ok: false, error: 'quota' };
       return { ok: true, products, costs: costsN, stores: Object.keys(idMap).length, storesSkipped: Object.keys(b.stores || {}).length - Object.keys(idMap).length };
     },
 

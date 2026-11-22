@@ -483,6 +483,7 @@ async function syncNow() {
       }
       try {
         const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
+        B.trackFunnel('first_sync_done');
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
       } catch (e) {
         apiErrors[shopId] = e.code || e.message;
@@ -1166,6 +1167,11 @@ export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) 
 /** UI → worker message handlers. */
 const uiHandlers = {
   /** Errors of extension pages go to the same journal. */
+  /** Funnel milestone from the dashboard (fire-and-forget, deduplicated in billing.js). */
+  'ui:trackFunnel': async ({ event }) => {
+    B.trackFunnel(String(event || ''));
+    return { ok: true };
+  },
   'ui:logError': async ({ where, message }) => {
     await logError(`page:${String(where || '').slice(0, 30)}`, String(message || ''));
     return { ok: true };

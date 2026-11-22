@@ -2193,6 +2193,7 @@ function openPay(blocking = false) {
   const dlg = $('payDialog');
   pay.open = true;
   pay.blocking = blocking || state.data?.license?.status === 'expired';
+  if (state.data?.license?.status === 'expired') send('ui:trackFunnel', { event: 'trial_expired_view' }).catch(() => {});
   renderPay();
   if (!dlg.open) dlg.showModal();
   rememberShown(state.data.license);
@@ -2659,6 +2660,7 @@ function viewAccount() {
             try { await navigator.clipboard.writeText(refLink); refState.copied = true; } catch { refState.copied = false; }
             refState.msg = refState.copied ? '' : refState.msg;
             renderView();
+            if (refState.copied) send('ui:trackFunnel', { event: 'referral_shared' }).catch(() => {});
             if (refState.copied) setTimeout(() => { refState.copied = false; renderView(); }, 2000);
           },
         }, refState.copied ? t('account.referral.copied') : t('account.referral.copy')),
