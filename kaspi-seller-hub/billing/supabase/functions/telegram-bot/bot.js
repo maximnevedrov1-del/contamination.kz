@@ -176,7 +176,14 @@ async function send(env, f, pause, { chunk, budgetMs, now }) {
       }
       stats.due++;
       const text = format(item);
-      if (!text) continue;
+      if (!text) {
+        // unknown kind / empty text: acknowledge as skipped so bot_jobs never returns it again (no queue starvation)
+        console.warn('[telegram-bot] skipped, no text for kind', String(item.kind).slice(0, 40));
+        pending.push({ user_id: item.user_id, kind: item.kind, key: item.key, ok: false, error: 'skipped_no_text', blocked: false });
+        progressed = true;
+        if (pending.length >= chunk) await flush();
+        continue;
+      }
       const route = item.kind === 'morning' ? 'orders' : item.kind === 'care' ? 'home' : 'account';
       const r = await tg(env, 'sendMessage', { chat_id: item.chat_id, text, reply_markup: buttons(jobs, route), disable_web_page_preview: true }, f);
       if (!r.ok) console.warn('[telegram-bot] not sent', item.kind, r.error); // the error is kept in tg_sent too
@@ -188,7 +195,7 @@ async function send(env, f, pause, { chunk, budgetMs, now }) {
       if (pause) await new Promise((res) => setTimeout(res, pause)); // Telegram: ~30 messages per second
     }
     await flush();
-    // stop when out of time, or when nothing could be sent (items without text are never recorded)
+    // stop when out of time, or when nothing could be sent (every item, even one without text, is acknowledged via bot_sent)
     if (stats.more || !progressed || !jobs.batch || items.length < jobs.batch) break;
   }
   return stats;

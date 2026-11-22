@@ -23,6 +23,7 @@
  */
 
 export const SKU_RE = /^[A-Za-z0-9]{1,20}$/; // price-list rule for NEW products
+const RESERVED_SKUS = new Set(['__proto__', 'constructor', 'prototype']); // would poison plain-object maps keyed by sku
 const SKU_IMPORTED_RE = /^[^\s<>"&']{1,64}$/; // products already selling keep their sku as is
 export const WAREHOUSE_RE = /^[A-Za-z0-9_-]{1,40}$/;
 export const MAX_PREORDER = 30;
@@ -60,7 +61,7 @@ export function validateProduct(p, { requireCard = false } = {}) {
     imported: !!p.imported,
     updatedAt: Date.now(),
   };
-  if (!(p.imported ? SKU_IMPORTED_RE : SKU_RE).test(sku)) errors.push('sku');
+  if (!(p.imported ? SKU_IMPORTED_RE : SKU_RE).test(sku) || RESERVED_SKUS.has(sku.toLowerCase())) errors.push('sku');
   if (!product.title) errors.push('title');
   if (!product.brand) errors.push('brand');
   if (!(product.price > 0)) errors.push('price');

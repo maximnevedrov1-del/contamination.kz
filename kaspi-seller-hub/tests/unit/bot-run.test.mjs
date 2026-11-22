@@ -56,6 +56,30 @@ await t('old database without batch: one pass, as before', async () => {
   assert.equal(r.sent, 7);
   assert.equal(log.jobs, 1);
 });
+await t('unknown kind / hostile text: acknowledged as skipped, never starves the queue, no crash', async () => {
+  const items = [
+    { user_id: 'x1', chat_id: 1, kind: 'mystery', key: '1', data: {} },
+    { user_id: 'x2', chat_id: 2, kind: 'care', key: 'w', data: { name: '<b>&</b> > <' } },
+    { user_id: 'x3', chat_id: 3, kind: 'referral', key: '3', data: null },
+  ];
+  const sent = new Map(); const msgs = [];
+  const f = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (url.endsWith('/rpc/bot_lock')) return new Response('true', { status: 200 });
+    if (url.endsWith('/rpc/bot_unlock')) return new Response('null', { status: 200 });
+    if (url.endsWith('/rpc/bot_jobs')) return new Response(JSON.stringify({ items: items.filter((i) => !sent.has(i.user_id)), batch: 300 }), { status: 200 });
+    if (url.endsWith('/rpc/bot_sent')) { body.p_results.forEach((r) => sent.set(r.user_id, r)); return new Response('1', { status: 200 }); }
+    msgs.push(body.text);
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  const r = await run(env, f, 0);
+  assert.equal(sent.size, 3, 'every item acknowledged');
+  assert.equal(sent.get('x1').ok, false);
+  assert.equal(sent.get('x1').error, 'skipped_no_text');
+  assert.equal(r.more, false);
+  assert.ok(msgs.every((m) => typeof m === 'string' && m.length > 0));
+});
+
 await t('time budget: stops with more:true, what was sent is recorded', async () => {
   const { f, log } = fake(100, 300);
   let clock = 0;

@@ -1715,7 +1715,7 @@ function viewSettings() {
           if (file.size > 100 * 1024 * 1024) return toast(errorText('backupTooBig'), 'error');
           let backup;
           try {
-            backup = JSON.parse(await file.text());
+            backup = JSON.parse(await file.text(), (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype' ? undefined : v));
           } catch {
             return toast(errorText('backupInvalid'), 'error');
           }

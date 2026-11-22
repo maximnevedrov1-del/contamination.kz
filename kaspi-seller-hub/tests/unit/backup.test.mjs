@@ -78,4 +78,23 @@ await t('malformed snapshots are skipped', async () => {
   assert.equal((await S.getSnapshots()).A, undefined);
 });
 
+await t('reserved keys (__proto__, constructor) are not imported as skus', async () => {
+  const evil = JSON.parse('{"app":"kaspi-seller-hub","version":1,"catalog":{"x":{"sku":"__proto__","title":"t","brand":"b","price":100,"stock":1},"y":{"sku":"constructor","title":"t","brand":"b","price":100,"stock":1}}}');
+  const r = await H['ui:backupImport']({ backup: evil });
+  assert.equal(r.ok, true);
+  assert.equal(r.products, 0);
+  assert.equal(({}).title, undefined);
+  assert.equal(Object.keys(await S.getCatalog()).includes('__proto__'), false);
+});
+
+await t('quota failure on a write is reported, not ok:true', async () => {
+  const realSet = chrome.storage.local.set;
+  chrome.storage.local.set = async () => { const e = new Error('QUOTA_BYTES quota exceeded'); e.name = 'QuotaExceededError'; throw e; };
+  try {
+    const r = await H['ui:backupImport']({ backup });
+    assert.equal(r.ok, false);
+    assert.equal(r.error, 'quota');
+  } finally { chrome.storage.local.set = realSet; }
+});
+
 console.log(`${n} passed`);

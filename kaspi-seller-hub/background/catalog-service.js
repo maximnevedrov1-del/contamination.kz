@@ -412,11 +412,14 @@ export function catalogHandlers({ allowedShopIds }) {
       const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null);
       let products = 0;
       let costsN = 0;
+      let failed = false;
       const touched = new Set();
+      // storage writes return {ok:false, kind} instead of throwing (quota): any failure = not a full restore
+      const chk = (r) => { if (r && r.ok === false) failed = true; };
       await lock(async () => {
         const costs = await getCosts();
         for (const [k, v] of Object.entries(b.costs || {}).slice(0, 50000)) if (typeof k === 'string' && k.length <= 200 && num(v) != null) (costs[k] = num(v)), costsN++;
-        await setCosts(costs);
+        chk(await setCosts(costs));
         const photos = await getPhotos();
         let photoBytes = photosDataSize(photos);
         for (const [k, v] of Object.entries(b.photos || {}).slice(0, 20000)) {
@@ -426,7 +429,7 @@ export function catalogHandlers({ allowedShopIds }) {
           photoBytes += add;
           photos[k] = v;
         }
-        await setPhotos(photos);
+        chk(await setPhotos(photos));
         const catalog = await getCatalog();
         for (const raw of Object.values(b.catalog || {}).slice(0, 50000)) {
           const stores = Object.fromEntries(Object.entries(raw?.stores || {}).filter(([id]) => idMap[id]).map(([id, o]) => [idMap[id], o]));
@@ -437,7 +440,7 @@ export function catalogHandlers({ allowedShopIds }) {
           Object.entries(product.stores).forEach(([id, o]) => o.on && touched.add(id));
           products++;
         }
-        await setCatalog(catalog);
+        chk(await setCatalog(catalog));
         // orders: only for stores present in the file and here; a store that already has a snapshot keeps it
         if (b.snapshots && typeof b.snapshots === 'object') {
           const snaps = await getSnapshots();
@@ -448,7 +451,7 @@ export function catalogHandlers({ allowedShopIds }) {
             snaps[id] = sn;
             added = true;
           }
-          if (added) await setSnapshots(snaps);
+          if (added) chk(await setSnapshots(snaps));
         }
         const feeds = await getFeeds();
         for (const [oldId, f] of Object.entries(b.feeds || {})) {
@@ -456,7 +459,7 @@ export function catalogHandlers({ allowedShopIds }) {
           if (!id || feeds[id]?.merchantId) continue; // keep what is already set up here
           feeds[id] = { ...feeds[id], merchantId: String(f?.merchantId || '').slice(0, 64), company: String(f?.company || '').slice(0, 200), warehouses: (f?.warehouses || []).filter((w) => WAREHOUSE_RE.test(w)), confirmed: false };
         }
-        await setFeeds(feeds);
+        chk(await setFeeds(feeds));
         const st = b.settings || {};
         const patch = {};
         if (['ru', 'kk'].includes(st.lang)) patch.lang = st.lang;
@@ -470,9 +473,10 @@ export function catalogHandlers({ allowedShopIds }) {
           const id = idMap[oldId];
           if (id && fresh.stores[id]) fresh.stores[id] = { ...fresh.stores[id], alias: String(stx.alias || fresh.stores[id].alias || '').slice(0, 100), color: /^#[0-9a-f]{6}$/i.test(stx.color) ? stx.color : fresh.stores[id].color };
         }
-        await saveSettings({ ...patch, stores: fresh.stores });
+        chk(await saveSettings({ ...patch, stores: fresh.stores }));
       });
       scheduleFeedSync([...touched]);
+      if (failed) return { ok: false, error: 'quota' };
       return { ok: true, products, costs: costsN, stores: Object.keys(idMap).length, storesSkipped: Object.keys(b.stores || {}).length - Object.keys(idMap).length };
     },
 
