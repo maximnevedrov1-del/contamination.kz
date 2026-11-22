@@ -1,45 +1,46 @@
-/* Seller Hub — landing page. Tokens follow DESIGN.md (same as the extension). */
+/* SaudaPulse — landing page. Tokens follow DESIGN.md (same as the extension). Dark is the default. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --border: #e4e4e7;
-  --text: #0a0a0a;
-  --text-2: #52525b;
-  --text-3: #71717a;
-  --accent: #0a0a0a;
-  --accent-text: #ffffff;
-  --focus: #2a78d6;
-  --hot: #9a5b00;
-  --hot-bg: #fdf3e1;
-  --late: #c0262d;
-  --late-bg: #fdecec;
-  --glow: rgba(42, 120, 214, 0.16);
-  --shadow-shot: 0 24px 60px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --surface-2: #273449;
+  --border: #334155;
+  --text: #F8FAFC;
+  --text-2: #CBD5E1;
+  --text-3: #94A3B8;
+  --accent: #10B981;
+  --accent-text: #0F172A;
+  --focus: #38BDF8;
+  --hot: #f0b45a;
+  --hot-bg: #2e2412;
+  --late: #F43F5E;
+  --late-bg: #3B1622;
+  --glow: rgba(56, 189, 248, 0.18);
+  --shadow-shot: 0 24px 60px rgba(0, 0, 0, 0.55);
   --r-btn: 10px;
   --r-card: 14px;
   --r-frame: 18px;
 }
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #0a0a0b;
-    --surface: #111113;
-    --surface-2: #18181b;
-    --border: #27272a;
-    --text: #fafafa;
-    --text-2: #a1a1aa;
-    --text-3: #8b8b94;
-    --accent: #fafafa;
-    --accent-text: #0a0a0a;
-    --focus: #5b9ae8;
-    --hot: #f0b45a;
-    --hot-bg: #2e2412;
-    --late: #f07178;
-    --late-bg: #301417;
-    --glow: rgba(91, 154, 232, 0.18);
-    --shadow-shot: 0 24px 60px rgba(0, 0, 0, 0.55);
+    color-scheme: light;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f5;
+    --border: #e4e4e7;
+    --text: #0a0a0a;
+    --text-2: #52525b;
+    --text-3: #71717a;
+    --accent: #0a0a0a;
+    --accent-text: #ffffff;
+    --focus: #2a78d6;
+    --hot: #9a5b00;
+    --hot-bg: #fdf3e1;
+    --late: #c0262d;
+    --late-bg: #fdecec;
+    --glow: rgba(42, 120, 214, 0.16);
+    --shadow-shot: 0 24px 60px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
   }
 }
 
@@ -75,6 +76,10 @@ p { margin: 0; }
 .top__nav { display: flex; gap: 22px; margin-left: auto; }
 .top__nav a { color: var(--text-2); text-decoration: none; font-size: 15px; }
 .top__nav a:hover { color: var(--text); }
+.lang { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.lang a { color: var(--text-2); text-decoration: none; }
+.lang a:hover, .lang a[aria-current] { color: var(--text); }
+.lang a[aria-current] { font-weight: 600; }
 
 /* hero */
 .hero { position: relative; padding: 72px 0 96px; overflow: hidden; }
@@ -83,8 +88,9 @@ p { margin: 0; }
 .eyebrow { color: var(--text-2); font-size: 15px; font-weight: 500; margin-bottom: 18px; }
 .lead { margin-top: 22px; font-size: 19px; color: var(--text-2); max-width: 34em; }
 .hero__cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.hero__note { margin: 14px 0 0; color: var(--text-2); font-size: 14px; }
 .trust { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 28px 0 0; padding: 0; list-style: none; color: var(--text-2); font-size: 14px; }
-.trust li::before { content: '✓'; margin-right: 6px; color: #1f9d6b; font-weight: 700; }
+.trust li::before { content: '✓'; margin-right: 6px; color: #10B981; font-weight: 700; }
 .hero__shot { perspective: 1400px; }
 
 /* browser frame around product screenshots */
@@ -214,7 +220,8 @@ html:not(.js) .story__pics img:first-child { opacity: 1; }
   section { padding: 64px 0; }
   .wrap { padding: 0 16px; }
   .top__nav { display: none; }
-  .top__cta { margin-left: auto; }
+  .lang { margin-left: auto; }
+  .top__cta { display: none; } /* the sticky bottom bar and the hero already carry this CTA */
   .lead { font-size: 17px; }
   .hero__cta .btn { flex: 1 1 100%; }
   .merge__stage { height: 300px; }

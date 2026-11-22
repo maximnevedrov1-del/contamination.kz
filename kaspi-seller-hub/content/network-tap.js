@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — passive network tap (runs in the PAGE's main world).
+ * SaudaPulse — passive network tap (runs in the PAGE's main world).
  *
  * Kaspi's cabinet loads its data as JSON over fetch/XHR. This script observes the
  * responses the page ALREADY receives in the seller's authenticated session and

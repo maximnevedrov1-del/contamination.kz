@@ -65,14 +65,19 @@ const fill = (text) => text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(SRC, { withFileTypes: true })) {
-  if (f.name === 'site.config.json') continue;
-  const from = path.join(SRC, f.name);
-  const to = path.join(OUT, f.name);
-  if (f.isDirectory()) fs.cpSync(from, to, { recursive: true });
-  else if (f.name.endsWith('.html')) fs.writeFileSync(to, fill(conditional(fs.readFileSync(from, 'utf8'))));
-  else fs.copyFileSync(from, to);
+// .html files in any directory (site/kk/ …) are filled in; everything else is copied as-is
+function copyTree(dir, outDir) {
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (dir === SRC && f.name === 'site.config.json') continue;
+    const from = path.join(dir, f.name);
+    const to = path.join(outDir, f.name);
+    if (f.isDirectory()) copyTree(from, to);
+    else if (f.name.endsWith('.html')) fs.writeFileSync(to, fill(conditional(fs.readFileSync(from, 'utf8'))));
+    else fs.copyFileSync(from, to);
+  }
 }
+copyTree(SRC, OUT);
 // the how-to GIF and the legal documents come from the extension itself (one source of truth)
 fs.copyFileSync(path.join(ROOT, 'help/connect.gif'), path.join(OUT, 'assets/connect.gif'));
 fs.mkdirSync(path.join(OUT, 'legal'), { recursive: true });
@@ -80,12 +85,19 @@ fs.copyFileSync(path.join(ROOT, 'legal/legal.css'), path.join(OUT, 'legal/legal.
 let legal = fs.readFileSync(path.join(ROOT, 'legal/terms.html'), 'utf8');
 if (v.domain) legal = legal.replaceAll('[адрес сайта]', `https://${v.domain}`);
 fs.writeFileSync(path.join(OUT, 'legal/terms.html'), legal);
+// standalone offer and privacy policy: legal/*.html (for the extension too) and clean URLs /offer, /privacy
+for (const name of ['offer', 'privacy']) {
+  const html = fs.readFileSync(path.join(ROOT, `legal/${name}.html`), 'utf8');
+  fs.writeFileSync(path.join(OUT, `legal/${name}.html`), html);
+  fs.mkdirSync(path.join(OUT, name), { recursive: true });
+  fs.writeFileSync(path.join(OUT, name, 'index.html'), html.replaceAll('href="offer.html"', 'href="/offer"').replaceAll('href="privacy.html"', 'href="/privacy"'));
+}
 
 // robots.txt and sitemap.xml (the sitemap needs the domain)
-fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n${v.domain ? `Sitemap: https://${v.domain}/sitemap.xml\n` : ''}`);
+fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n\n${['GPTBot', 'OAI-SearchBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'].map((b) => `User-agent: ${b}\nAllow: /\n`).join('\n')}${v.domain ? `\nSitemap: https://${v.domain}/sitemap.xml\n# LLM summary: https://${v.domain}/llms.txt\n` : ''}`);
 if (v.domain) {
   const today = new Date().toISOString().slice(0, 10);
-  fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://${v.domain}/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/legal/terms.html</loc><lastmod>${today}</lastmod></url>\n</urlset>\n`);
+  fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://${v.domain}/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/kk/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/offer</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/privacy</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/legal/terms.html</loc><lastmod>${today}</lastmod></url>\n</urlset>\n`);
   fs.writeFileSync(path.join(OUT, 'CNAME'), `${v.domain}\n`); // GitHub Pages custom domain
 }
 const missing = ['domain', 'whatsapp', 'telegram', 'email', 'responseTime'].filter((k) => !filled(k));

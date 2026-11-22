@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — "Выгрузка товаров" (dashboard side).
+ * SaudaPulse — "Выгрузка товаров" (dashboard side).
  *
  * The seller keeps the whole assortment here and puts products on sale in ALL stores
  * or only in the ones they tick. Two Kaspi mechanisms are used:

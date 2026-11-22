@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Kaspi Seller Hub — release build for the Chrome Web Store.
+ * SaudaPulse — release build for the Chrome Web Store.
  *
  *   node tools/build-release.mjs                    → dist/kaspi-seller-hub-<version>.zip   (Chrome, Yandex, Edge, Opera, Brave)
  *   node tools/build-release.mjs --target=firefox   → dist/kaspi-seller-hub-<version>-firefox.zip (Firefox desktop & Android, addons.mozilla.org)
@@ -34,7 +34,7 @@ if (!['chrome', 'firefox'].includes(TARGET)) {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'dist');
 const PKG = path.join(OUT_DIR, TARGET === 'chrome' ? 'kaspi-seller-hub' : `kaspi-seller-hub-${TARGET}`);
-const SHIP = ['manifest.json', 'background', 'content', 'dashboard', 'popup', 'shared', 'locales', 'icons', 'vendor', 'legal', 'help'];
+const SHIP = ['manifest.json', 'background', 'content', 'dashboard', 'popup', 'shared', 'locales', 'icons', 'fonts', 'vendor', 'legal', 'help'];
 
 const errors = [];
 const fail = (msg) => errors.push(msg);
@@ -78,7 +78,9 @@ if (errors.length) {
 // ---------- copy ----------
 fs.rmSync(PKG, { recursive: true, force: true });
 fs.mkdirSync(PKG, { recursive: true });
-for (const item of SHIP) fs.cpSync(path.join(ROOT, item), path.join(PKG, item), { recursive: true });
+// Source maps and test folders never ship.
+const shipFilter = (src) => !/\.map$/.test(src) && !/[\\/](tests?|__tests__)([\\/]|$)/.test(src);
+for (const item of SHIP) fs.cpSync(path.join(ROOT, item), path.join(PKG, item), { recursive: true, filter: shipFilter });
 
 // Demo tab patterns (localhost, file://) are not shipped.
 const selPath = path.join(PKG, 'shared/selectors.js');
@@ -114,6 +116,7 @@ if (TARGET === 'firefox') {
   // 128 = first version with content scripts in the page's MAIN world (network tap).
   manifest.background = { scripts: [manifest.background.service_worker], type: 'module' };
   delete manifest.minimum_chrome_version;
+  delete manifest.externally_connectable; // Chrome-only key; Firefox warns on it
   manifest.browser_specific_settings = {
     gecko: {
       id: 'kaspi-seller-hub@sellerhub.kz',
@@ -128,9 +131,9 @@ manifest.content_security_policy = {
     "script-src 'self'",
     "object-src 'self'",
     "frame-src 'self' blob:",
-    `connect-src 'self' https://kaspi.kz https://*.kaspi.kz ${supa}`,
+    `connect-src 'self' https://kaspi.kz https://mc.shop.kaspi.kz https://idmc.shop.kaspi.kz ${supa}`,
     // product photos: Kaspi's own image hosts only (shared/photos.js → PHOTO_HOSTS)
-    `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.kaspi.kz https://*.cdn-kaspi.kz`,
+    `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.cdn-kaspi.kz`,
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; '),
@@ -143,10 +146,12 @@ const walk = (dir) => {
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, f.name);
     if (f.isDirectory()) walk(p);
+    else if (/\.map$/.test(f.name)) leaks.push(`${path.relative(PKG, p)}: source map`);
     else if (/\.(js|json|html|css)$/.test(f.name) && !p.includes(`${path.sep}vendor${path.sep}`)) {
       const txt = stripComments(fs.readFileSync(p, 'utf8'));
       if (/https?:\/\/localhost|127\.0\.0\.1/.test(txt)) leaks.push(`${path.relative(PKG, p)}: test address`);
       if (/sb_secret_|service_role"?\s*[:=]\s*['"]ey/.test(txt)) leaks.push(`${path.relative(PKG, p)}: secret key`);
+      if (/\bconsole\.(log|debug)\s*\(/.test(txt)) leaks.push(`${path.relative(PKG, p)}: console.log/debug (use console.warn/error)`);
       if (/\beval\s*\(|new Function\s*\(/.test(txt)) leaks.push(`${path.relative(PKG, p)}: eval`);
     }
   }

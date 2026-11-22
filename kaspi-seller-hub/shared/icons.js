@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — line icons (one style everywhere: 24-px grid, 2-px stroke, round caps).
+ * SaudaPulse — line icons (one style everywhere: 24-px grid, 2-px stroke, round caps).
  * Used instead of emoji, which look different on every system and clash with the menu icons.
  * Built as SVG nodes (no innerHTML).
  */

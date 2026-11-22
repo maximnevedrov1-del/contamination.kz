@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — API health counts (service worker).
+ * SaudaPulse — API health counts (service worker).
  *
  * Every Kaspi API request ends as «worked» or «failed because …». The worker adds these up and
  * every 15 minutes sends ONLY the numbers to the subscription server:

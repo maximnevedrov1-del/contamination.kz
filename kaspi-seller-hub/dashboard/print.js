@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — invoice print page.
+ * SaudaPulse — invoice print page.
  *
  * Reads the print queue (selected orders) and the captured invoices from
  * storage, renders each invoice on its own A4 page and calls window.print().

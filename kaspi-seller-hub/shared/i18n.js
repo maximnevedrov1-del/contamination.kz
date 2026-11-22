@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — internationalization.
+ * SaudaPulse — internationalization.
  *
  * - Locale dictionaries live in /locales/<lang>.json, nested by screen.
  * - t('orders.title') looks up a dot-path; {name} placeholders are substituted.

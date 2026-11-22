@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — content script (isolated world, one instance per Kaspi tab).
+ * SaudaPulse — content script (isolated world, one instance per Kaspi tab).
  *
  * Responsibilities
  *  - Identify the store and session state of this tab.

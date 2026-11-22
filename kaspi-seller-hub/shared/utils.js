@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — shared helpers (ES module).
+ * SaudaPulse — shared helpers (ES module).
  * Used by the service worker, the dashboard, the popup and the print page.
  * The content script is a classic script and keeps its own tiny parsers.
  */

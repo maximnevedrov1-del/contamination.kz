@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — features that are switched off in the release build.
+ * SaudaPulse — features that are switched off in the release build.
  *
  * cabinet: work through an open Kaspi seller-cabinet tab (reading pages, customer chat).
  *   Needs the real markup of the cabinet (TODO selectors in shared/selectors.js), which

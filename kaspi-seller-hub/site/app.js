@@ -1,4 +1,4 @@
-// Seller Hub landing page: small enhancements only. Without this file every section is
+// SaudaPulse landing page: small enhancements only. Without this file every section is
 // still readable (the <html class="js"> switch turns the effects on).
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -55,4 +55,25 @@
       });
     });
   }
+
+  // «Open» buttons: if the extension is installed, ask it to open the dashboard; otherwise (not
+  // installed / no id yet / no answer in 800 ms) follow the link as usual (store or in-page anchor).
+  const extId = document.querySelector('meta[name="sp-extension-id"]')?.content?.trim();
+  document.querySelectorAll('[data-sp-open]').forEach((a) => {
+    a.addEventListener('click', (ev) => {
+      if (!extId || !window.chrome?.runtime?.sendMessage) return; // plain link
+      ev.preventDefault();
+      let done = false;
+      const fallback = () => { if (done) return; done = true; if (a.hash && a.pathname === location.pathname) location.hash = a.hash; else location.href = a.href; };
+      const timer = setTimeout(fallback, 800);
+      try {
+        chrome.runtime.sendMessage(extId, { type: 'OPEN_DASHBOARD' }, (res) => {
+          void chrome.runtime.lastError; // "Could not establish connection" = not installed
+          clearTimeout(timer);
+          if (done) return;
+          if (res?.ok) done = true; else fallback();
+        });
+      } catch { clearTimeout(timer); fallback(); }
+    });
+  });
 })();

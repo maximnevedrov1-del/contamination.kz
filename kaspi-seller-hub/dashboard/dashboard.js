@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — dashboard (Screen 2).
+ * SaudaPulse — dashboard (Screen 2).
  *
  * Routes (location.hash): orders · returns · refusals · payments · analytics · chat · settings
  * Data comes from the service worker (ui:* messages) and chrome.storage; nothing
@@ -56,6 +56,7 @@ import {
   productKey,
 } from '../shared/utils.js';
 import { lineChart, barChart } from './charts.js';
+import { bannerFrom, expiryNotice } from '../shared/notices.js';
 import { statusBanner, supportCard, unreadAnswers, getCsat } from './support-view.js';
 import { npsCard, exitCard } from './feedback-view.js';
 import { storeMeter, needsUpsell, openUpsell, openCancelFlow, planNotice, telegramCard } from './growth-view.js';
@@ -1711,6 +1712,7 @@ function viewSettings() {
           const file = e.target.files[0];
           e.target.value = '';
           if (!file) return;
+          if (file.size > 100 * 1024 * 1024) return toast(errorText('backupTooBig'), 'error');
           let backup;
           try {
             backup = JSON.parse(await file.text());
@@ -1948,10 +1950,23 @@ function renderSidebar() {
 }
 
 /** Per-store "unavailable" banners — never block the other stores. */
-const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://*.kaspi.kz/*'];
+const KASPI_ORIGINS = ['https://kaspi.kz/*', 'https://mc.shop.kaspi.kz/*', 'https://idmc.shop.kaspi.kz/*'];
 
 function renderBanners() {
   const box = clear($('banners'));
+  // the owner's announcement from the licence (incidents, Kaspi layout changes): plain text only
+  const sys = bannerFrom(state.data?.license);
+  if (sys)
+    box.append(h('div', { class: `banner banner--${sys.type}`, role: sys.type === 'info' ? 'status' : 'alert', dataset: { banner: 'system' } },
+      h('span', { class: 'banner__icon' }, icon(sys.type === 'info' ? 'info' : 'warn')),
+      h('span', { class: 'banner__text' }, sys.text)));
+  // 1–3 days left: a soft reminder (the pay dialog and the Home to-do cover the earlier days)
+  const exp = expiryNotice(state.data?.license);
+  if (exp)
+    box.append(h('div', { class: 'banner banner--warn', role: 'status', dataset: { banner: 'expiry' } },
+      h('span', { class: 'banner__icon' }, icon('warn')),
+      h('span', { class: 'banner__text' }, t(exp.kind === 'trial' ? 'notices.expiryTrial' : 'notices.expiryPaid', { days: exp.days })),
+      h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'renew' }, onclick: () => (location.hash = state.data.license.pendingInvoice ? 'pay' : 'account') }, t('notices.renew'))));
   // the owner's notice for everyone («Kaspi не отвечает, чиним»)
   const notice = statusBanner(state.serviceStatus);
   if (notice) box.append(notice);
@@ -2206,6 +2221,16 @@ async function checkPayment(manual = false) {
   } else if (pay.open) renderPay();
 }
 
+/** «Номер счёта: № N» + Copy — the number the seller quotes when paying or writing to support. */
+function invoiceNumber(id) {
+  return h('div', { class: 'invoice-no', dataset: { block: 'invoice-no' }, style: { display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0' } },
+    h('b', { style: { fontSize: '1.15em' } }, t('notices.invoiceNo', { id })),
+    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'copy-invoice-no' }, onclick: async () => {
+      await copyText(String(id));
+      toast(t('notices.copied'), 'ok');
+    } }, t('notices.copy')));
+}
+
 function renderPay() {
   const dlg = $('payDialog');
   const lic = state.data.license || {};
@@ -2234,6 +2259,8 @@ function renderPay() {
       ? [
           h('div', { class: 'pay__amount' }, formatMoney(inv.amount)),
           h('div', { class: 'pay__details' }, t('pay.details', { id: inv.id, stores: inv.stores })),
+          invoiceNumber(inv.id),
+          h('p', { class: 'muted pay__hint', dataset: { block: 'pay-hint' } }, t('notices.payHint')),
           lic.payment?.qr_url
             ? h('img', { class: 'pay__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })
             : h('div', { class: 'pay__noqr' }, t('pay.noQr')),
@@ -2550,7 +2577,9 @@ function viewAccount() {
         h(
           'div',
           null,
+          invoiceNumber(inv.id),
           h('p', null, t('account.pendingText', { phone: fmtPhone(inv.phone) })),
+          h('p', { class: 'muted', dataset: { block: 'pay-hint' } }, t('notices.payHint')),
           lic.payment?.instructions && h('p', { class: 'pending-invoice__instr' }, lic.payment.instructions),
           h('p', { class: 'muted' }, t('account.pendingDetails', { stores: inv.stores, months: inv.months, date: formatDate(inv.created_at, 'datetime') })),
           h(
@@ -2979,8 +3008,9 @@ async function refreshTickets() {
 }
 
 function viewHelp() {
+  const waDigits = String(SUPPORT.whatsapp || '').replace(/\D/g, '');
   const contacts = [
-    SUPPORT.whatsapp && h('a', { class: 'btn btn--primary', href: `https://wa.me/${SUPPORT.whatsapp.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+    waDigits && h('a', { class: 'btn btn--primary', href: `https://wa.me/${waDigits}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
     SUPPORT.telegram && h('a', { class: 'btn', href: `https://t.me/${SUPPORT.telegram.replace(/^@/, '')}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
     SUPPORT.email && h('a', { class: 'btn', href: `mailto:${SUPPORT.email}` }, SUPPORT.email),
   ].filter(Boolean);
@@ -3370,7 +3400,17 @@ async function main() {
   manageChatPolling();
   sync(); // fresh snapshot from every store tab on open
   // First launch → the tour. Not under browser automation (it would sit on top of the page under test).
-  if (!memo.get('ksh.tourDone') && !navigator.webdriver) setTimeout(startTour, 1200);
+  // ?welcome=1 comes from the post-install tab: start the tour at once, then drop the param.
+  let welcome = false;
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has('welcome')) {
+      welcome = u.searchParams.get('welcome') === '1';
+      u.searchParams.delete('welcome');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
+  } catch { /* ignore */ }
+  if (!navigator.webdriver && (welcome || !memo.get('ksh.tourDone'))) setTimeout(startTour, welcome ? 300 : 1200);
 }
 
 main();

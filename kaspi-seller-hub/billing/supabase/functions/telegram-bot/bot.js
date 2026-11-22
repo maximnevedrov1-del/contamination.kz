@@ -1,5 +1,5 @@
 /**
- * Seller Hub — the seller's Telegram bot (Supabase Edge Function, also runs in Node for tests).
+ * SaudaPulse — the seller's Telegram bot (Supabase Edge Function, also runs in Node for tests).
  *
  * Routes (POST):
  *   …/telegram-bot/webhook  Telegram updates: /start <token> links the chat, /stop unlinks;
@@ -8,14 +8,16 @@
  *                           (the database decides whether to send: linked, alerts on, once per order).
  *   …/telegram-bot/run      scheduled at 09:00 Almaty with X-Bot-Key: morning digest, «6 days away»,
  *                           grace reminders, win-back at 30 / 60 days.
- * The bot reaches the database only through the bot_* functions with its own key (BOT_KEY);
- * the service_role key is not used. Messages are plain text (no HTML/Markdown parsing).
+ * The bot reaches the database only through the bot_* functions: EXECUTE on them is granted to
+ * service_role only (migration 017), so calls without a seller token use SUPABASE_SERVICE_ROLE_KEY
+ * (auto-provided by the Edge runtime), and every call also carries its own key (BOT_KEY → p_key).
+ * Messages are plain text (no HTML/Markdown parsing).
  *
- * Environment: SUPABASE_URL, SUPABASE_ANON_KEY (set by Supabase), BOT_TOKEN (@BotFather),
+ * Environment: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (all set by Supabase), BOT_TOKEN (@BotFather),
  * BOT_KEY (admin page → «Состояние» → «Ключ бота»), WEBHOOK_SECRET (any long random string).
  */
 
-const money = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0)).replace(/ /g, ' ') + ' ₸';
+const money = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0)).replace(/\u00a0/g, ' ') + ' ₸';
 const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many; };
 const ddmm = (day) => { const [, m, d] = String(day).split('-'); return `${d}.${m}`; };
 const hhmmAlmaty = (iso) => new Date(new Date(iso).getTime() + 5 * 3600000).toISOString().slice(11, 16);
@@ -51,8 +53,8 @@ export function format(item) {
   }
   if (item.kind === 'care') return `${d.name || 'Здравствуйте'}, мы заметили, что вы пару дней не заходили в кабинет. Всё в порядке? Если нужна помощь с синхронизацией Kaspi, мы на связи 🙌`;
   if (item.kind === 'grace') return `⏳ Оплаченный период закончился. Кабинет работает ещё ${d.days_left} ${plural(d.days_left, 'день', 'дня', 'дней')} — оплатите продление, чтобы не потерять доступ к заказам и истории.`;
-  if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в Seller Hub за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
-  if (item.kind === 'winback60') return `🎁 Вернитесь в Seller Hub со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
+  if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в SaudaPulse за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
+  if (item.kind === 'winback60') return `🎁 Вернитесь в SaudaPulse со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
   if (item.kind === 'alert') {
     if (d.kind === 'cancelled') return `❌ Заказ №${d.code} в магазине ${d.shop} отменён.`;
     const m = Math.max(0, Math.round(d.minutes || 0));
@@ -84,7 +86,9 @@ export async function tg(env, method, body, f = fetch) {
 async function rpc(env, fn, args, token, f = fetch) {
   const res = await f(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token || env.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    headers: token
+      ? { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      : { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(args),
   });
   const text = await res.text();
@@ -112,7 +116,7 @@ async function webhook(update, env, f) {
   const start = /^\/start(?:@\w+)?\s+([0-9a-f]{64})$/.exec(text);
   if (start) {
     const r = await rpc(env, 'bot_link', { p_key: env.BOT_KEY, p_token: start[1], p_chat_id: chat, p_name: String(msg.from?.first_name || '').slice(0, 64) }, null, f);
-    if (!r?.ok) return tg(env, 'sendMessage', { chat_id: chat, text: 'Ссылка устарела. Откройте Seller Hub → Настройки → «Подключить Telegram» и нажмите ещё раз.' }, f);
+    if (!r?.ok) return tg(env, 'sendMessage', { chat_id: chat, text: 'Ссылка устарела. Откройте SaudaPulse → Настройки → «Подключить Telegram» и нажмите ещё раз.' }, f);
     const shops = (r.shops || []).filter(Boolean);
     return tg(env, 'sendMessage', {
       chat_id: chat,
@@ -122,9 +126,9 @@ async function webhook(update, env, f) {
   }
   if (/^\/stop/.test(text)) {
     await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: chat, p_blocked: false }, null, f);
-    return tg(env, 'sendMessage', { chat_id: chat, text: 'Уведомления отключены. Подключить снова: Seller Hub → Настройки → «Подключить Telegram».' }, f);
+    return tg(env, 'sendMessage', { chat_id: chat, text: 'Уведомления отключены. Подключить снова: SaudaPulse → Настройки → «Подключить Telegram».' }, f);
   }
-  return tg(env, 'sendMessage', { chat_id: chat, text: 'Это бот уведомлений Seller Hub. Чтобы подключить его, откройте Seller Hub → Настройки → «Подключить Telegram».' }, f);
+  return tg(env, 'sendMessage', { chat_id: chat, text: 'Это бот уведомлений SaudaPulse. Чтобы подключить его, откройте SaudaPulse → Настройки → «Подключить Telegram».' }, f);
 }
 
 /**
@@ -197,8 +201,13 @@ export async function handle(req, env, f = fetch) {
   try {
     if (path.endsWith('/webhook')) {
       if (!sameSecret(req.headers.get('x-telegram-bot-api-secret-token'), env.WEBHOOK_SECRET)) return json({ error: 'forbidden' }, 401);
-      await webhook(await req.json(), env, f);
-      return json({ ok: true }); // always 200: Telegram would resend the update otherwise
+      // After the secret check always answer 200: Telegram would resend (and retry forever) the update otherwise.
+      try {
+        await webhook(await req.json(), env, f);
+      } catch (e) {
+        console.error('[telegram-bot] webhook update dropped:', String(e?.message || e).slice(0, 200));
+      }
+      return json({ ok: true });
     }
     if (path.endsWith('/alert')) {
       const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');

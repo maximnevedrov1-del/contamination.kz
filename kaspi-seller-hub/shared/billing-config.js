@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — subscription server (Supabase project).
+ * SaudaPulse — subscription server (Supabase project).
  *
  * Fill these two values from Supabase → Project Settings → API:
  *   - Project URL        → supabaseUrl
@@ -13,7 +13,7 @@ export const BILLING = Object.freeze({
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyYWt0cmlsdndyZnBjYm1rcXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyMjE4MzgsImV4cCI6MjExMDc5NzgzOH0.57Hd8d70R2OVjC40H_Ej552xWXn9_vFK4XasiAvU-XA',
   // How often the licence is re-checked online, and how long a cached licence is
   // trusted while the server cannot be reached.
-  refreshMinutes: 10,
+  refreshMinutes: 30,
   offlineGraceDays: 3,
   // PUBLIC signing key(s) of the Supabase project (Settings → JWT Keys, the ES256
   // key's public JWK — the entries of https://<project>.supabase.co/auth/v1/.well-known/jwks.json).
@@ -36,8 +36,8 @@ BILLING.licenseKeys.forEach(Object.freeze);
  * change, also raise «Версия условий» in the admin page so clients accept again.
  */
 export const LEGAL = Object.freeze({
-  offerUrl: '',
-  privacyUrl: '',
+  offerUrl: 'https://saudapulse.kz/offer',
+  privacyUrl: 'https://saudapulse.kz/privacy',
 });
 
 /** Link for the offer ('offer') or the privacy policy ('privacy'). */
@@ -49,11 +49,11 @@ export function legalUrl(kind) {
 /**
  * Support contacts shown on the «Помощь» page. Fill in what you use; empty ones are hidden.
  *   whatsapp — number in international format, digits only: '77011234567'
- *   telegram — user name without @
+ *   telegram — user name (a leading @ is stripped by the UI)
  */
 export const SUPPORT = Object.freeze({
   whatsapp: '',
-  telegram: '',
-  email: '',
-  hours: '', // e.g. 'пн–пт 10:00–19:00'
+  telegram: '@SaudaPulse',
+  email: 'support@saudapulse.kz',
+  hours: 'Пн–Вс, 09:00–21:00 (Алматы)',
 });

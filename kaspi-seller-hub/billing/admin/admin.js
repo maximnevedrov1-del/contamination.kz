@@ -1,5 +1,5 @@
 /*
- * Kaspi Seller Hub — owner's admin page for subscriptions.
+ * SaudaPulse — owner's admin page for subscriptions.
  * Plain script (works when opened as a local file). Talks to Supabase with the
  * public anon key + the admin's own login; every admin action is checked again
  * in the database (public.is_admin()). Client data is rendered as text only.
@@ -167,6 +167,7 @@
     if (tab === 'status') return renderStatus(panel);
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
+    if (tab === 'flags') return renderFlags(panel);
     const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
     renderInvoices(panel, page);
   }
@@ -384,7 +385,7 @@
             el('td', null, el('span', { class: 'badge ' + (RISK[x.reason]?.[1] || '') }, RISK[x.reason]?.[0] || x.reason)),
             el('td', null, x.last_active_at ? date(x.last_active_at, true) : 'не заходил'),
             el('td', null, date(x.created_at)),
-            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('Seller Hub — чем помочь?')}` }, 'Написать'))))))
+            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('SaudaPulse — чем помочь?')}` }, 'Написать'))))))
       : el('p', { class: 'muted' }, 'Сейчас никого — все в порядке.');
     const riskMore = risk.length > 10 && !riskAll && el('button', { type: 'button', class: 'btn', 'data-action': 'risk-all', onclick: () => ((riskAll = true), render()) }, `Показать всех (${risk.length})`);
     const section = (title, hint, ...body) => el('section', { class: 'block' }, el('h2', null, title), hint && el('p', { class: 'muted' }, hint), ...body);
@@ -543,7 +544,7 @@
     const box = el('div', { 'data-block': 'bot-settings' }, el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'), el('p', { class: 'muted' }, 'Загрузка…'));
     rpc('admin_growth_settings', { p: {} }).then((g) => {
       const f = {
-        bot_username: el('input', { class: 'input', placeholder: 'SellerHubBot', value: g.bot_username || '' }),
+        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulse_bot', value: g.bot_username || '' }),
         app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
@@ -649,6 +650,103 @@
     );
   }
 
+  async function renderFlags(panel) {
+    const [flags, bn] = await Promise.all([rpc('admin_list_feature_flags'), rpc('admin_get_system_banner')]);
+    const banner = {
+      on: el('input', { type: 'checkbox', checked: !!bn.active }),
+      type: el('select', { class: 'input' }, ...[['info', 'Информация'], ['warn', 'Предупреждение'], ['danger', 'Авария']].map(([v, l]) => el('option', { value: v, selected: v === (bn.type || 'info') }, l))),
+      text: el('input', { class: 'input', maxlength: 300, value: bn.text || '', placeholder: 'Например: Kaspi изменил вёрстку, часть данных может не загружаться — чиним', style: 'min-width:420px' }),
+    };
+    const parseEmails = (t) => t.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+    const save = async (key, v) => {
+      await rpc('admin_set_feature_flag', { p_key: key, p_enabled: v.enabled, p_rollout_percent: Number(v.rollout) || 0, p_allow_emails: v.emails, p_description: v.description || null });
+    };
+    const reload = () => renderFlags(panel);
+    const rows = flags.map((f) => {
+      const on = el('input', { type: 'checkbox', checked: f.enabled });
+      const pct = el('input', { class: 'input', type: 'number', min: 0, max: 100, value: f.rollout_percent, style: 'width:80px' });
+      const mails = el('textarea', { rows: 2, placeholder: 'по одному в строке' }, (f.allow_emails || []).join('\n'));
+      const cur = () => ({ enabled: on.checked, rollout: pct.value, emails: parseEmails(mails.value), description: f.description });
+      on.addEventListener('change', async () => {
+        try {
+          await save(f.flag_key, cur());
+          toast(on.checked ? `«${f.flag_key}» включён` : `«${f.flag_key}» выключен`);
+        } catch (e) {
+          on.checked = !on.checked;
+          toast(e.message, true);
+        }
+      });
+      return el(
+        'tr',
+        null,
+        el('td', null, el('b', null, f.flag_key), f.description && el('div', { class: 'muted' }, f.description)),
+        el('td', null, el('label', null, on, ' Включён')),
+        el('td', null, pct, ' %'),
+        el('td', null, mails),
+        el(
+          'td',
+          null,
+          el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+            try {
+              await save(f.flag_key, cur());
+              toast('Сохранено');
+              reload();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Сохранить'),
+          ' ',
+          el('button', { type: 'button', class: 'btn', onclick: async () => {
+            if (!confirm(`Удалить флаг «${f.flag_key}»?`)) return;
+            try {
+              await rpc('admin_delete_feature_flag', { p_key: f.flag_key });
+              toast('Удалено');
+              reload();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Удалить'),
+        ),
+      );
+    });
+    const n = {
+      key: el('input', { class: 'input', placeholder: 'new_feature', maxlength: 63 }),
+      desc: el('input', { class: 'input', placeholder: 'Что включает', style: 'min-width:280px' }),
+      on: el('input', { type: 'checkbox' }),
+      pct: el('input', { class: 'input', type: 'number', min: 0, max: 100, value: 0, style: 'width:80px' }),
+      mails: el('textarea', { rows: 2, placeholder: 'тестовые email, по одному в строке или через запятую' }),
+    };
+    panel.replaceChildren(
+      el('h2', null, 'Объявление в расширении'),
+      el('p', { class: 'muted' }, 'Показывается всем клиентам вверху панели (приходит вместе с лицензией, обновляется в течение нескольких часов). Только текст, до 300 символов.'),
+      el('div', { class: 'grid2' }, 'Показывать', el('label', null, banner.on, ' Включено'), 'Тип', banner.type, 'Текст', banner.text),
+      el('div', { class: 'row', style: 'margin-top:12px' }, el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+        try {
+          await rpc('admin_set_system_banner', { p_active: banner.on.checked, p_text: banner.text.value.trim() || null, p_type: banner.type.value });
+          toast(banner.on.checked ? 'Объявление включено' : 'Объявление выключено');
+        } catch (e) {
+          toast(e.message, true);
+        }
+      } }, 'Сохранить')),
+      el('h2', null, 'Фича-флаги'),
+      el('p', { class: 'muted' }, 'Включают новые функции у части клиентов без выпуска новой версии. Флаг — только про интерфейс: он не подписан и не защищает платные функции. Клиент получает флаги вместе с лицензией (обновляются в течение нескольких часов).'),
+      rows.length
+        ? el('table', null, el('thead', null, el('tr', null, ...['Флаг', 'Состояние', 'Доля клиентов', 'Тестовые email', ''].map((h) => el('th', null, h)))), el('tbody', null, ...rows))
+        : el('p', { class: 'muted' }, 'Флагов пока нет.'),
+      el('h2', { style: 'margin-top:20px' }, 'Новый флаг'),
+      el('div', { class: 'grid2' }, 'Ключ (a-z, 0-9, _)', n.key, 'Описание', n.desc, 'Включён для всех', n.on, 'Доля клиентов, %', n.pct, 'Тестовые email', n.mails),
+      el('div', { class: 'row', style: 'margin-top:16px' }, el('button', { type: 'button', class: 'btn btn--primary', onclick: async () => {
+        try {
+          await save(n.key.value.trim(), { enabled: n.on.checked, rollout: n.pct.value, emails: parseEmails(n.mails.value), description: n.desc.value.trim() });
+          toast('Флаг создан');
+          reload();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      } }, 'Создать')),
+    );
+  }
+
   /* ---------- events ---------- */
   $('saveConn').addEventListener('click', () => {
     store.set(LS.url, $('url').value.trim());
@@ -697,13 +795,13 @@
       const page = await rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 20, p_offset: 0 });
       const pending = page.rows; // newest first: enough to spot new invoices
       $('pendingCount').textContent = page.total || '';
-      document.title = (page.total ? `(${page.total}) ` : '') + 'Seller Hub — админка';
+      document.title = (page.total ? `(${page.total}) ` : '') + 'SaudaPulse — админка';
       const open = await rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).catch(() => null);
       if (open) {
         if (knownTickets != null && open.open > knownTickets) {
           toast('Новый вопрос в поддержку');
           try {
-            if (window.Notification && Notification.permission === 'granted') new Notification('Новый вопрос Seller Hub', { body: 'Откройте вкладку «Вопросы»' });
+            if (window.Notification && Notification.permission === 'granted') new Notification('Новый вопрос SaudaPulse', { body: 'Откройте вкладку «Вопросы»' });
           } catch {
             /* notifications unavailable */
           }
@@ -718,7 +816,7 @@
       if (fresh.length) {
         toast(`Новый счёт: ${money(fresh[0].amount)} — ${fresh[0].email || phone(fresh[0].phone)}`);
         try {
-          if (window.Notification && Notification.permission === 'granted') new Notification('Новый счёт Seller Hub', { body: `${money(fresh[0].amount)} — ${fresh[0].email || ''}` });
+          if (window.Notification && Notification.permission === 'granted') new Notification('Новый счёт SaudaPulse', { body: `${money(fresh[0].amount)} — ${fresh[0].email || ''}` });
         } catch {
           /* notifications unavailable */
         }

@@ -75,7 +75,7 @@ reset role;
 
 -- 4. digest: key, outage detection, recovery
 set role anon;
-do $$ begin perform ops_digest('x'); raise notice 'FAIL digest without a key set'; exception when others then raise notice 'PASS digest refused before a key is set (%)', sqlerrm; end $$;
+set role service_role; do $$ begin perform ops_digest('x'); raise notice 'FAIL digest without a key set'; exception when others then raise notice 'PASS digest refused before a key is set (%)', sqlerrm; end $$; set role anon;
 reset role; set role authenticated;
 select pg_temp.as_user('e0000000-0000-0000-0000-00000000000b');
 do $$ begin perform admin_ops_settings(repeat('a', 64)); raise notice 'FAIL seller set the job key'; exception when others then raise notice 'PASS seller cannot set the job key (%)', sqlerrm; end $$;
@@ -90,14 +90,14 @@ insert into public.api_health (bucket, user_id, market, ok, fail, kinds) values
   (date_trunc('hour', now()), 'e0000000-0000-0000-0000-00000000000e', 'kaspi', 2, 9, '{"timeout": 5, "server": 4}'),
   (date_trunc('hour', now()), 'e0000000-0000-0000-0000-00000000000a', 'kaspi', 3, 30, '{"auth": 30}');
 set role anon;
-do $$ begin perform ops_digest('wrong-key-wrong-key-wrong-key-wrong-key'); raise notice 'FAIL wrong key accepted'; exception when others then raise notice 'PASS wrong key refused (%)', sqlerrm; end $$;
-select pg_temp.ok('outage: 3 of 5 clients failing → alert; a wrong token is not an outage', (select jsonb_array_length(d->'alerts') = 1 and (d->'alerts'->0->>'failing')::int = 3 and (d->'alerts'->0->>'users')::int = 5 and (d->>'open_tickets')::int = 1 from (select ops_digest('test-job-key-0123456789abcdef0123456789') d) x));
-select pg_temp.ok('no repeat alert 1 minute later', (select jsonb_array_length(ops_digest('test-job-key-0123456789abcdef0123456789')->'alerts') = 0));
+set role service_role; do $$ begin perform ops_digest('wrong-key-wrong-key-wrong-key-wrong-key'); raise notice 'FAIL wrong key accepted'; exception when others then raise notice 'PASS wrong key refused (%)', sqlerrm; end $$; set role anon;
+set role service_role; select pg_temp.ok('outage: 3 of 5 clients failing → alert; a wrong token is not an outage', (select jsonb_array_length(d->'alerts') = 1 and (d->'alerts'->0->>'failing')::int = 3 and (d->'alerts'->0->>'users')::int = 5 and (d->>'open_tickets')::int = 1 from (select ops_digest('test-job-key-0123456789abcdef0123456789') d) x)); set role anon;
+set role service_role; select pg_temp.ok('no repeat alert 1 minute later', (select jsonb_array_length(ops_digest('test-job-key-0123456789abcdef0123456789')->'alerts') = 0)); set role anon;
 reset role;
 update public.api_health set ok = 500, fail = 0, kinds = '{}' where user_id <> 'e0000000-0000-0000-0000-00000000000a';
 set role anon;
-select pg_temp.ok('recovery reported once', (select d->'recovered' = '["kaspi"]'::jsonb from (select ops_digest('test-job-key-0123456789abcdef0123456789') d) x));
-select pg_temp.ok('digest has no client e-mails', (select ops_digest('test-job-key-0123456789abcdef0123456789')::text !~ '@'));
+set role service_role; select pg_temp.ok('recovery reported once', (select d->'recovered' = '["kaspi"]'::jsonb from (select ops_digest('test-job-key-0123456789abcdef0123456789') d) x)); set role anon;
+set role service_role; select pg_temp.ok('digest has no client e-mails', (select ops_digest('test-job-key-0123456789abcdef0123456789')::text !~ '@')); set role anon;
 do $$ begin perform 1 from public.ops_settings; raise notice 'FAIL ops settings readable'; exception when others then raise notice 'PASS ops settings not readable (%)', sqlerrm; end $$;
 reset role; set role authenticated;
 select pg_temp.as_user('e0000000-0000-0000-0000-00000000000b');

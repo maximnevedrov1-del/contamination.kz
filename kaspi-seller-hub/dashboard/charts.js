@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — lightweight SVG charts (no dependencies).
+ * SaudaPulse — lightweight SVG charts (no dependencies).
  *
  * Design rules: one y-axis per chart (two measures → two charts), 2px lines,
  * recessive grid, rounded bar ends anchored at the baseline, hover tooltip on

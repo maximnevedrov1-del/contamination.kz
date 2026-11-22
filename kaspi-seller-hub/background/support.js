@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — support inside the extension (service worker).
+ * SaudaPulse — support inside the extension (service worker).
  *
  *  - ui:serviceStatus  — the owner's notice for everyone («Kaspi не отвечает, чиним»), cached 5 min;
  *  - ui:ticketSend     — a question from «Помощь», with the technical report attached

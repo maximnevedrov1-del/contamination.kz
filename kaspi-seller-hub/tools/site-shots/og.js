@@ -8,20 +8,19 @@ const data = (f, type) => `data:${type};base64,${require('fs').readFileSync(path
   const p = await b.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
   await p.setContent(`<!doctype html><html><head><style>
     body{margin:0;width:1200px;height:630px;overflow:hidden;font-family:Inter,sans-serif;background:#fafafa;color:#0a0a0a;position:relative}
-    .glow{position:absolute;inset:-30% -20% auto 35%;height:140%;background:radial-gradient(closest-side,rgba(42,120,214,.18),transparent)}
-    .t{position:absolute;left:64px;top:92px;width:470px}
-    .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:26px}
-    .logo img{width:40px;height:40px;border-radius:9px}
-    h1{margin:44px 0 0;font-size:58px;line-height:1.05;letter-spacing:-.03em}
-    p{margin:24px 0 0;font-size:24px;line-height:1.4;color:#52525b}
-    .f{position:absolute;left:600px;top:110px;width:760px;border-radius:18px;overflow:hidden;border:1px solid #e4e4e7;background:#fff;box-shadow:0 30px 70px rgba(0,0,0,.16);transform:perspective(1400px) rotateY(-10deg) rotateX(4deg)}
-    .bar{height:30px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;display:flex;gap:6px;align-items:center;padding:0 12px}.bar i{width:9px;height:9px;border-radius:50%;background:#e4e4e7}
-    .f img{display:block;width:100%}
+    .glow{position:absolute;inset:-40% -25% auto 45%;height:140%;background:radial-gradient(closest-side,rgba(42,120,214,.18),transparent)}
+    .t{position:absolute;left:84px;top:70px;width:1000px}
+    .logo{display:flex;align-items:center;gap:18px;font-weight:700;font-size:44px;letter-spacing:-.02em}
+    .logo img{width:72px;height:72px;border-radius:16px}
+    h1{margin:40px 0 0;font-size:76px;line-height:1.04;letter-spacing:-.035em}
+    p{margin:28px 0 0;font-size:28px;line-height:1.4;color:#52525b;width:900px}
+    .chips{position:absolute;left:84px;bottom:56px;display:flex;gap:12px}
+    .chips span{padding:10px 20px;border-radius:999px;background:#fff;border:1px solid #e4e4e7;font-size:22px;color:#27272a}
   </style></head><body><div class="glow"></div>
-    <div class="t"><div class="logo"><img src="${data('icon-128.png', 'image/png')}">Seller Hub</div>
+    <div class="t"><div class="logo"><img src="${data('icon-128.png', 'image/png')}">SaudaPulse</div>
     <h1>Все магазины Kaspi — в одном окне</h1>
     <p>Заказы, сроки, сборка, накладные и прибыль 2–5 магазинов. 30 дней бесплатно.</p></div>
-    <div class="f"><div class="bar"><i></i><i></i><i></i></div><img src="${data('home.webp', 'image/webp')}"></div>
+    <div class="chips"><span>Заказы</span><span>Сроки</span><span>Сборка</span><span>Накладные</span><span>Прибыль</span></div>
   </body></html>`, { waitUntil: 'load' });
   await p.screenshot({ path: path.join(A, 'og.png') });
   await b.close();

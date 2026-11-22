@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — how waybill pages are laid out on the seller's paper.
+ * SaudaPulse — how waybill pages are laid out on the seller's paper.
  *
  * Sellers print on different printers, so the mode is chosen once per computer in
  * «Настройки → Печать накладных» (stored in this browser only):

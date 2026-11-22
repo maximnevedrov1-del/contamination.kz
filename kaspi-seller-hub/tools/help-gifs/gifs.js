@@ -125,7 +125,7 @@ const VP = { width: 1120, height: 700 };
   await save.scrollIntoViewIfNeeded(); await sleep(300);
   await frame('2. Найдите блок «Резервная копия»', { ms: 2000 });
   const dl = d.waitForEvent('download').catch(() => null);
-  await click(save, '3. Нажмите «Сохранить копию в файл»');
+  await click(save, '3. Нажмите «Экспорт данных (JSON)»');
   await dl; await sleep(600);
   await frame('Файл с себестоимостью, каталогом и настройками сохранён', { ms: 3000 });
   end();

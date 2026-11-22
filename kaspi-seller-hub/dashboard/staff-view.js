@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — staff: sign-in screen of a «Компьютер склада», the packer panel
+ * SaudaPulse — staff: sign-in screen of a «Компьютер склада», the packer panel
  * («сканируй и проверяй», the model of ShipStation Scan-to-Verify / pack stations), and the
  * owner's cards «Сотрудники» and «Компьютер склада».
  *

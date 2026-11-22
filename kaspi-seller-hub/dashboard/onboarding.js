@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — «Первые шаги» on Home.
+ * SaudaPulse — «Первые шаги» on Home.
  *
  * Most sellers who leave never got to the useful part: no store connected, the first waybill
  * printed crooked, no cost prices (so no profit), no backup. The card shows five steps with

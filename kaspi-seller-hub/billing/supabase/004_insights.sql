@@ -1,4 +1,4 @@
--- Kaspi Seller Hub — the owner's control panel («Пульт»): where sellers get stuck, what they use,
+-- SaudaPulse — the owner's control panel («Пульт»): where sellers get stuck, what they use,
 -- who stays, how satisfied they are (NPS), why they leave. Run after 001–003. Safe to re-run.
 --
 -- What the extension sends (only signed-in sellers, every 15 minutes, as additions):

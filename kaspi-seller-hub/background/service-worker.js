@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — background service worker (MV3, ES module).
+ * SaudaPulse — background service worker (MV3, ES module).
  *
  *  - Tab registry: which open Kaspi tab belongs to which store (chrome.storage.session,
  *    because the worker itself can be stopped at any time).
@@ -160,7 +160,8 @@ const storeKeyCache = new Map();
 async function storeKeys(stores) {
   const out = [];
   for (const st of stores) {
-    const id = String(st.id ?? '');
+    // normalised so the same shop always gives the same key
+    const id = String(st.id ?? '').trim().toLowerCase();
     if (!id) continue;
     if (!storeKeyCache.has(id)) {
       const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`ksh:${id}`));
@@ -211,7 +212,7 @@ async function notifyPayment(lic) {
   const key = `${inv.id}:${inv.amount}:${new Date().toDateString()}`;
   const { 'ksh.payNotified': last } = await chrome.storage.local.get('ksh.payNotified');
   if (last === key) return;
-  await chrome.storage.local.set({ 'ksh.payNotified': key });
+  try { await chrome.storage.local.set({ 'ksh.payNotified': key }); } catch (e) { console.warn('[ksh.sw] storage write failed', e?.message || e); }
   await initI18n();
   const amount = formatMoney(inv.amount);
   const msgKey = !lic.canUse ? 'notifications.payExpired' : inv.kind === 'addon' ? 'notifications.payAddon' : 'notifications.payRenewal';
@@ -546,7 +547,7 @@ async function notifyDeadlines() {
     }
   }
   if (!fresh.length) return;
-  await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen });
+  try { await chrome.storage.session.set({ [KEYS.deadlineNotified]: seen }); } catch (e) { console.warn('[ksh.sw] storage write failed', e?.message || e); }
   // Telegram (if linked): one message per order, even when Chrome notifications are off
   alertDeadlines(fresh).catch((e) => console.warn(LOG, 'telegram alert', e));
   if (!settings.notifications.deadlines) return;
@@ -1097,14 +1098,21 @@ async function openChatTabs() {
 /* Misc                                                                   */
 /* ===================================================================== */
 
-async function openDashboard(route = 'orders') {
-  // chrome-extension:// URLs are not valid match patterns, so filter manually.
-  const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
-  const url = `${DASHBOARD_URL}#${route}`;
-  if (tab) {
-    await chrome.tabs.update(tab.id, { active: true, url });
-    await chrome.windows.update(tab.windowId, { focused: true });
-  } else await chrome.tabs.create({ url });
+let dashboardOpening = null; // in-flight guard: a burst of calls (onInstalled + message) opens one tab
+/** Focus the existing dashboard tab (and its window) or create one. `query` is e.g. 'welcome=1'. */
+function openDashboard(route = 'orders', query = '', { keepPage = false } = {}) {
+  if (dashboardOpening) return dashboardOpening;
+  dashboardOpening = (async () => {
+    // chrome-extension:// URLs are not valid match patterns, so filter manually.
+    const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
+    const url = `${DASHBOARD_URL}${query ? `?${query}` : ''}#${route || 'home'}`;
+    if (tab) {
+      // no route (or keepPage, e.g. on install) = just focus, keep the page the user is on
+      await chrome.tabs.update(tab.id, route && !keepPage ? { active: true, url } : { active: true });
+      await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    } else await chrome.tabs.create({ url });
+  })().finally(() => { dashboardOpening = null; });
+  return dashboardOpening;
 }
 
 async function openStore({ shopId }) {
@@ -1391,7 +1399,7 @@ async function licenseGate(type, payload) {
   const shops = [...(payload?.items || []).map((i) => i.shopId), payload?.shopId, ...(payload?.shopIds || [])].filter(Boolean);
   if (shops.length && type !== 'ui:connectApi') {
     const allowed = new Set(allowedStoreIds(await getSettings(), lic));
-    if (shops.some((id) => !allowed.has(id))) return { ok: false, error: 'storeOverLimit' };
+    if (shops.some((id) => !allowed.has(id))) return { ok: false, error: lic.sharedStores ? 'storeShared' : 'storeOverLimit' };
   }
   return null;
 }
@@ -1429,7 +1437,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => unregisterTab(tabId));
-/** Chrome match pattern → RegExp ("https://*.kaspi.kz/*" also matches kaspi.kz itself). */
+/** Chrome match pattern → RegExp (a leading "*." also matches the bare domain; current patterns are exact hosts). */
 const patternToRegExp = (p) => {
   const [, scheme, host, path] = p.match(/^(\w+):\/\/([^/]*)(\/.*)$/); // host is empty for file:///
   const esc = (x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
@@ -1483,7 +1491,31 @@ async function ensureAlarms() {
 }
 ensureAlarms().catch(() => {});
 
-chrome.runtime.onInstalled.addListener(() => {
+/* The landing (saudapulse.kz) may ask an installed extension to open its dashboard. Nothing else is
+   accepted and nothing is returned except {ok} / the version. */
+function isSaudaPulseOrigin(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && (u.hostname === 'saudapulse.kz' || u.hostname.endsWith('.saudapulse.kz'));
+  } catch { return false; }
+}
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (!isSaudaPulseOrigin(sender?.origin || sender?.url)) { sendResponse({ ok: false }); return false; }
+  if (msg?.type === 'PING') { sendResponse({ ok: true, version: chrome.runtime.getManifest().version }); return false; }
+  if (msg?.type === 'OPEN_DASHBOARD') {
+    openDashboard('').then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true; // async response
+  }
+  sendResponse({ ok: false });
+  return false;
+});
+
+/* Toolbar click: no default_popup is set in the manifest, so the click opens the dashboard.
+   Focuses the existing dashboard tab instead of opening a duplicate. */
+chrome.action?.onClicked?.addListener(() => { openDashboard('').catch(() => {}); });
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details?.reason === 'install') openDashboard('home', 'welcome=1', { keepPage: true }).catch(() => {});
   // Order contents now live only in the snapshots: drop the old duplicate cache (one-off, idempotent).
   chrome.storage.local.remove('ksh.apiEntries').catch(() => {});
   scheduleAlarms();

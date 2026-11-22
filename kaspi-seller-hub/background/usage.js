@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — usage counts for the owner's control panel (service worker).
+ * SaudaPulse — usage counts for the owner's control panel (service worker).
  *
  * Counted per day (Kazakhstan time), numbers only:
  *   sections — how many times each dashboard section was opened;
@@ -41,7 +41,7 @@ function bump(kind, name) {
     // keep at most a week of unsent days (offline, logged out)
     const keys = Object.keys(u.days).sort();
     for (const k of keys.slice(0, Math.max(0, keys.length - 7))) delete u.days[k];
-    await chrome.storage.local.set({ [KEY]: u });
+    try { await chrome.storage.local.set({ [KEY]: u }); } catch (e) { console.warn('[ksh.usage] storage write failed', e?.message || e); }
   }).catch(() => {});
 }
 
@@ -80,7 +80,7 @@ export async function flushUsage() {
         }
       if (!Object.keys(d.sections).length && !Object.keys(d.actions).length) delete now.days[sent.day];
     }
-    await chrome.storage.local.set({ [KEY]: now });
+    try { await chrome.storage.local.set({ [KEY]: now }); } catch (e) { console.warn('[ksh.usage] storage write failed', e?.message || e); }
   });
   return true;
 }

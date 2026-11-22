@@ -54,7 +54,7 @@ Compared with the requested tree, four things were added:
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Click **Load unpacked** and select the `kaspi-seller-hub/` folder.
 3. Open the Kaspi seller cabinet in a separate tab for each store and log in. If tabs were already open before you installed the extension, they're picked up on the first **Refresh**: scripts are injected on demand.
-4. Click the toolbar icon to open the popup, then **Open dashboard**.
+4. Click the toolbar icon: it opens the dashboard.
 
 Minimum Chrome version is 116 (MV3 module service worker, `world: "MAIN"` content scripts).
 
@@ -168,7 +168,7 @@ Stores connect by API token only. Once the selectors are verified on a real cabi
 
 1. Load the extension unpacked (see above).
 2. **Easiest:** open `demo/mc/store-a.html`, `store-b.html`, `store-c.html` by double-click (in Chrome).
-   If the dashboard finds no stores, open `chrome://extensions` → Kaspi Seller Hub → **Details** and turn on **Allow access to file URLs**. Then continue with step 4.
+   If the dashboard finds no stores, open `chrome://extensions` → SaudaPulse → **Details** and turn on **Allow access to file URLs**. Then continue with step 4.
    **Alternative** — serve the demo folder:
 
 ```bash
@@ -309,7 +309,7 @@ Some Chromium builds advertise `kk-KZ` but ship no data for it, which produces "
 
 | Permission | Why |
 |---|---|
-| `tabs`, `scripting`, `activeTab` | find Kaspi tabs, inject the content script into tabs opened before install, focus or navigate a store tab after a click |
+| `tabs`, `scripting` | find Kaspi tabs, inject the content script into tabs opened before install, focus or navigate a store tab after a click (`activeTab` is not requested) |
 | `storage`, `unlimitedStorage` | cached snapshots, chat, settings, captured PDF invoices |
 | `notifications` | new orders / returns / messages |
 | `alarms` | chat polling and background refresh. The worker sleeps, so `setInterval` isn't reliable. Chrome's minimum period is **30 s**, so the setting is clamped to ≥ 30 s. |

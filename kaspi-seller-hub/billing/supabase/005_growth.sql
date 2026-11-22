@@ -1,4 +1,4 @@
--- Kaspi Seller Hub — growth and retention (run after 001–004; safe to re-run).
+-- SaudaPulse — growth and retention (run after 001–004; safe to re-run).
 --
 --  * «Старт» → «Мульти»: 24-hour trial boost (3 stores, once), upgrade quote (proration).
 --  * Cancellation flow: reason → an offer (30 % for 2 months / «Старт» / 30-day freeze / feedback),

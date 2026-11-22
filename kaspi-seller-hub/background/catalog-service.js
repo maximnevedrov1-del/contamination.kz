@@ -1,5 +1,5 @@
 /**
- * Kaspi Seller Hub — product upload ("Выгрузка товаров"), service-worker side.
+ * SaudaPulse — product upload ("Выгрузка товаров"), service-worker side.
  *
  *  - Catalog: the seller's whole assortment, with price/stock per store (shared/catalog.js).
  *  - Card upload: new product cards go to Kaspi through the official Content API, with
@@ -12,7 +12,7 @@
  */
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
-import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos } from '../shared/storage.js';
+import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos, getSnapshots, setSnapshots } from '../shared/storage.js';
 import { isAllowedPhoto, photosDataSize, MAX_PHOTOS_DATA } from '../shared/photos.js';
 import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
@@ -378,7 +378,7 @@ export function catalogHandlers({ allowedShopIds }) {
     },
 
     'ui:backupExport': async () => {
-      const [settings, costs, catalog, feeds, photos] = await Promise.all([getSettings(), getCosts(), getCatalog(), getFeeds(), getPhotos()]);
+      const [settings, costs, catalog, feeds, photos, snaps] = await Promise.all([getSettings(), getCosts(), getCatalog(), getFeeds(), getPhotos(), getSnapshots()]);
       return {
         ok: true,
         backup: {
@@ -390,6 +390,8 @@ export function catalogHandlers({ allowedShopIds }) {
           costs,
           photos,
           catalog,
+          // orders: per-store snapshots, only for stores listed above (no tokens / session / licence here)
+          snapshots: Object.fromEntries(storesOf(settings).filter((st) => snaps[st.id]).map((st) => [st.id, snaps[st.id]])),
           feeds: Object.fromEntries(Object.entries(feeds).map(([id, f]) => [id, { merchantId: f.merchantId || '', company: f.company || '', warehouses: f.warehouses || [] }])),
         },
       };
@@ -436,6 +438,18 @@ export function catalogHandlers({ allowedShopIds }) {
           products++;
         }
         await setCatalog(catalog);
+        // orders: only for stores present in the file and here; a store that already has a snapshot keeps it
+        if (b.snapshots && typeof b.snapshots === 'object') {
+          const snaps = await getSnapshots();
+          let added = false;
+          for (const [oldId, sn] of Object.entries(b.snapshots)) {
+            const id = idMap[oldId];
+            if (!id || snaps[id] || !sn || typeof sn !== 'object' || Array.isArray(sn) || !sn.sections || typeof sn.sections !== 'object') continue;
+            snaps[id] = sn;
+            added = true;
+          }
+          if (added) await setSnapshots(snaps);
+        }
         const feeds = await getFeeds();
         for (const [oldId, f] of Object.entries(b.feeds || {})) {
           const id = idMap[oldId];

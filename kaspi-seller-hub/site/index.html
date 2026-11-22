@@ -3,15 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seller Hub — все магазины Kaspi в одном окне</title>
+  <title>SaudaPulse — все магазины Kaspi в одном окне</title>
   <meta name="description" content="Расширение для продавцов Kaspi.kz с 2–5 магазинами: заказы, горящие сроки, сборка с фото, накладные на любой принтер и прибыль — на одном экране. 30 дней бесплатно.">
   <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://{{domain}}/" data-requires="domain">
+  <link rel="alternate" hreflang="ru" href="https://{{domain}}/" data-requires="domain">
+  <link rel="alternate" hreflang="kk" href="https://{{domain}}/kk/" data-requires="domain">
+  <link rel="alternate" hreflang="x-default" href="https://{{domain}}/" data-requires="domain">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_KZ">
-  <meta property="og:site_name" content="Seller Hub">
-  <meta property="og:title" content="Seller Hub — все магазины Kaspi в одном окне">
+  <meta property="og:site_name" content="SaudaPulse">
+  <meta property="og:title" content="SaudaPulse — все магазины Kaspi в одном окне">
   <meta property="og:description" content="Заказы, горящие сроки, сборка, накладные и прибыль 2–5 магазинов Kaspi на одном экране. 30 дней бесплатно.">
   <meta property="og:url" content="https://{{domain}}/" data-requires="domain">
   <meta property="og:image" content="https://{{domain}}/assets/og.png" data-requires="domain">
@@ -23,32 +26,133 @@
   <link rel="preload" as="image" href="assets/home.webp" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Seller Hub",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Windows, macOS, Linux (Chrome, Яндекс Браузер, Edge, Opera)",
-    "inLanguage": ["ru", "kk"],
-    "description": "Расширение для продавцов Kaspi.kz: заказы, сроки, сборка, накладные и прибыль нескольких магазинов в одном окне.",
-    "offers": [
-      { "@type": "Offer", "name": "Старт — 1 магазин", "price": "12000", "priceCurrency": "KZT" },
-      { "@type": "Offer", "name": "Мульти — до 3 магазинов", "price": "20000", "priceCurrency": "KZT" },
-      { "@type": "Offer", "name": "Мульти — 4 магазина", "price": "25000", "priceCurrency": "KZT" }
-    ],
-    "provider": { "@type": "Organization", "name": "ИП «НЕВЕДРОВ»" }
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "SaudaPulse",
+  "url": "https://saudapulse.kz/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Windows, macOS (Google Chrome и совместимые браузеры)",
+  "inLanguage": "ru",
+  "description": "Расширение для продавцов Kaspi.kz: заказы, сроки, сборка, накладные и прибыль нескольких магазинов в одном окне.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Старт — 1 магазин",
+      "description": "Тариф для 1 магазина, 12 000 ₸ в месяц. Бесплатный период 30 дней.",
+      "price": "12000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    },
+    {
+      "@type": "Offer",
+      "name": "Мульти — до 3 магазинов",
+      "description": "Тариф для 3 магазинов, 20 000 ₸ в месяц.",
+      "price": "20000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    },
+    {
+      "@type": "Offer",
+      "name": "Мульти — 4 магазина",
+      "description": "Тариф для 4 магазинов: 20 000 ₸ за 3 магазина плюс 5 000 ₸ за дополнительный, 25 000 ₸ в месяц.",
+      "price": "25000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    }
+  ],
+  "publisher": {
+    "@type": "Organization",
+    "name": "ИП «НЕВЕДРОВ»",
+    "url": "https://saudapulse.kz/",
+    "email": "support@saudapulse.kz"
+  },
+  "provider": {
+    "@type": "Organization",
+    "name": "ИП «НЕВЕДРОВ»",
+    "url": "https://saudapulse.kz/",
+    "email": "support@saudapulse.kz"
   }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Безопасно ли давать токен API?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Токен хранится только в браузере на вашем компьютере и используется для запросов напрямую к Kaspi. На наш сервер он не отправляется. Токен можно в любой момент перевыпустить в кабинете Kaspi — старый сразу перестанет работать."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Нужно держать кабинет Kaspi открытым?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Нет. Заказы приходят по токену API напрямую от Kaspi, даже когда кабинет закрыт. Чтобы приходили уведомления о новых и горящих заказах, браузер с расширением должен быть запущен."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "В каких браузерах работает?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Google Chrome, Яндекс Браузер, Microsoft Edge, Opera и Brave на компьютере с Windows или macOS. На телефонах расширения пока не работают."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Подойдёт мой принтер?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Да. В настройках выберите свой: термопринтер (100×150, 100×100, 75×120, 58×100 или свой размер) или обычный A4 — по одной или по четыре накладные на лист. «Пробная печать» покажет, всё ли настроено."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Что будет после 30 дней?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Чтобы продолжить, оплатите подписку по Kaspi QR — на месяц или сразу на несколько. Без оплаты обновление заказов остановится, а ваши настройки, себестоимость и товары сохранятся."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Сколько стоит?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Тариф «Старт» — 12 000 ₸ в месяц за 1 магазин, «Мульти» — 20 000 ₸ в месяц до 3 магазинов, каждый дополнительный магазин — +5 000 ₸ в месяц. Можно оплатить сразу до 12 месяцев по Kaspi QR; карта не сохраняется, автосписаний нет."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Есть ли бесплатный период?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Да, 30 дней бесплатно — до 3 магазинов. Пробный период даётся один раз на каждый магазин."
+      }
+    }
+  ]
+}
   </script>
   <script>document.documentElement.classList.add('js')</script>
+  <meta name="sp-extension-id" content="{{extensionId}}" data-requires="extensionId">
 </head>
 <body>
 <a class="skip" href="#main">Перейти к содержимому</a>
 
 <header class="top" id="top">
   <div class="wrap top__in">
-    <a class="logo" href="#top" aria-label="Seller Hub — в начало">
+    <a class="logo" href="#top" aria-label="SaudaPulse — в начало">
       <img src="assets/icon-128.png" alt="" width="28" height="28">
-      <span>Seller Hub</span>
+      <span>SaudaPulse</span>
     </a>
     <nav class="top__nav" aria-label="Разделы">
       <a href="#features">Возможности</a>
@@ -56,7 +160,9 @@
       <a href="#price">Цены</a>
       <a href="#faq">Вопросы</a>
     </nav>
-    <a class="btn btn--primary btn--sm top__cta" href="#support">Скоро в Chrome Web Store</a>
+    <nav class="lang" aria-label="Язык"><a href="/" hreflang="ru" lang="ru" aria-current="true">РУС</a><span aria-hidden="true">|</span><a href="/kk/" hreflang="kk" lang="kk">ҚАЗ</a></nav>
+    <a class="btn btn--primary btn--sm top__cta" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener">Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary btn--sm top__cta" data-sp-open data-unless="storeUrl" href="#support">Подключить магазин Kaspi за 1 минуту</a>
   </div>
 </header>
 
@@ -66,16 +172,17 @@
   <section class="hero">
     <div class="wrap hero__in">
       <div class="hero__text">
-        <p class="eyebrow">Расширение для браузера · для продавцов Kaspi.kz</p>
+        <p class="eyebrow">Для продавцов Kaspi.kz · 2–5 магазинов</p>
         <h1>Все магазины Kaspi — в&nbsp;одном окне</h1>
         <p class="lead">Заказы, горящие сроки, сборка, накладные и прибыль 2–5 магазинов на одном экране. Не нужно переключаться между кабинетами и бояться пропустить заказ.</p>
         <div class="hero__cta">
-          <a class="btn btn--primary" href="#support">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
-            Скоро в Chrome Web Store
-          </a>
-          <a class="btn btn--ghost" href="#features">Как это работает ↓</a>
+          <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--ghost" data-sp-open href="#features">Открыть кабинет</a>
         </div>
+        <p class="hero__note">Работает локально в вашем браузере Chrome — данные не покидают ваш компьютер</p>
         <ul class="trust" aria-label="Коротко о главном">
           <li>Официальный API Kaspi</li>
           <li>Токены остаются на вашем компьютере</li>
@@ -85,7 +192,7 @@
       <div class="hero__shot">
         <figure class="frame tilt" data-tilt>
           <div class="frame__bar" aria-hidden="true"><i></i><i></i><i></i></div>
-          <img src="assets/home.webp" width="1600" height="1000" alt="Главная Seller Hub: что сделать сейчас — 9 горящих и 9 новых заказов, выручка за сегодня, неделю и месяц, три магазина" fetchpriority="high">
+          <img src="assets/home.webp" width="1600" height="1000" alt="Главная SaudaPulse: что сделать сейчас — 9 горящих и 9 новых заказов, выручка за сегодня, неделю и месяц, три магазина" fetchpriority="high">
         </figure>
       </div>
     </div>
@@ -96,20 +203,20 @@
     <div class="wrap merge__in">
       <div class="merge__text reveal">
         <h2 id="merge-title">Пять кабинетов → одно окно</h2>
-        <p>Каждый магазин Kaspi — отдельный кабинет и отдельный вход. Seller Hub собирает заказы всех магазинов в одну таблицу: цвет точки показывает, из какого магазина заказ.</p>
+        <p>Каждый магазин Kaspi — отдельный кабинет и отдельный вход. SaudaPulse собирает заказы всех магазинов в одну таблицу: цвет точки показывает, из какого магазина заказ.</p>
       </div>
       <div class="merge__stage" data-merge aria-hidden="true">
-        <div class="merge__store" style="--c:#2a78d6;--i:0"><b></b>Автозапчасти<span>12 заказов</span></div>
-        <div class="merge__store" style="--c:#e8643c;--i:1"><b></b>Шины Астана<span>7 заказов</span></div>
-        <div class="merge__store" style="--c:#1f9d6b;--i:2"><b></b>Масла и фильтры<span>9 заказов</span></div>
-        <div class="merge__store" style="--c:#7c5cd6;--i:3"><b></b>Аксессуары<span>4 заказа</span></div>
+        <div class="merge__store" style="--c:#38BDF8;--i:0"><b></b>Автозапчасти<span>12 заказов</span></div>
+        <div class="merge__store" style="--c:#F43F5E;--i:1"><b></b>Шины Астана<span>7 заказов</span></div>
+        <div class="merge__store" style="--c:#10B981;--i:2"><b></b>Масла и фильтры<span>9 заказов</span></div>
+        <div class="merge__store" style="--c:#3B82F6;--i:3"><b></b>Аксессуары<span>4 заказа</span></div>
         <div class="merge__store" style="--c:#d99a1b;--i:4"><b></b>Электрика<span>6 заказов</span></div>
         <div class="merge__table">
           <div class="merge__head"><span>Заказ</span><span>Магазин</span><span>Срок</span></div>
-          <div class="merge__row" style="--c:#2a78d6"><span>803102001</span><span><b></b>Автозапчасти</span><em class="hot">через 1 ч</em></div>
-          <div class="merge__row" style="--c:#e8643c"><span>806202002</span><span><b></b>Шины Астана</span><em class="late">просрочен</em></div>
-          <div class="merge__row" style="--c:#1f9d6b"><span>809302003</span><span><b></b>Масла и фильтры</span><em class="hot">через 30 мин</em></div>
-          <div class="merge__row" style="--c:#7c5cd6"><span>812402004</span><span><b></b>Аксессуары</span><em>—</em></div>
+          <div class="merge__row" style="--c:#38BDF8"><span>803102001</span><span><b></b>Автозапчасти</span><em class="hot">через 1 ч</em></div>
+          <div class="merge__row" style="--c:#F43F5E"><span>806202002</span><span><b></b>Шины Астана</span><em class="late">просрочен</em></div>
+          <div class="merge__row" style="--c:#10B981"><span>809302003</span><span><b></b>Масла и фильтры</span><em class="hot">через 30 мин</em></div>
+          <div class="merge__row" style="--c:#3B82F6"><span>812402004</span><span><b></b>Аксессуары</span><em>—</em></div>
           <div class="merge__row" style="--c:#d99a1b"><span>815502005</span><span><b></b>Электрика</span><em>—</em></div>
         </div>
       </div>
@@ -119,7 +226,7 @@
   <!-- 3. Features: scroll story -->
   <section class="story" id="features" aria-labelledby="features-title">
     <div class="wrap">
-      <h2 id="features-title" class="section-title reveal">Что умеет Seller Hub</h2>
+      <h2 id="features-title" class="section-title reveal">Что умеет SaudaPulse</h2>
       <div class="story__grid">
         <ol class="story__steps">
           <li class="story__step" data-step="orders">
@@ -205,7 +312,7 @@
        To show: remove the «hidden» attribute and fill in name, store, quote, photo. -->
   <section class="reviews" id="reviews" hidden aria-labelledby="reviews-title">
     <div class="wrap">
-      <h2 id="reviews-title" class="section-title">Продавцы о Seller Hub</h2>
+      <h2 id="reviews-title" class="section-title">Продавцы о SaudaPulse</h2>
       <div class="reviews__grid">
         <blockquote class="review"><p>[Отзыв продавца]</p><footer>[Имя], [магазин на Kaspi]</footer></blockquote>
       </div>
@@ -256,6 +363,14 @@
           <summary>Что будет после 30 дней?</summary>
           <p>Чтобы продолжить, оплатите подписку по Kaspi QR — на месяц или сразу на несколько. Без оплаты обновление заказов остановится, а ваши настройки, себестоимость и товары сохранятся.</p>
         </details>
+        <details>
+          <summary>Сколько стоит?</summary>
+          <p>Тариф «Старт» — 12 000 ₸ в месяц за 1 магазин, «Мульти» — 20 000 ₸ в месяц до 3 магазинов, каждый дополнительный магазин — +5 000 ₸ в месяц. Можно оплатить сразу до 12 месяцев по Kaspi QR; карта не сохраняется, автосписаний нет.</p>
+        </details>
+        <details>
+          <summary>Есть ли бесплатный период?</summary>
+          <p>Да, 30 дней бесплатно — до 3 магазинов. Пробный период даётся один раз на каждый магазин.</p>
+        </details>
       </div>
     </div>
   </section>
@@ -279,20 +394,21 @@
 <footer class="foot">
   <div class="wrap foot__in">
     <div>
-      <a class="logo" href="#top"><img src="assets/icon-128.png" alt="" width="24" height="24"><span>Seller Hub</span></a>
+      <a class="logo" href="#top"><img src="assets/icon-128.png" alt="" width="24" height="24"><span>SaudaPulse</span></a>
       <p class="foot__small">ИП «НЕВЕДРОВ», ИИН 900327302429<br>Республика Казахстан, Алматинская область, Енбекшиказахский район, с. Космос, ул. Шанырак, д. 15, кв./офис 1</p>
     </div>
     <nav class="foot__links" aria-label="Документы">
-      <a href="legal/terms.html#offer">Публичная оферта</a>
-      <a href="legal/terms.html#privacy">Политика конфиденциальности</a>
+      <a href="/offer">Публичная оферта</a>
+      <a href="/privacy">Политика конфиденциальности</a>
       <a data-requires="email" href="mailto:{{email}}">{{email}}</a>
     </nav>
   </div>
-  <p class="wrap foot__note">Kaspi и Kaspi.kz — товарные знаки их правообладателя. Seller Hub — независимый сервис и не связан с Kaspi.</p>
+  <p class="wrap foot__note">Kaspi и Kaspi.kz — товарные знаки их правообладателя. SaudaPulse — независимый сервис и не связан с Kaspi.</p>
 </footer>
 
 <div class="mcta" aria-hidden="true">
-  <a class="btn btn--primary" href="#support" tabindex="-1">Скоро в Chrome Web Store</a>
+  <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener" tabindex="-1">Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support" tabindex="-1">Подключить магазин Kaspi за 1 минуту</a>
   <a class="btn" href="#price" tabindex="-1">Цены</a>
 </div>
 
