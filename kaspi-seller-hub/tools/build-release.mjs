@@ -34,7 +34,7 @@ if (!['chrome', 'firefox'].includes(TARGET)) {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'dist');
 const PKG = path.join(OUT_DIR, TARGET === 'chrome' ? 'kaspi-seller-hub' : `kaspi-seller-hub-${TARGET}`);
-const SHIP = ['manifest.json', 'background', 'content', 'dashboard', 'popup', 'shared', 'locales', 'icons', 'vendor', 'legal', 'help'];
+const SHIP = ['manifest.json', 'background', 'content', 'dashboard', 'popup', 'shared', 'locales', 'icons', 'fonts', 'vendor', 'legal', 'help'];
 
 const errors = [];
 const fail = (msg) => errors.push(msg);
