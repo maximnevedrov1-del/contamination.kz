@@ -89,7 +89,7 @@ for (const name of ['offer', 'privacy']) {
 }
 
 // robots.txt and sitemap.xml (the sitemap needs the domain)
-fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n${v.domain ? `Sitemap: https://${v.domain}/sitemap.xml\n` : ''}`);
+fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n\n${['GPTBot', 'OAI-SearchBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'].map((b) => `User-agent: ${b}\nAllow: /\n`).join('\n')}${v.domain ? `\nSitemap: https://${v.domain}/sitemap.xml\n# LLM summary: https://${v.domain}/llms.txt\n` : ''}`);
 if (v.domain) {
   const today = new Date().toISOString().slice(0, 10);
   fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://${v.domain}/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/offer</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/privacy</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/legal/terms.html</loc><lastmod>${today}</lastmod></url>\n</urlset>\n`);

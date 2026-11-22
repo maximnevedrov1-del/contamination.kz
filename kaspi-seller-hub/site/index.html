@@ -23,21 +23,121 @@
   <link rel="preload" as="image" href="assets/home.webp" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "SaudaPulse",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Windows, macOS, Linux (Chrome, Яндекс Браузер, Edge, Opera)",
-    "inLanguage": ["ru", "kk"],
-    "description": "Расширение для продавцов Kaspi.kz: заказы, сроки, сборка, накладные и прибыль нескольких магазинов в одном окне.",
-    "offers": [
-      { "@type": "Offer", "name": "Старт — 1 магазин", "price": "12000", "priceCurrency": "KZT" },
-      { "@type": "Offer", "name": "Мульти — до 3 магазинов", "price": "20000", "priceCurrency": "KZT" },
-      { "@type": "Offer", "name": "Мульти — 4 магазина", "price": "25000", "priceCurrency": "KZT" }
-    ],
-    "provider": { "@type": "Organization", "name": "ИП «НЕВЕДРОВ»" }
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "SaudaPulse",
+  "url": "https://saudapulse.kz/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Windows, macOS (Google Chrome и совместимые браузеры)",
+  "inLanguage": "ru",
+  "description": "Расширение для продавцов Kaspi.kz: заказы, сроки, сборка, накладные и прибыль нескольких магазинов в одном окне.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Старт — 1 магазин",
+      "description": "Тариф для 1 магазина, 12 000 ₸ в месяц. Бесплатный период 30 дней.",
+      "price": "12000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    },
+    {
+      "@type": "Offer",
+      "name": "Мульти — до 3 магазинов",
+      "description": "Тариф для 3 магазинов, 20 000 ₸ в месяц.",
+      "price": "20000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    },
+    {
+      "@type": "Offer",
+      "name": "Мульти — 4 магазина",
+      "description": "Тариф для 4 магазинов: 20 000 ₸ за 3 магазина плюс 5 000 ₸ за дополнительный, 25 000 ₸ в месяц.",
+      "price": "25000",
+      "priceCurrency": "KZT",
+      "availability": "https://schema.org/InStock",
+      "url": "https://saudapulse.kz/"
+    }
+  ],
+  "publisher": {
+    "@type": "Organization",
+    "name": "ИП «НЕВЕДРОВ»",
+    "url": "https://saudapulse.kz/",
+    "email": "support@saudapulse.kz"
+  },
+  "provider": {
+    "@type": "Organization",
+    "name": "ИП «НЕВЕДРОВ»",
+    "url": "https://saudapulse.kz/",
+    "email": "support@saudapulse.kz"
   }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Безопасно ли давать токен API?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Токен хранится только в браузере на вашем компьютере и используется для запросов напрямую к Kaspi. На наш сервер он не отправляется. Токен можно в любой момент перевыпустить в кабинете Kaspi — старый сразу перестанет работать."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Нужно держать кабинет Kaspi открытым?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Нет. Заказы приходят по токену API напрямую от Kaspi, даже когда кабинет закрыт. Чтобы приходили уведомления о новых и горящих заказах, браузер с расширением должен быть запущен."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "В каких браузерах работает?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Google Chrome, Яндекс Браузер, Microsoft Edge, Opera и Brave на компьютере с Windows или macOS. На телефонах расширения пока не работают."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Подойдёт мой принтер?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Да. В настройках выберите свой: термопринтер (100×150, 100×100, 75×120, 58×100 или свой размер) или обычный A4 — по одной или по четыре накладные на лист. «Пробная печать» покажет, всё ли настроено."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Что будет после 30 дней?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Чтобы продолжить, оплатите подписку по Kaspi QR — на месяц или сразу на несколько. Без оплаты обновление заказов остановится, а ваши настройки, себестоимость и товары сохранятся."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Сколько стоит?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Тариф «Старт» — 12 000 ₸ в месяц за 1 магазин, «Мульти» — 20 000 ₸ в месяц до 3 магазинов, каждый дополнительный магазин — +5 000 ₸ в месяц. Можно оплатить сразу до 12 месяцев по Kaspi QR; карта не сохраняется, автосписаний нет."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Есть ли бесплатный период?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Да, 30 дней бесплатно — до 3 магазинов. Пробный период даётся один раз на каждый магазин."
+      }
+    }
+  ]
+}
   </script>
   <script>document.documentElement.classList.add('js')</script>
 </head>
@@ -255,6 +355,14 @@
         <details>
           <summary>Что будет после 30 дней?</summary>
           <p>Чтобы продолжить, оплатите подписку по Kaspi QR — на месяц или сразу на несколько. Без оплаты обновление заказов остановится, а ваши настройки, себестоимость и товары сохранятся.</p>
+        </details>
+        <details>
+          <summary>Сколько стоит?</summary>
+          <p>Тариф «Старт» — 12 000 ₸ в месяц за 1 магазин, «Мульти» — 20 000 ₸ в месяц до 3 магазинов, каждый дополнительный магазин — +5 000 ₸ в месяц. Можно оплатить сразу до 12 месяцев по Kaspi QR; карта не сохраняется, автосписаний нет.</p>
+        </details>
+        <details>
+          <summary>Есть ли бесплатный период?</summary>
+          <p>Да, 30 дней бесплатно — до 3 магазинов. Пробный период даётся один раз на каждый магазин.</p>
         </details>
       </div>
     </div>
