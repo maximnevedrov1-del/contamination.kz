@@ -7,8 +7,8 @@ insert into auth.users (id, email) values ('11111111-1111-1111-1111-111111111111
   ('22222222-2222-2222-2222-222222222222', 'other@example.kz'), ('99999999-9999-9999-9999-999999999999', 'owner@example.kz');
 insert into public.admins values ('99999999-9999-9999-9999-999999999999');
 
-select pg_temp.ok('trigger creates account with 30-day trial',
-  (select trial_ends_at between now() + interval '29 days 23 hours' and now() + interval '30 days 1 hour' from accounts where email = 'seller@example.kz'));
+select pg_temp.ok('trigger creates account with 14-day trial',
+  (select trial_ends_at between now() + interval '13 days 23 hours' and now() + interval '14 days 1 hour' from accounts where email = 'seller@example.kz'));
 
 -- ===== as the seller =====
 set role authenticated; set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
