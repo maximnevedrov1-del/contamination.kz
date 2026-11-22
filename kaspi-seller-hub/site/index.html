@@ -143,6 +143,7 @@
 }
   </script>
   <script>document.documentElement.classList.add('js')</script>
+  <meta name="sp-extension-id" content="{{extensionId}}" data-requires="extensionId">
 </head>
 <body>
 <a class="skip" href="#main">Перейти к содержимому</a>
@@ -160,7 +161,8 @@
       <a href="#faq">Вопросы</a>
     </nav>
     <nav class="lang" aria-label="Язык"><a href="/" hreflang="ru" lang="ru" aria-current="true">РУС</a><span aria-hidden="true">|</span><a href="/kk/" hreflang="kk" lang="kk">ҚАЗ</a></nav>
-    <a class="btn btn--primary btn--sm top__cta" href="#support">Скоро в Chrome Web Store</a>
+    <a class="btn btn--primary btn--sm top__cta" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener">Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary btn--sm top__cta" data-sp-open data-unless="storeUrl" href="#support">Подключить магазин Kaspi за 1 минуту</a>
   </div>
 </header>
 
@@ -170,16 +172,17 @@
   <section class="hero">
     <div class="wrap hero__in">
       <div class="hero__text">
-        <p class="eyebrow">Расширение для браузера · для продавцов Kaspi.kz</p>
+        <p class="eyebrow">Для продавцов Kaspi.kz · 2–5 магазинов</p>
         <h1>Все магазины Kaspi — в&nbsp;одном окне</h1>
         <p class="lead">Заказы, горящие сроки, сборка, накладные и прибыль 2–5 магазинов на одном экране. Не нужно переключаться между кабинетами и бояться пропустить заказ.</p>
         <div class="hero__cta">
-          <a class="btn btn--primary" href="#support">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
-            Скоро в Chrome Web Store
-          </a>
-          <a class="btn btn--ghost" href="#features">Как это работает ↓</a>
+          <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--ghost" data-sp-open href="#features">Открыть аналитику</a>
         </div>
+        <p class="hero__note">Работает локально в вашем браузере Chrome — данные не покидают ваш компьютер</p>
         <ul class="trust" aria-label="Коротко о главном">
           <li>Официальный API Kaspi</li>
           <li>Токены остаются на вашем компьютере</li>
@@ -404,7 +407,8 @@
 </footer>
 
 <div class="mcta" aria-hidden="true">
-  <a class="btn btn--primary" href="#support" tabindex="-1">Скоро в Chrome Web Store</a>
+  <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener" tabindex="-1">Подключить магазин Kaspi за 1 минуту</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support" tabindex="-1">Подключить магазин Kaspi за 1 минуту</a>
   <a class="btn" href="#price" tabindex="-1">Цены</a>
 </div>
 

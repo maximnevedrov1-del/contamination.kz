@@ -116,6 +116,7 @@ if (TARGET === 'firefox') {
   // 128 = first version with content scripts in the page's MAIN world (network tap).
   manifest.background = { scripts: [manifest.background.service_worker], type: 'module' };
   delete manifest.minimum_chrome_version;
+  delete manifest.externally_connectable; // Chrome-only key; Firefox warns on it
   manifest.browser_specific_settings = {
     gecko: {
       id: 'kaspi-seller-hub@sellerhub.kz',

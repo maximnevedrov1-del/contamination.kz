@@ -1098,14 +1098,20 @@ async function openChatTabs() {
 /* Misc                                                                   */
 /* ===================================================================== */
 
-async function openDashboard(route = 'orders') {
-  // chrome-extension:// URLs are not valid match patterns, so filter manually.
-  const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
-  const url = `${DASHBOARD_URL}#${route}`;
-  if (tab) {
-    await chrome.tabs.update(tab.id, { active: true, url });
-    await chrome.windows.update(tab.windowId, { focused: true });
-  } else await chrome.tabs.create({ url });
+let dashboardOpening = null; // in-flight guard: a burst of calls (onInstalled + message) opens one tab
+/** Focus the existing dashboard tab (and its window) or create one. `query` is e.g. 'welcome=1'. */
+function openDashboard(route = 'orders', query = '') {
+  if (dashboardOpening) return dashboardOpening;
+  dashboardOpening = (async () => {
+    // chrome-extension:// URLs are not valid match patterns, so filter manually.
+    const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
+    const url = `${DASHBOARD_URL}${query ? `?${query}` : ''}#${route || 'home'}`;
+    if (tab) {
+      await chrome.tabs.update(tab.id, route ? { active: true, url } : { active: true }); // no route = just focus, keep the user's page
+      await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    } else await chrome.tabs.create({ url });
+  })().finally(() => { dashboardOpening = null; });
+  return dashboardOpening;
 }
 
 async function openStore({ shopId }) {
@@ -1484,7 +1490,27 @@ async function ensureAlarms() {
 }
 ensureAlarms().catch(() => {});
 
-chrome.runtime.onInstalled.addListener(() => {
+/* The landing (saudapulse.kz) may ask an installed extension to open its dashboard. Nothing else is
+   accepted and nothing is returned except {ok} / the version. */
+function isSaudaPulseOrigin(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && (u.hostname === 'saudapulse.kz' || u.hostname.endsWith('.saudapulse.kz'));
+  } catch { return false; }
+}
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (!isSaudaPulseOrigin(sender?.origin || sender?.url)) { sendResponse({ ok: false }); return false; }
+  if (msg?.type === 'PING') { sendResponse({ ok: true, version: chrome.runtime.getManifest().version }); return false; }
+  if (msg?.type === 'OPEN_DASHBOARD') {
+    openDashboard('').then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true; // async response
+  }
+  sendResponse({ ok: false });
+  return false;
+});
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details?.reason === 'install') openDashboard('home', 'welcome=1').catch(() => {});
   // Order contents now live only in the snapshots: drop the old duplicate cache (one-off, idempotent).
   chrome.storage.local.remove('ksh.apiEntries').catch(() => {});
   scheduleAlarms();

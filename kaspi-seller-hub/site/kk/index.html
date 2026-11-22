@@ -143,6 +143,7 @@
 }
   </script>
   <script>document.documentElement.classList.add('js')</script>
+  <meta name="sp-extension-id" content="{{extensionId}}" data-requires="extensionId">
 </head>
 <body>
 <a class="skip" href="#main">Мазмұнға өту</a>
@@ -160,7 +161,8 @@
       <a href="#faq">Сұрақтар</a>
     </nav>
     <nav class="lang" aria-label="Тіл"><a href="/" hreflang="ru" lang="ru">РУС</a><span aria-hidden="true">|</span><a href="/kk/" hreflang="kk" lang="kk" aria-current="true">ҚАЗ</a></nav>
-    <a class="btn btn--primary btn--sm top__cta" href="#support">Жақында Chrome Web Store-да</a>
+    <a class="btn btn--primary btn--sm top__cta" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener">Kaspi дүкенін 1 минутта қосу</a>
+          <a class="btn btn--primary btn--sm top__cta" data-sp-open data-unless="storeUrl" href="#support">Kaspi дүкенін 1 минутта қосу</a>
   </div>
 </header>
 
@@ -170,16 +172,17 @@
   <section class="hero">
     <div class="wrap hero__in">
       <div class="hero__text">
-        <p class="eyebrow">Браузер кеңейтімі · Kaspi.kz сатушыларына арналған</p>
+        <p class="eyebrow">Kaspi.kz сатушыларына арналған · 2–5 дүкен</p>
         <h1>Барлық Kaspi дүкені — бір&nbsp;терезеде</h1>
         <p class="lead">2–5 дүкеннің тапсырыстары, жанып тұрған мерзімдері, жинау, жүкқұжаттары және пайдасы бір экранда. Кабинеттер арасында ауысып, тапсырысты өткізіп алудан қорқудың қажеті жоқ.</p>
         <div class="hero__cta">
-          <a class="btn btn--primary" href="#support">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
-            Жақында Chrome Web Store-да
-          </a>
-          <a class="btn btn--ghost" href="#features">Бұл қалай жұмыс істейді ↓</a>
+          <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Kaspi дүкенін 1 минутта қосу</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+            Kaspi дүкенін 1 минутта қосу</a>
+          <a class="btn btn--ghost" data-sp-open href="#features">Аналитиканы ашу</a>
         </div>
+        <p class="hero__note">Chrome браузеріңізде жергілікті жұмыс істейді — деректер компьютеріңізден шықпайды</p>
         <ul class="trust" aria-label="Қысқаша ең бастысы">
           <li>Kaspi-дің ресми API-ы</li>
           <li>Токендер сіздің компьютеріңізде қалады</li>
@@ -404,7 +407,8 @@
 </footer>
 
 <div class="mcta" aria-hidden="true">
-  <a class="btn btn--primary" href="#support" tabindex="-1">Жақында Chrome Web Store-да</a>
+  <a class="btn btn--primary" data-sp-open data-requires="storeUrl" href="{{storeUrl}}" rel="noopener" tabindex="-1">Kaspi дүкенін 1 минутта қосу</a>
+          <a class="btn btn--primary" data-sp-open data-unless="storeUrl" href="#support" tabindex="-1">Kaspi дүкенін 1 минутта қосу</a>
   <a class="btn" href="#price" tabindex="-1">Бағалар</a>
 </div>
 

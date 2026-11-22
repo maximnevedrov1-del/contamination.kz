@@ -3399,7 +3399,17 @@ async function main() {
   manageChatPolling();
   sync(); // fresh snapshot from every store tab on open
   // First launch → the tour. Not under browser automation (it would sit on top of the page under test).
-  if (!memo.get('ksh.tourDone') && !navigator.webdriver) setTimeout(startTour, 1200);
+  // ?welcome=1 comes from the post-install tab: start the tour at once, then drop the param.
+  let welcome = false;
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has('welcome')) {
+      welcome = u.searchParams.get('welcome') === '1';
+      u.searchParams.delete('welcome');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
+  } catch { /* ignore */ }
+  if (!navigator.webdriver && (welcome || !memo.get('ksh.tourDone'))) setTimeout(startTour, welcome ? 300 : 1200);
 }
 
 main();

@@ -68,6 +68,9 @@
       "run_at": "document_idle"
     }
   ],
+  "externally_connectable": {
+    "matches": ["https://saudapulse.kz/*", "https://*.saudapulse.kz/*"]
+  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' blob:"
   }
