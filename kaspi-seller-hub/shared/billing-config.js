@@ -36,8 +36,8 @@ BILLING.licenseKeys.forEach(Object.freeze);
  * change, also raise «Версия условий» in the admin page so clients accept again.
  */
 export const LEGAL = Object.freeze({
-  offerUrl: '',
-  privacyUrl: '',
+  offerUrl: 'https://saudapulse.kz/offer',
+  privacyUrl: 'https://saudapulse.kz/privacy',
 });
 
 /** Link for the offer ('offer') or the privacy policy ('privacy'). */
@@ -49,11 +49,11 @@ export function legalUrl(kind) {
 /**
  * Support contacts shown on the «Помощь» page. Fill in what you use; empty ones are hidden.
  *   whatsapp — number in international format, digits only: '77011234567'
- *   telegram — user name without @
+ *   telegram — user name (a leading @ is stripped by the UI)
  */
 export const SUPPORT = Object.freeze({
   whatsapp: '',
-  telegram: '',
-  email: '',
-  hours: '', // e.g. 'пн–пт 10:00–19:00'
+  telegram: '@SaudaPulse',
+  email: 'support@saudapulse.kz',
+  hours: 'Пн–Вс, 09:00–21:00 (Алматы)',
 });

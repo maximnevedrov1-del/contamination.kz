@@ -80,12 +80,19 @@ fs.copyFileSync(path.join(ROOT, 'legal/legal.css'), path.join(OUT, 'legal/legal.
 let legal = fs.readFileSync(path.join(ROOT, 'legal/terms.html'), 'utf8');
 if (v.domain) legal = legal.replaceAll('[адрес сайта]', `https://${v.domain}`);
 fs.writeFileSync(path.join(OUT, 'legal/terms.html'), legal);
+// standalone offer and privacy policy: legal/*.html (for the extension too) and clean URLs /offer, /privacy
+for (const name of ['offer', 'privacy']) {
+  const html = fs.readFileSync(path.join(ROOT, `legal/${name}.html`), 'utf8');
+  fs.writeFileSync(path.join(OUT, `legal/${name}.html`), html);
+  fs.mkdirSync(path.join(OUT, name), { recursive: true });
+  fs.writeFileSync(path.join(OUT, name, 'index.html'), html.replaceAll('href="offer.html"', 'href="/offer"').replaceAll('href="privacy.html"', 'href="/privacy"'));
+}
 
 // robots.txt and sitemap.xml (the sitemap needs the domain)
 fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n${v.domain ? `Sitemap: https://${v.domain}/sitemap.xml\n` : ''}`);
 if (v.domain) {
   const today = new Date().toISOString().slice(0, 10);
-  fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://${v.domain}/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/legal/terms.html</loc><lastmod>${today}</lastmod></url>\n</urlset>\n`);
+  fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://${v.domain}/</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/offer</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/privacy</loc><lastmod>${today}</lastmod></url>\n  <url><loc>https://${v.domain}/legal/terms.html</loc><lastmod>${today}</lastmod></url>\n</urlset>\n`);
   fs.writeFileSync(path.join(OUT, 'CNAME'), `${v.domain}\n`); // GitHub Pages custom domain
 }
 const missing = ['domain', 'whatsapp', 'telegram', 'email', 'responseTime'].filter((k) => !filled(k));

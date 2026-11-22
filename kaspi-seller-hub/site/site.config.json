@@ -1,9 +1,9 @@
 {
   "_comment": "Filled in at launch. Empty value = the block that needs it is left out of the built site (tools/build-site.mjs).",
-  "domain": "",
+  "domain": "saudapulse.kz",
   "whatsapp": "",
-  "telegram": "",
-  "email": "",
+  "telegram": "@SaudaPulse",
+  "email": "support@saudapulse.kz",
   "responseTime": "",
-  "hours": ""
+  "hours": "Пн–Вс, 09:00–21:00 (Алматы)"
 }

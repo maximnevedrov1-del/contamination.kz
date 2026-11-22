@@ -2979,8 +2979,9 @@ async function refreshTickets() {
 }
 
 function viewHelp() {
+  const waDigits = String(SUPPORT.whatsapp || '').replace(/\D/g, '');
   const contacts = [
-    SUPPORT.whatsapp && h('a', { class: 'btn btn--primary', href: `https://wa.me/${SUPPORT.whatsapp.replace(/\D/g, '')}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+    waDigits && h('a', { class: 'btn btn--primary', href: `https://wa.me/${waDigits}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
     SUPPORT.telegram && h('a', { class: 'btn', href: `https://t.me/${SUPPORT.telegram.replace(/^@/, '')}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
     SUPPORT.email && h('a', { class: 'btn', href: `mailto:${SUPPORT.email}` }, SUPPORT.email),
   ].filter(Boolean);
