@@ -29,7 +29,7 @@ export function formatDigest(d) {
   for (const m of d.recovered || []) lines.push(`🟢 ${MARKET[m] || m} снова работает. Не забудьте убрать сообщение для клиентов.`);
   if (d.new_tickets > 0) lines.push(`💬 Новых вопросов: ${d.new_tickets} (всего ждут ответа: ${d.open_tickets}).`);
   if (d.new_invoices > 0) lines.push(`🧾 Новых счетов: ${d.new_invoices} (ждут подтверждения: ${d.pending_invoices} на ${new Intl.NumberFormat('ru-RU').format(d.pending_sum)} ₸).`);
-  return lines.length ? `Seller Hub\n${lines.join('\n')}` : null;
+  return lines.length ? `Selleros\n${lines.join('\n')}` : null;
 }
 
 export async function run(env = process.env, log = console.log) {
