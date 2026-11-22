@@ -168,6 +168,7 @@
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
     if (tab === 'flags') return renderFlags(panel);
+    if (tab === 'errors') return renderErrors(panel);
     const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
     renderInvoices(panel, page);
   }
@@ -325,6 +326,18 @@
     el('ul', { class: 'quotes' }, list.slice(0, 8).map(item)),
     list.length > 8 && el('details', null, el('summary', { class: 'muted' }, `ещё ${list.length - 8}`), el('ul', { class: 'quotes' }, list.slice(8).map(item))),
   ];
+
+  async function renderErrors(panel) {
+    const list = (await rpc('admin_client_errors', { p_limit: 200 })) || [];
+    if (!list.length) return panel.replaceChildren(el('p', { class: 'muted' }, 'Ошибок пока нет.'));
+    const rows = list.map((r) => el('tr', null,
+      el('td', null, r.error_code), el('td', { class: 'muted' }, r.context || '—'),
+      el('td', { class: 'num' }, r.users), el('td', { class: 'num' }, r.occurrences),
+      el('td', null, r.app_version || '—'), el('td', { class: 'muted' }, new Date(r.last_seen).toLocaleString('ru-RU'))));
+    panel.replaceChildren(el('table', null,
+      el('thead', null, el('tr', null, ['Код', 'Контекст', 'Пользователей', 'Повторов', 'Версия', 'Последний раз'].map((h, n) => el('th', { class: n === 2 || n === 3 ? 'num' : null }, h)))),
+      el('tbody', null, rows)));
+  }
 
   async function renderInsights(panel) {
     const r = await rpc('admin_insights', { p_days: insightDays });

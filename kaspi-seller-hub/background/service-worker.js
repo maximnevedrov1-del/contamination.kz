@@ -199,6 +199,7 @@ async function billingMaintenance(force = false, reconcile = force) {
       if (await B.reconcileInvoice(count, lic)) lic = await currentLicense(true);
     } catch (e) {
       console.warn(LOG, 'billing reconcile', e.code || e.message);
+      B.reportClientError(`billing_${e.code || 'error'}`, 'maintenance');
     }
   }
   await notifyPayment(lic).catch((e) => console.warn(LOG, 'pay notify', e));
@@ -1471,7 +1472,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   await dataReady;
   if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => report('chat poll', e));
-  if (alarm.name === ALARM_SYNC && (await syncDue())) sync().catch((e) => report('sync', e));
+  if (alarm.name === ALARM_SYNC && (await syncDue())) sync().catch((e) => { report('sync', e); B.reportClientError(`sync_${e?.code || 'error'}`, 'alarm'); });
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
   if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
   if (alarm.name === ALARM_HEALTH) {

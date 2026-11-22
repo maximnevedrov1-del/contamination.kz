@@ -55,6 +55,7 @@ export function format(item) {
   if (item.kind === 'grace') return `⏳ Оплаченный период закончился. Кабинет работает ещё ${d.days_left} ${plural(d.days_left, 'день', 'дня', 'дней')} — оплатите продление, чтобы не потерять доступ к заказам и истории.`;
   if (item.kind === 'winback30') return `👋 Здравствуйте${hi}! Вот что нового в SaudaPulse за последний месяц:\n\n${d.whats_new}\n\nВаши магазины и настройки сохранены — вернуться можно в любой момент.`;
   if (item.kind === 'winback60') return `🎁 Вернитесь в SaudaPulse со скидкой ${d.pct || 50} % на первый месяц. Ваши старые магазины сохранены в архиве — настраивать заново ничего не нужно. Предложение действует 30 дней.`;
+  if (item.kind === 'nudge') return String(d.text || '').slice(0, 1000);
   if (item.kind === 'referral') return `🎉 Ваш друг оплатил подписку — вам начислено +${d.days || 14} дней SaudaPulse!`;
   if (item.kind === 'alert') {
     if (d.kind === 'cancelled') return `❌ Заказ №${d.code} в магазине ${d.shop} отменён.`;
@@ -148,6 +149,8 @@ export async function run(env, f = fetch, pause = 40, { chunk = 50, budgetMs = 4
     return { due: 0, sent: 0, blocked: 0, failed: 0, more: false, busy: true };
   }
   try {
+    // queue retention nudges (tg_outbox, deduped in the database); a failure must never break the run
+    await rpc(env, 'enqueue_retention_nudges', {}, null, f).catch((e) => console.warn('[telegram-bot] enqueue_retention_nudges failed', String(e?.message || e).slice(0, 100)));
     return await send(env, f, pause, { chunk, budgetMs, now });
   } finally {
     await rpc(env, 'bot_unlock', { p_key: env.BOT_KEY, p_holder: holder }, null, f).catch(() => {}); // else it expires

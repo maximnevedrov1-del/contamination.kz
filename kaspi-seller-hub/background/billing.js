@@ -329,6 +329,7 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
       return null;
     }
     if (usable && age < BILLING.offlineGraceDays * DAY) return cache.data;
+    reportClientError(`license_${e.code || 'error'}`, 'getLicense');
     throw e;
   }
 }
@@ -447,6 +448,32 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
 
 const FUNNEL_EVENTS = new Set(['onboarding_completed', 'first_sync_done', 'trial_expired_view', 'invoice_created', 'referral_shared']);
 const FUNNEL_KEY = 'ksh.funnelSent';
+const errThrottle = new Map();
+/**
+ * Anonymous error report (short code + context only; the server strips anything personal anyway).
+ * Fire-and-forget: never throws, skips when signed out, same code+context at most once per 10 min.
+ */
+export function reportClientError(code, context = '') {
+  try {
+    if (!isConfigured()) return;
+    const c = String(code ?? '').slice(0, 120);
+    const x = String(context ?? '').slice(0, 120);
+    if (!c) return;
+    const key = `${c}|${x}`;
+    const now = Date.now();
+    if (now - (errThrottle.get(key) || 0) < 10 * 60000) return;
+    if (errThrottle.size >= 50 && !errThrottle.has(key)) errThrottle.delete(errThrottle.keys().next().value);
+    errThrottle.set(key, now);
+    (async () => {
+      try {
+        if (!(await accessToken())) return;
+        const version = typeof chrome !== 'undefined' ? chrome.runtime?.getManifest?.().version || '' : '';
+        await rpc('report_client_error', { p_code: c, p_context: x, p_version: String(version).slice(0, 120) });
+      } catch { /* telemetry must never break anything */ }
+    })();
+  } catch { /* ignore */ }
+}
+
 const funnelPending = new Set();
 /**
  * Product funnel milestone, sent at most once per event (the server also dedups). Fire-and-forget:
