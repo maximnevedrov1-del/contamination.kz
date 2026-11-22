@@ -1100,14 +1100,15 @@ async function openChatTabs() {
 
 let dashboardOpening = null; // in-flight guard: a burst of calls (onInstalled + message) opens one tab
 /** Focus the existing dashboard tab (and its window) or create one. `query` is e.g. 'welcome=1'. */
-function openDashboard(route = 'orders', query = '') {
+function openDashboard(route = 'orders', query = '', { keepPage = false } = {}) {
   if (dashboardOpening) return dashboardOpening;
   dashboardOpening = (async () => {
     // chrome-extension:// URLs are not valid match patterns, so filter manually.
     const tab = (await chrome.tabs.query({})).find((x) => x.url?.startsWith(DASHBOARD_URL));
     const url = `${DASHBOARD_URL}${query ? `?${query}` : ''}#${route || 'home'}`;
     if (tab) {
-      await chrome.tabs.update(tab.id, route ? { active: true, url } : { active: true }); // no route = just focus, keep the user's page
+      // no route (or keepPage, e.g. on install) = just focus, keep the page the user is on
+      await chrome.tabs.update(tab.id, route && !keepPage ? { active: true, url } : { active: true });
       await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
     } else await chrome.tabs.create({ url });
   })().finally(() => { dashboardOpening = null; });
@@ -1514,7 +1515,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 chrome.action?.onClicked?.addListener(() => { openDashboard('').catch(() => {}); });
 
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details?.reason === 'install') openDashboard('home', 'welcome=1').catch(() => {});
+  if (details?.reason === 'install') openDashboard('home', 'welcome=1', { keepPage: true }).catch(() => {});
   // Order contents now live only in the snapshots: drop the old duplicate cache (one-off, idempotent).
   chrome.storage.local.remove('ksh.apiEntries').catch(() => {});
   scheduleAlarms();
