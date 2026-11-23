@@ -1,6 +1,8 @@
 # saas-core-template v1.0.0: отчёт о базовой версии (2026-11-23)
 
-Тег: `saas-core-v1.0.0`. Ветка: `claude/magical-maxwell-6yq76b`.
+Тег: `saas-core-v1.0.0` → коммит `953e366`. Ветка: `claude/magical-maxwell-6yq76b`.
+
+> ⚠️ Тег создан локально, но в GitHub не отправлен: среда разработки не пропускает отправку тегов (ветка отправилась). Создать вручную: GitHub → Releases → «Draft a new release» → «Choose a tag»: `saas-core-v1.0.0` → Target: коммит `953e366` → Publish. До этого вместо тега используйте хэш `953e366`.
 
 ## Синхронизация с SaudaPulse 0.1.2 (d116ac2)
 
@@ -50,6 +52,7 @@ Init обходит все каталоги (кроме `scripts`), `.yml` в с
 
 ```bash
 git archive saas-core-v1.0.0 saas-core-template | tar -x && cd saas-core-template
+# пока тега нет в GitHub: git archive 953e366 saas-core-template | tar -x
 cp saas.config.example.json saas.config.json   # заполнить
 node scripts/init-new-saas.mjs --dry-run --config saas.config.json
 node scripts/init-new-saas.mjs --config saas.config.json --out ../<APP_SLUG>
