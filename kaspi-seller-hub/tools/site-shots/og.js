@@ -19,7 +19,7 @@ const data = (f, type) => `data:${type};base64,${require('fs').readFileSync(path
   </style></head><body><div class="glow"></div>
     <div class="t"><div class="logo"><img src="${data('icon-128.png', 'image/png')}">SaudaPulse</div>
     <h1>Все магазины Kaspi — в одном окне</h1>
-    <p>Заказы, сроки, сборка, накладные и прибыль 2–5 магазинов. 30 дней бесплатно.</p></div>
+    <p>Заказы, сроки, сборка, накладные и прибыль 2–5 магазинов. 14&nbsp;дней бесплатно.</p></div>
     <div class="chips"><span>Заказы</span><span>Сроки</span><span>Сборка</span><span>Накладные</span><span>Прибыль</span></div>
   </body></html>`, { waitUntil: 'load' });
   await p.screenshot({ path: path.join(A, 'og.png') });
