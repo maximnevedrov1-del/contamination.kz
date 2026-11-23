@@ -7,6 +7,7 @@
  * The session (tokens) never leaves the worker; pages get a plain licence view.
  */
 import { BILLING } from '../shared/billing-config.js';
+import { createLicenseVerifier } from '../shared/license-signature.js';
 
 const SESSION_KEY = 'ksh.session';
 const LAST_USER_KEY = 'ksh.lastUser';
@@ -18,7 +19,7 @@ const DAY = 86400000;
 export const isConfigured = () => !!(BILLING.supabaseUrl && BILLING.supabaseAnonKey);
 
 /** Error with a code the UI can translate (errors.<code>). */
-class BillingError extends Error {
+export class BillingError extends Error {
   constructor(code, detail = '', status = 0) {
     super(code);
     this.code = code;
@@ -202,61 +203,14 @@ const refreshRefused = (e) => e?.status === 400 || e?.status === 401 || e?.statu
  * custom_access_token_hook in 001_billing.sql puts the licence into it). Editing
  * chrome.storage, replaying or faking server answers cannot produce a valid signature.
  */
-export const signingRequired = () => Array.isArray(BILLING.licenseKeys) && BILLING.licenseKeys.length > 0;
+const verifier = createLicenseVerifier({
+  keys: () => BILLING.licenseKeys,
+  issuer: () => BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1',
+});
+export const signingRequired = () => verifier.required();
 
-const b64url = (str) => {
-  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  return Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
-};
-const ALGS = {
-  ES256: { kty: 'EC', import: { name: 'ECDSA', namedCurve: 'P-256' }, verify: { name: 'ECDSA', hash: 'SHA-256' } },
-  RS256: { kty: 'RSA', import: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, verify: { name: 'RSASSA-PKCS1-v1_5' } },
-};
-let keysPromise = null;
-function verifyingKeys() {
-  keysPromise ??= Promise.all(
-    BILLING.licenseKeys.map(async (jwk) => {
-      const alg = Object.keys(ALGS).find((a) => ALGS[a].kty === jwk?.kty);
-      if (!alg || (jwk.alg && jwk.alg !== alg) || (alg === 'ES256' && jwk.crv !== 'P-256')) return null;
-      if (jwk.d || jwk.k) return null; // a private/symmetric key was pasted by mistake — never use it
-      const { kty, crv, x, y, n, e } = jwk; // public parts only
-      const key = await crypto.subtle.importKey('jwk', { kty, crv, x, y, n, e }, ALGS[alg].import, false, ['verify']).catch(() => null);
-      return key && { kid: jwk.kid || null, alg, key };
-    }),
-  ).then((list) => list.filter(Boolean));
-  return keysPromise;
-}
-
-/** Claims of a JWT whose signature checks out against licenseKeys; otherwise null. */
-export async function verifiedClaims(jwt, expectedSub = null) {
-  const parts = String(jwt || '').split('.');
-  if (parts.length !== 3) return null;
-  let header, payload;
-  try {
-    header = JSON.parse(new TextDecoder().decode(b64url(parts[0])));
-    payload = JSON.parse(new TextDecoder().decode(b64url(parts[1])));
-  } catch {
-    return null;
-  }
-  if (!ALGS[header?.alg]) return null; // never "none" or HS256 (symmetric: the secret would have to ship in the extension)
-  const iss = BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1';
-  if (payload.iss !== iss || (expectedSub && payload.sub !== expectedSub)) return null;
-  // Supabase user tokens only (not anon/service keys or tokens of another audience), with a lifetime.
-  if (payload.aud !== 'authenticated' || !Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) return null;
-  const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-  let sig;
-  try {
-    sig = b64url(parts[2]);
-  } catch {
-    return null;
-  }
-  if (header.alg === 'ES256' && sig.length !== 64) return null; // JWS ES256 = raw r||s, 64 bytes
-  for (const k of await verifyingKeys()) {
-    if (k.alg !== header.alg || (header.kid && k.kid && k.kid !== header.kid)) continue;
-    if (await crypto.subtle.verify(ALGS[k.alg].verify, k.key, sig, data).catch(() => false)) return payload;
-  }
-  return null;
-}
+/** Claims of a JWT whose ES256/RS256 signature checks out against licenseKeys; otherwise null (see shared/license-signature.js). */
+export const verifiedClaims = (jwt, expectedSub = null) => verifier.verifiedClaims(jwt, expectedSub);
 
 const sec = (iso) => (iso ? Math.floor(new Date(iso).getTime() / 1000) : null);
 /** Server answer and token disagree (just paid, consent given…) → the token is older. */
@@ -554,40 +508,6 @@ export async function setPhone({ phone }) {
 export async function cancelInvoice({ id }) {
   await rpc('cancel_my_invoice', { p_id: Number(id) });
   return licenseView({ force: true });
-}
-
-/* ---------------- price-list feeds (Supabase Storage) ---------------- */
-
-/** Secret feed of one store (created on first use). */
-export async function ensureFeed(shopKey) {
-  return rpc('ensure_price_feed', { p_shop_key: shopKey });
-}
-
-/** Public URL Kaspi fetches the price list from. */
-export const feedUrl = (feedId, shopKey) => `${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/pricelists/${feedId}/${shopKey}.xml`;
-
-/** Upload (overwrite) the store's XML price list. */
-export async function uploadFeed(feedId, shopKey, xml) {
-  const token = await accessToken();
-  if (!token) throw new BillingError('billingLoggedOut');
-  let res;
-  try {
-    res = await fetch(`${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/pricelists/${feedId}/${shopKey}.xml`, {
-      method: 'POST',
-      headers: { apikey: BILLING.supabaseAnonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/xml', 'x-upsert': 'true', 'cache-control': 'max-age=60' },
-      body: new Blob([xml], { type: 'application/xml' }),
-    });
-  } catch (e) {
-    throw new BillingError('billingNetwork', e.message);
-  }
-  if (res.status === 413) throw new BillingError('feedTooLarge');
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    // Storage answers 400 {"statusCode":"403","message":"new row violates row-level security policy"}
-    if (res.status === 401 || res.status === 403 || /row-level security|"403"|Unauthorized/i.test(text)) throw new BillingError('feedForbidden', text.slice(0, 200));
-    throw new BillingError('billingHttp', `${res.status} ${text.slice(0, 200)}`);
-  }
-  return feedUrl(feedId, shopKey);
 }
 
 /* ---------------- support: service status, tickets, API health ---------------- */

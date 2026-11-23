@@ -19,6 +19,7 @@ const dir = mkdtempSync(path.join(tmpdir(), 'ksh-flow-'));
 mkdirSync(path.join(dir, 'background'));
 mkdirSync(path.join(dir, 'shared'));
 writeFileSync(path.join(dir, 'background/billing.js'), readFileSync(path.join(ROOT, 'background/billing.js')));
+writeFileSync(path.join(dir, 'shared/license-signature.js'), readFileSync(path.join(ROOT, 'shared/license-signature.js')));
 const cfg = readFileSync(path.join(ROOT, 'shared/billing-config.js'), 'utf8')
   .replace(/supabaseUrl: '[^']*'/, `supabaseUrl: '${URL_}'`)
   .replace(/supabaseAnonKey: '[^']*'/, "supabaseAnonKey: 'anon'")

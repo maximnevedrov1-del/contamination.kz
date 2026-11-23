@@ -12,6 +12,7 @@
  */
 import * as K from './kaspi-api.js';
 import * as B from './billing.js';
+import * as Feed from './price-feed.js';
 import { getApiTokens, getCatalog, setCatalog, getFeeds, setFeeds, getImports, setImports, getContentCache, setContentCache, getSettings, saveSettings, getCosts, setCosts, getPhotos, setPhotos, getSnapshots, setSnapshots, KEYS } from '../shared/storage.js';
 import { isAllowedPhoto, photosDataSize, MAX_PHOTOS_DATA } from '../shared/photos.js';
 import { normalizePrint } from '../dashboard/print-layout.js';
@@ -99,8 +100,8 @@ export async function syncFeeds(shopIds, { force = false, allowDrop = false } = 
       }
       try {
         const key = shopSlug(shopId);
-        const feedId = f.feedId || (await B.ensureFeed(key)).feed_id;
-        const url = await B.uploadFeed(feedId, key, xml);
+        const feedId = f.feedId || (await Feed.ensureFeed(key)).feed_id;
+        const url = await Feed.uploadFeed(feedId, key, xml);
         feeds[shopId] = { ...f, feedId, url, hash, uploadedAt: Date.now(), offers: count, error: null, drop: null };
         await setFeeds(feeds);
         return { ok: true, url };
