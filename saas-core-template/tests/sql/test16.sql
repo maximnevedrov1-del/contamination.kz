@@ -1,3 +1,5 @@
+-- 026: admin_confirm_invoice needs the expected amount/stores; cf() reads them from the invoice itself
+create or replace function pg_temp.cf(p_id bigint, p_note text default null) returns jsonb language plpgsql security definer as $$ declare a int; s int; begin select amount, stores into a, s from public.invoices where id = p_id; return public.admin_confirm_invoice(p_id, p_note, a, s); end $$;
 \set ON_ERROR_STOP off
 \pset format unaligned
 \pset tuples_only on
@@ -39,7 +41,7 @@ insert into invoices (user_id, kind, stores, months, amount) values
 select set_config('test.inv1', (select max(id)::text from invoices), false) is not null;
 select set_config('test.before', (select greatest(now(), coalesce(paid_until, now()), trial_ends_at)::text from accounts where email = 'ref@example.kz'), false) is not null;
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select admin_confirm_invoice(current_setting('test.inv1')::bigint) is not null;
+select pg_temp.cf(current_setting('test.inv1')::bigint) is not null;
 reset role;
 select pg_temp.ok('referrer paid_until +14d', (select abs(extract(epoch from paid_until - (current_setting('test.before')::timestamptz + interval '14 days'))) < 5 from accounts where email = 'ref@example.kz'));
 select pg_temp.ok('referrer counters 1 / 14', (select referrals_count = 1 and referral_bonus_days = 14 from accounts where email = 'ref@example.kz'));
@@ -50,7 +52,7 @@ select pg_temp.ok('bot_jobs returns referral item', (select exists (select 1 fro
 insert into invoices (user_id, kind, stores, months, amount) values ('a0000000-0000-0000-0000-000000000002', 'manual', 1, 1, 10000);
 select set_config('test.inv2', (select max(id)::text from invoices), false) is not null;
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select admin_confirm_invoice(current_setting('test.inv2')::bigint) is not null;
+select pg_temp.cf(current_setting('test.inv2')::bigint) is not null;
 reset role;
 select pg_temp.ok('second invoice: no extra reward', (select referrals_count = 1 and referral_bonus_days = 14 and abs(extract(epoch from paid_until - (current_setting('test.before')::timestamptz + interval '14 days'))) < 5 from accounts where email = 'ref@example.kz'));
 select pg_temp.ok('second invoice: no extra outbox', (select count(*) = 1 from tg_outbox));

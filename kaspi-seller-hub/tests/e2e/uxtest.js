@@ -68,7 +68,7 @@ const launch = async () => {
   // ---- "new computer": fresh browser profile, store re-connected (new id), restore ----
   ({ ctx, d, msg, errs } = await launch());
   const newId = Object.keys((await msg('ui:getState')).settings.stores)[0];
-  check('3 fresh profile: store has a different id, no catalog', newId !== shopId && (await msg('ui:catalogState')).products.length === 0, `${shopId} → ${newId}`);
+  check('3 fresh profile: store keeps the SAME stable id (no extra slot), no catalog', newId === shopId && Object.keys((await msg('ui:getState')).settings.stores).length === 1 && (await msg('ui:catalogState')).products.length === 0, `${shopId} → ${newId}`);
   await d.evaluate(() => (location.hash = 'settings')); await sleep(800);
   await d.locator('input[data-action=backup-file]').setInputFiles(file);
   await d.waitForSelector('#confirmDialog[open]');

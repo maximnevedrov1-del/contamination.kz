@@ -17,7 +17,7 @@ async function adminConfirmPending() {
   const tk = await adminToken();
   const call = (fn, args) => fetch(`${SUPA}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { ...H, Authorization: 'Bearer ' + tk }, body: JSON.stringify(args) }).then((r) => r.json());
   const list = (await call('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 100, p_offset: 0 })).rows;
-  return list.length ? call('admin_confirm_invoice', { p_id: list[0].id, p_note: 'test' }) : null;
+  return list.length ? call('admin_confirm_invoice', { p_id: list[0].id, p_note: 'test', p_expected_amount: list[0].amount, p_expected_stores: list[0].stores }) : null;
 }
 
 (async () => {

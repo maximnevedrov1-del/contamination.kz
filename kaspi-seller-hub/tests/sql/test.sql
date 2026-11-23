@@ -1,3 +1,5 @@
+-- 026: admin_confirm_invoice needs the expected amount/stores; cf() reads them from the invoice itself
+create or replace function pg_temp.cf(p_id bigint, p_note text default null) returns jsonb language plpgsql security definer as $$ declare a int; s int; begin select amount, stores into a, s from public.invoices where id = p_id; return public.admin_confirm_invoice(p_id, p_note, a, s); end $$;
 \set ON_ERROR_STOP off
 \pset format unaligned
 \pset tuples_only on
@@ -29,7 +31,7 @@ do $$ begin perform create_invoice(-2, 1, '87011234567'); raise notice 'FAIL neg
 -- client cannot write directly / set its own price or paid_until
 do $$ begin insert into invoices (user_id, stores, months, amount, phone) values (auth.uid(), 10, 12, 1, '77011234567'); raise notice 'FAIL direct insert allowed'; exception when others then raise notice 'PASS direct insert denied (%)', sqlerrm; end $$;
 do $$ begin update accounts set paid_until = now() + interval '10 years'; if (select paid_until from accounts) is not null then raise notice 'FAIL client extended own subscription'; else raise notice 'PASS client update has no effect/denied'; end if; exception when others then raise notice 'PASS direct update denied (%)', sqlerrm; end $$;
-do $$ begin perform admin_confirm_invoice((select id from invoices where status='pending'), null); raise notice 'FAIL non-admin confirmed'; exception when others then raise notice 'PASS non-admin cannot confirm (%)', sqlerrm; end $$;
+do $$ begin perform pg_temp.cf((select id from invoices where status='pending'), null); raise notice 'FAIL non-admin confirmed'; exception when others then raise notice 'PASS non-admin cannot confirm (%)', sqlerrm; end $$;
 do $$ begin perform (admin_invoices('all')->'rows'); raise notice 'FAIL non-admin listed invoices'; exception when others then raise notice 'PASS non-admin cannot list invoices (%)', sqlerrm; end $$;
 do $$ begin perform 1 from billing_config; raise notice 'FAIL client reads billing_config directly'; exception when others then raise notice 'PASS billing_config not directly readable'; end $$;
 select pg_temp.ok('license shows pending invoice', (select (l->'pending_invoice'->>'amount')::int = 60000 from (select get_license(null) l) x));
@@ -49,8 +51,8 @@ reset role; set role authenticated; set request.jwt.claim.sub = '99999999-9999-9
 select pg_temp.ok('admin sees pending invoice with email', (select jsonb_array_length(a) = 1 and a->0->>'email' = 'seller@example.kz' from (select (admin_invoices('pending')->'rows') a) x));
 select pg_temp.ok('confirm: paid period starts after the trial (trial not lost)',
   (select (r->>'period_from')::timestamptz >= now() + interval '13 days' and (r->>'period_to')::timestamptz > (r->>'period_from')::timestamptz + interval '58 days'
-   from (select admin_confirm_invoice((select ((admin_invoices('pending')->'rows'))->0->>'id')::bigint, 'Kaspi #123') r) x));
-do $$ begin perform admin_confirm_invoice((select (((admin_invoices('paid')->'rows'))->0->>'id')::bigint), null); raise notice 'FAIL double confirm'; exception when others then raise notice 'PASS double confirm rejected (%)', sqlerrm; end $$;
+   from (select pg_temp.cf((select ((admin_invoices('pending')->'rows'))->0->>'id')::bigint, 'Kaspi #123') r) x));
+do $$ begin perform pg_temp.cf((select (((admin_invoices('paid')->'rows'))->0->>'id')::bigint), null); raise notice 'FAIL double confirm'; exception when others then raise notice 'PASS double confirm rejected (%)', sqlerrm; end $$;
 select pg_temp.ok('config update by admin', (select (c->>'kaspi_qr_url') = 'https://example.kz/qr.png' from (select admin_update_config('{"kaspi_qr_url":"https://example.kz/qr.png","payment_instructions":"Оплатите по QR"}') c) x));
 select pg_temp.ok('admin accounts list', (select jsonb_array_length((admin_accounts()->'rows')) = 3));
 
@@ -66,7 +68,7 @@ select accept_terms() is not null;
 select create_invoice(3, 1, '87770001122') is not null;
 reset role; set role authenticated; set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select pg_temp.ok('confirm for expired user starts now (≈ +1 month)', (select (r->>'period_from')::timestamptz between now() - interval '1 minute' and now() + interval '1 minute'
-   from (select admin_confirm_invoice((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'other@example.kz'), null) r) x));
+   from (select pg_temp.cf((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'other@example.kz'), null) r) x));
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select pg_temp.ok('after payment: active, 3 stores', (select (l->>'status') = 'active' and (l->>'store_limit')::int = 3 from (select get_license(1) l) x));
 reset role;

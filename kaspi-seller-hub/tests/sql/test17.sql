@@ -1,3 +1,5 @@
+-- 026: admin_confirm_invoice needs the expected amount/stores; cf() reads them from the invoice itself
+create or replace function pg_temp.cf(p_id bigint, p_note text default null) returns jsonb language plpgsql security definer as $$ declare a int; s int; begin select amount, stores into a, s from public.invoices where id = p_id; return public.admin_confirm_invoice(p_id, p_note, a, s); end $$;
 \set ON_ERROR_STOP off
 \pset format unaligned
 \pset tuples_only on
@@ -18,14 +20,14 @@ update accounts set paid_until = now() + interval '20 days', store_limit = 1 whe
 insert into invoices (user_id, kind, stores, months, amount) values ('a0000000-0000-0000-0000-000000000002', 'addon', 2, 0, 1000);
 select set_config('test.inv1', (select max(id)::text from invoices), false) is not null;
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select admin_confirm_invoice(current_setting('test.inv1')::bigint) is not null;
+select pg_temp.cf(current_setting('test.inv1')::bigint) is not null;
 reset role;
 select pg_temp.ok('addon invoice: no referral reward', (select referrals_count = 0 and not (select referral_rewarded from accounts where email = 'friend@example.kz') from accounts where email = 'ref@example.kz'));
 -- first subscription invoice after the add-on: reward, expired paid_until -> now()+14d
 insert into invoices (user_id, kind, stores, months, amount) values ('a0000000-0000-0000-0000-000000000002', 'manual', 2, 1, 10000);
 select set_config('test.inv2', (select max(id)::text from invoices), false) is not null;
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select admin_confirm_invoice(current_setting('test.inv2')::bigint) is not null;
+select pg_temp.cf(current_setting('test.inv2')::bigint) is not null;
 reset role;
 select pg_temp.ok('subscription after addon: reward, expired paid_until -> now()+14d', (select referrals_count = 1 and abs(extract(epoch from paid_until - (now() + interval '14 days'))) < 10 from accounts where email = 'ref@example.kz'));
 -- frozen referrer: no reward
@@ -33,13 +35,13 @@ update accounts set frozen_until = now() + interval '10 days' where email = 'ref
 insert into invoices (user_id, kind, stores, months, amount) values ('a0000000-0000-0000-0000-000000000005', 'manual', 1, 1, 10000);
 select set_config('test.inv3', (select max(id)::text from invoices), false) is not null;
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select admin_confirm_invoice(current_setting('test.inv3')::bigint) is not null;
+select pg_temp.cf(current_setting('test.inv3')::bigint) is not null;
 reset role;
 select pg_temp.ok('frozen referrer: no reward, no outbox', (select referrals_count = 0 and referral_bonus_days = 0 from accounts where email = 'ref2@example.kz'));
 select pg_temp.ok('frozen referrer: friend still marked rewarded', (select referral_rewarded from accounts where email = 'friend2@example.kz'));
 -- non-admin cannot confirm
 set role authenticated; set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
-do $$ begin perform admin_confirm_invoice(1); raise notice 'FAIL non-admin confirmed'; exception when others then raise notice '% non-admin forbidden (%)', case when sqlerrm = 'forbidden' then 'PASS' else 'FAIL' end, sqlerrm; end $$;
+do $$ begin perform pg_temp.cf(1); raise notice 'FAIL non-admin confirmed'; exception when others then raise notice '% non-admin forbidden (%)', case when sqlerrm = 'forbidden' then 'PASS' else 'FAIL' end, sqlerrm; end $$;
 -- column privileges on invoices
 do $$ begin perform admin_note from invoices; raise notice 'FAIL seller read admin_note'; exception when others then raise notice 'PASS seller cannot read admin_note (%)', sqlerrm; end $$;
 do $$ begin perform confirmed_by from invoices; raise notice 'FAIL seller read confirmed_by'; exception when others then raise notice 'PASS seller cannot read confirmed_by (%)', sqlerrm; end $$;
