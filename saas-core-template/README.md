@@ -19,7 +19,7 @@ modules. Product identity is parameterized; nothing here belongs to one brand.
 | `extension-core/ux-telemetry.js` | `createUxTracker` (batches whitelisted screen/click/rage-click/abandoned-form/help counters in memory, flushes at most once a minute) + `createUxReporter` (background: validates and calls `track_ux_event`); admin tab «UX / Затыки». |
 | `extension-core/error-telemetry.js` | `reportClientError(code, context)`: anonymous, 10-min per-key throttle, fire-and-forget; server (`report_client_error`) sanitizes and aggregates, admin tab «Ошибки» shows it. |
 | `extension-core/billing-config.js`, `feature-flags.js`, `notices.js` | Config (URL, anon key, public JWKs, legal/support), remote flags, banners. |
-| `tests/sql/` | 20 PostgreSQL test files on a Supabase stub (`run.sh`, `stub.sql`, `test.sql`, `test2…test20.sql`). There is no `test1.sql`: `test.sql` is the first one. |
+| `tests/sql/` | 22 PostgreSQL test files on a Supabase stub (`run.sh`, `stub.sql`, `test.sql`, `test2…test22.sql`). There is no `test1.sql`: `test.sql` is the first one. |
 | `tests/unit/` | Node tests for the extension-core and the bot. |
 | `scripts/init-new-saas.mjs` | Bootstrap CLI (not copied into generated projects). |
 | `saas.config.example.json` | Values for the placeholders. |

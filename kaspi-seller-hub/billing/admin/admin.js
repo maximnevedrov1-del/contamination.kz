@@ -240,11 +240,15 @@
     const note = prompt(`Подтвердить оплату счёта № ${i.id} на ${money(i.amount)} от ${i.email || phone(i.phone)}?\n\nМожно добавить заметку (например, номер операции Kaspi):`, '');
     if (note === null) return;
     try {
-      const r = await rpc('admin_confirm_invoice', { p_id: i.id, p_note: note || null });
+      // pass what was displayed: the server refuses if the invoice was rewritten since (amount / stores)
+      const r = await rpc('admin_confirm_invoice', { p_id: i.id, p_note: note || null, p_expected_amount: i.amount, p_expected_stores: i.stores });
       toast(`Оплачено до ${date(r.period_to)}. Клиент увидит это в расширении при следующей проверке.`);
       await render();
     } catch (e) {
-      toast(e.message, true);
+      if (/amount_changed/.test(e.message)) {
+        toast('Сумма или число магазинов в счёте изменились, пока вы его смотрели. Оплата НЕ подтверждена. Список обновлён: проверьте новую сумму и подтвердите снова.', true);
+        await render();
+      } else toast(e.message, true);
     }
   }
 
@@ -252,6 +256,61 @@
     if (!confirm(`Отменить счёт № ${i.id}?`)) return;
     try {
       await rpc('admin_cancel_invoice', { p_id: i.id, p_note: null });
+      await render();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  /** Raw Storage API call with the admin's token (DELETE / POST with JSON). */
+  async function storage(method, path, body) {
+    const tk = await token();
+    if (!tk) throw new Error('Войдите снова');
+    const { url, key } = cfg();
+    const res = await fetch(url + '/storage/v1/' + path, {
+      method,
+      headers: { apikey: key, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    if (!res.ok) throw new Error((data && (data.message || data.error)) || 'HTTP ' + res.status);
+    return data;
+  }
+
+  /** Removes the price-list files of deleted feeds (objects are <feed_id>/<shop_key>.xml in bucket «pricelists»). */
+  async function removeFeedFiles(feedIds) {
+    let removed = 0;
+    let failed = 0;
+    for (const id of feedIds) {
+      try {
+        const objs = (await storage('POST', 'object/list/pricelists', { prefix: String(id), limit: 1000, offset: 0 })) || [];
+        const names = objs.filter((o) => o && o.name).map((o) => `${id}/${o.name}`);
+        if (!names.length) continue;
+        await storage('DELETE', 'object/pricelists', { prefixes: names });
+        removed += names.length;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { removed, failed };
+  }
+
+  async function deleteAccount(a) {
+    if (!confirm(`УДАЛИТЬ аккаунт ${a.email}?\n\nЭто необратимо: данные клиента, магазины, обращения и файлы прайс-листов будут стёрты. Счета и согласия сохранятся без email.`)) return;
+    const typed = prompt(`Для подтверждения введите email аккаунта точно так же:\n${a.email}`, '');
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== String(a.email || '').trim().toLowerCase()) return toast('Email не совпал: аккаунт НЕ удалён.', true);
+    try {
+      const r = await rpc('admin_delete_account', { p_user: a.user_id, p_email: typed.trim() });
+      const feeds = Array.isArray(r && r.price_feeds_to_remove) ? r.price_feeds_to_remove : [];
+      const f = await removeFeedFiles(feeds);
+      toast(`Аккаунт удалён. Файлов прайс-листов удалено: ${f.removed}` + (f.failed ? `, не удалось очистить прайс-листов: ${f.failed} (удалите вручную в Storage → pricelists)` : '') + '.', f.failed > 0);
       await render();
     } catch (e) {
       toast(e.message, true);
@@ -297,6 +356,8 @@
             },
             '+ дни',
           ),
+          ' ',
+          el('button', { type: 'button', class: 'btn btn--danger', onclick: () => deleteAccount(a) }, 'Удалить аккаунт'),
         ),
       ),
     );
@@ -595,7 +656,7 @@
     const box = el('div', { 'data-block': 'bot-settings' }, el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'), el('p', { class: 'muted' }, 'Загрузка…'));
     rpc('admin_growth_settings', { p: {} }).then((g) => {
       const f = {
-        bot_username: el('input', { class: 'input', placeholder: 'SaudaPluseBot', value: g.bot_username || '' }),
+        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulseBot', value: g.bot_username || '' }),
         app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
