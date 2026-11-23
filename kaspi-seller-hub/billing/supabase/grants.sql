@@ -1,5 +1,5 @@
--- Seller Hub: function privileges, deterministic and idempotent.
--- Apply AFTER restoring a dump made without privileges (pg_restore --no-owner ...):
+-- Seller Hub: function, table and Storage privileges, deterministic and idempotent.
+-- Apply AFTER restoring a dump (pg_restore --no-owner ...):
 --   psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql
 -- Mirrors the grants of migrations 001..025 (verified against a database built from them).
 -- Keep in sync: when a migration adds a function or changes who may call it, update this file too.
@@ -92,5 +92,49 @@ do $$ begin
   if exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
     grant usage on schema public to supabase_auth_admin;
     grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
+  end if;
+end $$;
+
+-- ---------- 6. tables and sequences (restore drill 2026-11-23) ----------
+-- A restore into a Supabase project runs CREATE TABLE under Supabase's default privileges
+-- (ALL to anon/authenticated); the dump's GRANTs only add on top. Close everything, then
+-- re-grant exactly what the migrations grant: clients read their own account row (RLS) and
+-- the public invoice columns of their own invoices (RLS); everything else goes through RPCs.
+revoke all on all tables in schema public from public, anon, authenticated;
+revoke all on all sequences in schema public from public, anon, authenticated;
+alter default privileges in schema public revoke all on tables from public, anon, authenticated;
+alter default privileges in schema public revoke all on sequences from public, anon, authenticated;
+grant select on public.accounts to authenticated;
+grant select (id, user_id, kind, stores, months, amount, phone, status, created_at, paid_at, period_from, period_to, discount_pct)
+  on public.invoices to authenticated;
+
+-- ---------- 7. Storage: price-list bucket and its rules (schema storage is NOT in the dump) ----------
+-- The files themselves live in Supabase Storage, outside the database dump: after a restore the
+-- extension re-uploads a feed only when its prices/stock change or on a forced re-publish (same feed_id → same URL
+-- on the same project; a new project has a new URL that the seller must paste into Kaspi again).
+do $$ begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('pricelists', 'pricelists', true, 5242880, array['application/xml', 'text/xml'])
+      on conflict (id) do update set public = true, file_size_limit = 5242880, allowed_mime_types = array['application/xml', 'text/xml'];
+    drop policy if exists "pricelists insert own" on storage.objects;
+    drop policy if exists "pricelists update own" on storage.objects;
+    drop policy if exists "pricelists select own" on storage.objects;
+    drop policy if exists "pricelists delete own" on storage.objects;
+    drop policy if exists "pricelists admin select" on storage.objects;
+    drop policy if exists "pricelists admin delete" on storage.objects;
+    create policy "pricelists insert own" on storage.objects for insert to authenticated
+      with check (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists update own" on storage.objects for update to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name))
+      with check (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists select own" on storage.objects for select to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists delete own" on storage.objects for delete to authenticated
+      using (bucket_id = 'pricelists' and public.can_write_feed(name));
+    create policy "pricelists admin select" on storage.objects for select to authenticated
+      using (bucket_id = 'pricelists' and public.is_admin());
+    create policy "pricelists admin delete" on storage.objects for delete to authenticated
+      using (bucket_id = 'pricelists' and public.is_admin());
   end if;
 end $$;

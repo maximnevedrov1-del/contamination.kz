@@ -1,7 +1,12 @@
 # Seller Hub: daily encrypted dump of the billing database (Supabase) kept 30 days as a workflow artifact.
 # Secrets: SUPABASE_DB_URL (Supabase → Project Settings → Database → connection string, session pooler),
 # BACKUP_PASSPHRASE (any long random string, keep a copy outside GitHub — without it the dump cannot be read).
-# Restore: gpg -d billing-*.dump.gpg > db.dump && pg_restore --no-owner -d "$TARGET_DB_URL" db.dump  (the «schema "public" already exists» error is harmless), THEN psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql  (the dump keeps no privileges: grants.sql re-applies the function grants, anon gets only get_service_status/health)
+# Restore (drill 2026-11-23): gpg -d billing-*.dump.gpg > db.dump && pg_restore --no-owner -d "$TARGET_DB_URL" db.dump  (on a fresh Supabase project the
+#   «schema public/auth already exists», «relation users already exists» and «function uid already exists» errors are expected), THEN
+#   psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql  — required: Supabase default privileges open every restored table/function
+#   to anon/authenticated; grants.sql closes them again and recreates the «pricelists» bucket + Storage rules (schema storage is not dumped).
+# Not in this backup: Storage files (price-list XML: re-uploaded only on the next price/stock change or a forced re-publish — until then Kaspi gets 404),
+#   Edge Function secrets, Auth settings (email/OTP, access-token hook). A NEW project also changes the Supabase URL and signing keys: new extension build.
 name: seller-hub-db-backup
 
 on:
