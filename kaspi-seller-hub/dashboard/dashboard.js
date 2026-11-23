@@ -3091,7 +3091,7 @@ function viewHelp() {
     SUPPORT.telegram && h('a', { class: 'btn', href: `https://t.me/${SUPPORT.telegram.replace(/^@/, '')}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
     SUPPORT.email && h('a', { class: 'btn', href: `mailto:${SUPPORT.email}` }, SUPPORT.email),
   ].filter(Boolean);
-  const faq = ['connect', 'token', 'accept', 'printer', 'profit', 'upload', 'backup', 'pay', 'phone'];
+  const faq = ['connect', 'token', 'accept', 'printer', 'profit', 'upload', 'backup', 'pay', 'telegram', 'phone'];
   return h(
     'div',
     { class: 'settings' },
