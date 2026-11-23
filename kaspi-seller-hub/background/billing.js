@@ -474,6 +474,31 @@ export function reportClientError(code, context = '') {
   } catch { /* ignore */ }
 }
 
+const UX_TYPES = new Set(['screen_view', 'action_click', 'rage_click', 'form_abandoned', 'help_opened']);
+const UX_KEY = /^[a-z0-9_:-]{1,64}$/;
+const uxOk = (k) => typeof k === 'string' && UX_KEY.test(k) && !/^[0-9]+$/.test(k);
+/**
+ * Anonymous UX counters from the dashboard (shared/ux-telemetry.js): a batch of {t, k, s, n}.
+ * Only whitelisted codes pass (re-validated here); each event calls track_ux_event min(n, 5) times
+ * (the RPC adds 1 per call, so very large counts are capped), at most 50 events per batch.
+ * Fire-and-forget: never throws, skips when signed out / not configured.
+ */
+export function trackUxEvents(events) {
+  (async () => {
+    try {
+      if (!isConfigured() || !Array.isArray(events)) return;
+      const list = events.filter((e) => e && UX_TYPES.has(e.t) && uxOk(e.k) && uxOk(e.s)).slice(0, 50);
+      if (!list.length || !(await accessToken())) return;
+      for (const e of list) {
+        const n = Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5);
+        for (let i = 0; i < n; i++) {
+          try { await rpc('track_ux_event', { p_event_type: e.t, p_target_key: e.k, p_screen_key: e.s }); } catch { break; }
+        }
+      }
+    } catch { /* telemetry must never break anything */ }
+  })();
+}
+
 const funnelPending = new Set();
 /**
  * Product funnel milestone, sent at most once per event (the server also dedups). Fire-and-forget:

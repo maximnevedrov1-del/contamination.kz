@@ -1,5 +1,5 @@
 #!/bin/bash
-# Full browser regression: each suite on a fresh DB + fresh mocks + fresh test copy.
+# Full browser regression (21 suites: 11 billing/mock-Supabase + 10 API/demo): each suite on a fresh DB + fresh mocks + fresh test copy.
 S="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$(cd "$S/.." && pwd)"
 copyext() { mkdir -p "$1" && tar -C "$SRC" --exclude=./tests --exclude=./dist -cf - . | tar -C "$1" -xf - \
@@ -14,7 +14,7 @@ fresh() {
   $S/e2e/mkbillcopy.sh >/dev/null
   rm -rf billprof bill2prof profile2 apiprof featprof
 }
-for t in cattest billtest hack billtest2 team support insights orchestra growth telegram; do
+for t in cattest billtest hack billtest2 team support insights orchestra growth telegram uxtelemetry; do
   fresh
   echo "$t: $(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
 done

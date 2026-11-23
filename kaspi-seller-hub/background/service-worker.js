@@ -1173,6 +1173,11 @@ const uiHandlers = {
     B.trackFunnel(String(event || ''));
     return { ok: true };
   },
+  /** Anonymous UX counters from the dashboard (whitelisted codes only, fire-and-forget). */
+  'ui:trackUx': async ({ events }) => {
+    B.trackUxEvents(events);
+    return { ok: true };
+  },
   'ui:logError': async ({ where, message }) => {
     await logError(`page:${String(where || '').slice(0, 30)}`, String(message || ''));
     return { ok: true };

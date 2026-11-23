@@ -169,6 +169,7 @@
     if (tab === 'config') return renderConfig(panel);
     if (tab === 'flags') return renderFlags(panel);
     if (tab === 'errors') return renderErrors(panel);
+    if (tab === 'ux') return renderUx(panel);
     const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
     renderInvoices(panel, page);
   }
@@ -326,6 +327,27 @@
     el('ul', { class: 'quotes' }, list.slice(0, 8).map(item)),
     list.length > 8 && el('details', null, el('summary', { class: 'muted' }, `ещё ${list.length - 8}`), el('ul', { class: 'quotes' }, list.slice(8).map(item))),
   ];
+
+  const UX_TYPE = { rage_click: 'Ярость-клики', form_abandoned: 'Бросили форму', help_opened: 'Открыли помощь' };
+  async function renderUx(panel) {
+    const r = (await rpc('admin_ux_summary', {})) || {};
+    const table = (head, rows) => el('table', null,
+      el('thead', null, el('tr', null, head.map((h, n) => el('th', { class: n >= head.length - 2 ? 'num' : null }, h)))),
+      el('tbody', null, rows));
+    const screens = (list) => list?.length
+      ? table(['Экран', 'Пользователей', 'Просмотров'], list.map((x) => el('tr', null, el('td', null, x.screen_key), el('td', { class: 'num' }, x.users), el('td', { class: 'num' }, x.views))))
+      : el('p', { class: 'muted' }, 'Данных пока нет.');
+    panel.replaceChildren(
+      el('p', { class: 'muted' }, 'Анонимные счётчики поведения (без текстов, адресов и данных Kaspi). Из топа затыков берите темы для подсказок бота и статей блога.'),
+      el('h3', null, 'Затыки'),
+      r.friction?.length
+        ? table(['Что', 'Элемент', 'Экран', 'Пользователей', 'Раз'], r.friction.map((x) => el('tr', null,
+            el('td', null, UX_TYPE[x.event_type] || x.event_type), el('td', null, x.target_key), el('td', { class: 'muted' }, x.screen_key),
+            el('td', { class: 'num' }, x.users), el('td', { class: 'num' }, x.occurrences))))
+        : el('p', { class: 'muted' }, 'Затыков пока не видно.'),
+      el('h3', null, 'Самые используемые экраны'), screens(r.top_screens),
+      el('h3', null, 'Реже всего открывают'), screens(r.least_screens));
+  }
 
   async function renderErrors(panel) {
     const list = (await rpc('admin_client_errors', { p_limit: 200 })) || [];

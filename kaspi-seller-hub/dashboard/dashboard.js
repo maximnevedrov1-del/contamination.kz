@@ -23,6 +23,7 @@ import {
   formatDuration,
 } from '../shared/i18n.js';
 import '../shared/selectors.js';
+import { startUx } from './ux-wire.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
@@ -388,7 +389,7 @@ function renderTable(route, allRows) {
 
     h('div', { class: 'toolbar__spacer' }),
     route === 'orders' && h('button', { type: 'button', class: 'btn btn--sm', onclick: () => openPickList(allRows) }, t('pick.button')),
-    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'export' }, disabled: !rows.length, title: t('export.hint'), onclick: () => exportRows(route, selectedRows.length ? selectedRows : rows) }, t('export.button')),
+    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'export', uxKey: 'act_export' }, disabled: !rows.length, title: t('export.hint'), onclick: () => exportRows(route, selectedRows.length ? selectedRows : rows) }, t('export.button')),
     h('span', { class: 'toolbar__count' }, t('table.rows', { count: rows.length })),
   );
 
@@ -734,7 +735,7 @@ function openPhoto(sku, name, onSaved) {
       state.photos?.[sku] && h('button', { type: 'button', class: 'btn btn--ghost btn--danger', onclick: () => save(null) }, t('photo.remove')),
       h('span', { class: 'grow' }),
       h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, t('common.close')),
-      h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'photo-save' }, onclick: () => (isAllowedPhoto(value) ? save(value) : ((err.hidden = false), (err.textContent = t('errors.photoNotAllowed')))) }, t('photo.save')),
+      h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'photo-save', uxKey: 'act_photo-save' }, onclick: () => (isAllowedPhoto(value) ? save(value) : ((err.hidden = false), (err.textContent = t('errors.photoNotAllowed')))) }, t('photo.save')),
       file,
     ),
   );
@@ -1534,6 +1535,7 @@ function manageChatPolling() {
 
 /** Settings are written by the worker (under its lock), never directly from here. */
 async function updateSettings(patch, { silent } = {}) {
+  uxSaved = true;
   const next = await send('ui:saveSettings', { patch });
   if (next?.stores) state.data.settings = next;
   if (!silent) toast(t('settings.saved'), 'ok', 2000);
@@ -1541,6 +1543,7 @@ async function updateSettings(patch, { silent } = {}) {
 }
 
 async function updateStore(shopId, patch) {
+  uxSaved = true;
   const next = await send('ui:updateStore', { shopId, patch });
   if (next?.stores) state.data.settings = next;
   toast(t('settings.saved'), 'ok', 2000);
@@ -1565,7 +1568,7 @@ function printCard(st) {
   return h('section', { class: 'card', dataset: { card: 'print' } },
     h('div', { class: 'card__header' },
       h('div', null, h('h2', { class: 'card__title' }, t('settings.printTitle')), h('div', { class: 'card__sub' }, t('settings.printHint'))),
-      h('button', { type: 'button', class: 'btn', dataset: { action: 'print-test' }, onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL('dashboard/print.html?mode=test') }) }, t('settings.printTest')),
+      h('button', { type: 'button', class: 'btn', dataset: { action: 'print-test', uxKey: 'act_print-test' }, onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL('dashboard/print.html?mode=test') }) }, t('settings.printTest')),
     ),
     h('div', { class: 'card__body' },
       seg,
@@ -1698,7 +1701,7 @@ function viewSettings() {
       h(
         'div',
         { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
-        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'backup-save' }, onclick: async () => {
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'backup-save', uxKey: 'act_backup-save' }, onclick: async () => {
           const res = await send('ui:backupExport');
           if (!res?.ok) return toast(errorText(res?.error), 'error');
           const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(res.backup, null, 1)], { type: 'application/json' })), download: `seller-hub-backup-${new Date().toISOString().slice(0, 10)}.json` });
@@ -1708,7 +1711,7 @@ function viewSettings() {
           markStep('backup');
         } }, t('backup.save')),
         h('button', { type: 'button', class: 'btn', onclick: (e) => e.currentTarget.nextElementSibling.click() }, t('backup.restore')),
-        h('input', { type: 'file', accept: '.json,application/json', hidden: true, dataset: { action: 'backup-file' }, onchange: async (e) => {
+        h('input', { type: 'file', accept: '.json,application/json', hidden: true, dataset: { action: 'backup-file', uxKey: 'act_backup-file' }, onchange: async (e) => {
           const file = e.target.files[0];
           e.target.value = '';
           if (!file) return;
@@ -1966,7 +1969,7 @@ function renderBanners() {
     box.append(h('div', { class: 'banner banner--warn', role: 'status', dataset: { banner: 'expiry' } },
       h('span', { class: 'banner__icon' }, icon('warn')),
       h('span', { class: 'banner__text' }, t(exp.kind === 'trial' ? 'notices.expiryTrial' : 'notices.expiryPaid', { days: exp.days })),
-      h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'renew' }, onclick: () => (location.hash = state.data.license.pendingInvoice ? 'pay' : 'account') }, t('notices.renew'))));
+      h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'renew', uxKey: 'act_renew' }, onclick: () => (location.hash = state.data.license.pendingInvoice ? 'pay' : 'account') }, t('notices.renew'))));
   // the owner's notice for everyone («Kaspi не отвечает, чиним»)
   const notice = statusBanner(state.serviceStatus);
   if (notice) box.append(notice);
@@ -2226,7 +2229,7 @@ async function checkPayment(manual = false) {
 function invoiceNumber(id) {
   return h('div', { class: 'invoice-no', dataset: { block: 'invoice-no' }, style: { display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0' } },
     h('b', { style: { fontSize: '1.15em' } }, t('notices.invoiceNo', { id })),
-    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'copy-invoice-no' }, onclick: async () => {
+    h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'copy-invoice-no', uxKey: 'act_copy-invoice-no' }, onclick: async () => {
       await copyText(String(id));
       toast(t('notices.copied'), 'ok');
     } }, t('notices.copy')));
@@ -2358,8 +2361,8 @@ function subscriptionCard(lic) {
       disc,
       lic.downgradeNext ? h('p', { class: 'muted' }, t('plan.downgradeNext')) : null,
       lic.cancelAt
-        ? h('div', null, h('p', null, t('plan.cancelled', { date: formatDate(lic.paidUntil) })), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'resume' }, onclick: resumeSubscription }, t('plan.resume')))
-        : lic.status !== 'frozen' && h('div', null, h('button', { type: 'button', class: 'btn btn--ghost btn--sm', dataset: { action: 'cancel-subscription' }, onclick: () => openCancelFlow({ lic, toast, errorText, onLicense: (l) => { if (l) state.data.license = l; renderAll(); } }) }, t('plan.cancelBtn')))));
+        ? h('div', null, h('p', null, t('plan.cancelled', { date: formatDate(lic.paidUntil) })), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'resume', uxKey: 'act_resume' }, onclick: resumeSubscription }, t('plan.resume')))
+        : lic.status !== 'frozen' && h('div', null, h('button', { type: 'button', class: 'btn btn--ghost btn--sm', dataset: { action: 'cancel-subscription', uxKey: 'act_cancel-subscription' }, onclick: () => openCancelFlow({ lic, toast, errorText, onLicense: (l) => { if (l) state.data.license = l; renderAll(); } }) }, t('plan.cancelBtn')))));
 }
 
 /** Opens the «connect a store» form (set by bindConnectDialog). */
@@ -2419,7 +2422,7 @@ function bindConnectDialog() {
       return;
     }
     $('connectToken').value = '';
-    dlg.close();
+    dlg.close('ok');
     toast(t('connect.done'), 'ok');
     await loadState();
     const lic = state.data.license;
@@ -2798,8 +2801,16 @@ function npsCtx() {
 const exitEl = () => (state.feedbackDue === 'exit' || feedbackUi.exit.done ? exitCard({ ui: feedbackUi.exit, toast, errorText, rerender: () => renderView() }) : null);
 /** Control panel: which section was opened (numbers only, background/usage.js). */
 function noteSection() {
-  if (!staffMode()) send('ui:usage', { section: state.route }).catch(() => {});
+  if (staffMode()) return;
+  send('ui:usage', { section: state.route }).catch(() => {});
+  // anonymous UX counters (shared/ux-telemetry.js): section view; Settings left after >15 s without a change = abandoned
+  if (!ux) return;
+  if (uxLast === 'settings') ux.formClosed('settings', uxSaved);
+  uxSaved = false; uxLast = state.route;
+  ux.screenView(state.route);
+  if (state.route === 'settings') ux.formOpened('settings');
 }
+let ux = null, uxLast = null, uxSaved = false;
 
 function viewHome() {
   const orders = allOrders();
@@ -2924,6 +2935,7 @@ const gifUrl = (route) => (GUIDE_GIFS[route] ? chrome.runtime.getURL(`help/${GUI
 
 /** The recording in a window; the GIF is loaded only when asked for. */
 function openGif(route) {
+  ux?.help(`gif_${route}`);
   let dlg = $('gifDialog');
   if (!dlg) {
     dlg = h('dialog', { id: 'gifDialog', class: 'dialog dialog--gif', 'aria-labelledby': 'gifTitle' });
@@ -2951,7 +2963,7 @@ function guideCard(route, { dismissible = true } = {}) {
     dismissible &&
       h('div', { class: 'guide__actions' },
         h('button', { type: 'button', class: 'btn btn--sm btn--primary', onclick: () => (memo.set(`ksh.guide.${route}`, '1'), (state.guideOpen = false), renderView()) }, t('guide.gotIt')),
-        gifUrl(route) && h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'gif' }, onclick: () => openGif(route) }, '▶ ', t('guide.watch')),
+        gifUrl(route) && h('button', { type: 'button', class: 'btn btn--sm', dataset: { action: 'gif', uxKey: 'act_gif' }, onclick: () => openGif(route) }, '▶ ', t('guide.watch')),
         h('a', { class: 'btn btn--sm btn--ghost', href: '#help' }, t('guide.all')),
       ),
   );
@@ -3021,6 +3033,7 @@ function showTourStep(i) {
 }
 
 function startTour() {
+  ux?.help('tour');
   if (document.querySelector('dialog[open]')) return; // consent / payment windows come first
   location.hash = 'home';
   showTourStep(0);
@@ -3034,13 +3047,13 @@ function reportCard() {
     h('div', { class: 'card__header' },
       h('div', null, h('h2', { class: 'card__title' }, t('help.report.title')), status),
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
-        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'copy-report' }, onclick: async () => {
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'copy-report', uxKey: 'act_copy-report' }, onclick: async () => {
           const res = await send('ui:diagnostics');
           if (!res?.ok) return toast(errorText(res?.error), 'error');
           await copyText(res.text);
           toast(t('help.report.copied', { count: res.count }), 'ok', 6000);
         } }, t('help.report.copy')),
-        h('button', { type: 'button', class: 'btn', dataset: { action: 'clear-report' }, onclick: async () => {
+        h('button', { type: 'button', class: 'btn', dataset: { action: 'clear-report', uxKey: 'act_clear-report' }, onclick: async () => {
           await send('ui:clearErrors');
           toast(t('help.report.cleared'), 'ok');
         } }, t('help.report.clear')),
@@ -3087,8 +3100,8 @@ function viewHelp() {
       contacts.length ? h('div', { class: 'card__body', style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, contacts) : null,
     ),
     h('section', { class: 'card' },
-      h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour' }, onclick: startTour }, t('help.startTour'))),
-      h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, gifUrl(r) && h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'gif' }, onclick: () => openGif(r) }, '▶ ', t('guide.watch')), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection')))))),
+      h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('help.guidesTitle')), h('div', { class: 'card__sub' }, t('help.guidesText'))), h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'tour', uxKey: 'act_tour' }, onclick: startTour }, t('help.startTour'))),
+      h('div', { class: 'card__body faq' }, GUIDE_ROUTES.map((r) => h('details', { class: 'faq__item', dataset: { guide: r } }, h('summary', null, t(`guide.${r}.title`)), h('ol', { class: 'guide__steps' }, guideSteps(r).map((x) => h('li', null, x))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, gifUrl(r) && h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'gif', uxKey: 'act_gif' }, onclick: () => openGif(r) }, '▶ ', t('guide.watch')), h('a', { class: 'btn btn--sm', href: `#${r}` }, t('help.openSection')))))),
     ),
     supportCard(supportCtx()),
     reportCard(),
@@ -3162,7 +3175,7 @@ function promptReason() {
   return new Promise((resolve) => {
     let dlg = $('reasonDialog');
     if (!dlg) {
-      dlg = h('dialog', { id: 'reasonDialog', class: 'dialog' });
+      dlg = h('dialog', { id: 'reasonDialog', class: 'dialog', dataset: { uxForm: '1' } });
       document.body.append(dlg);
     }
     const reasons = ['noStock', 'damaged', 'wrongItem', 'other'];
@@ -3174,7 +3187,7 @@ function promptReason() {
       note,
       h('div', { class: 'dialog__actions' },
         h('button', { type: 'button', class: 'btn', onclick: () => (dlg.close(), resolve(null)) }, t('common.cancel')),
-        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'reason-send' }, onclick: () => (dlg.close(), resolve(`${t(`pack.reason.${pick}`)}${note.value.trim() ? `: ${note.value.trim()}` : ''}`)) }, t('pack.send'))),
+        h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'reason-send', uxKey: 'act_reason-send' }, onclick: () => (dlg.close('ok'), resolve(`${t(`pack.reason.${pick}`)}${note.value.trim() ? `: ${note.value.trim()}` : ''}`)) }, t('pack.send'))),
     );
     dlg.showModal();
   });
@@ -3317,6 +3330,7 @@ function bindShell() {
   bindConnectDialog();
   // narrow window: ☰ opens the menu; choosing a section or tapping outside closes it
   $('guideBtn').addEventListener('click', () => {
+    ux?.help(`guide_${state.route}`);
     if (!GUIDE_ROUTES.includes(state.route)) return (location.hash = 'help');
     const shown = !!document.querySelector('#view > .guide');
     state.guideOpen = !shown; // «?» shows the guide; pressed again, hides it for good
@@ -3456,6 +3470,7 @@ async function main() {
   await initI18n();
   state.route = routeFromHash();
   state.kaspiAccess = chrome.permissions?.contains ? await chrome.permissions.contains({ origins: KASPI_ORIGINS }).catch(() => true) : true;
+  ux = startUx({ enabled: () => !staffMode() });
   bindShell();
   await refreshInvoiceCount();
   await loadState();

@@ -7,6 +7,7 @@
  * site/site.config.json holds what is only known at launch (domain, support contacts, response
  * time). An element marked data-requires="key" is kept only when that value is filled in;
  * data-unless="key" is kept only when it is empty. "contacts" = any of whatsapp/telegram/email.
+ * clarityProjectId (optional): when set, pages load site/clarity.js, which adds Microsoft Clarity (no inline script).
  * {{key}} in the HTML is replaced by the value. Nothing is invented: an empty value simply
  * leaves its block out.
  */
@@ -28,6 +29,7 @@ const v = {
 v.contacts = v.whatsappDigits || v.telegramName || v.email ? 'yes' : '';
 v.whatsapp = v.whatsappDigits;
 v.telegram = v.telegramName;
+if (String(cfg.clarityProjectId || '').trim() && !/^[a-z0-9]{6,20}$/.test(cfg.clarityProjectId)) throw new Error('clarityProjectId must match ^[a-z0-9]{6,20}$');
 const filled = (k) => String(v[k] ?? '').trim() !== '';
 
 const VOID = new Set(['link', 'meta', 'img', 'br', 'hr', 'input', 'source']);
@@ -69,7 +71,7 @@ fs.mkdirSync(OUT, { recursive: true });
 function copyTree(dir, outDir) {
   fs.mkdirSync(outDir, { recursive: true });
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (dir === SRC && f.name === 'site.config.json') continue;
+    if (dir === SRC && (f.name === 'site.config.json' || (f.name === 'clarity.js' && !filled('clarityProjectId')))) continue;
     const from = path.join(dir, f.name);
     const to = path.join(outDir, f.name);
     if (f.isDirectory()) copyTree(from, to);
