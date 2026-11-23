@@ -1,4 +1,4 @@
--- Seller Hub: strict invoice confirmation + durable Storage cleanup queue. Safe to run again.
+-- SaaS core: strict invoice confirmation + durable Storage cleanup queue. Safe to run again.
 -- MUST be applied AFTER 025_audit_hardening_f1_f2.sql.
 -- (a) admin_confirm_invoice now REQUIRES p_expected_amount and p_expected_stores ('expected_values_required',
 --     errcode 22023, raised before anything is updated). The admin page always sends them; old 2-argument

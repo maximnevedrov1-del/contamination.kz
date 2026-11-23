@@ -1,4 +1,4 @@
--- Seller Hub: indexes for per-user lookups that scanned whole tables, and a health check. Safe to run again.
+-- SaaS core: indexes for per-user lookups that scanned whole tables, and a health check. Safe to run again.
 -- Run after 005_growth.sql.
 
 -- offer_used check: count by user_id, outcome over 180 days (005_growth.sql, cancel flow); also FK cascade

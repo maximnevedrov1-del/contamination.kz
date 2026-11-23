@@ -1,4 +1,4 @@
--- Seller Hub — staff (packers) of a store owner. Run after 001_billing.sql; safe to re-run.
+-- SaaS core — staff (packers) of a store owner. Run after 001_billing.sql; safe to re-run.
 --
 -- The owner adds a packer by e-mail. The packer signs in with a code from a letter (Supabase
 -- Auth, as everyone) on the owner's warehouse computer and joins the owner's team. The owner can

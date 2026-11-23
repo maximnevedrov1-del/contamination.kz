@@ -1,4 +1,4 @@
--- Seller Hub: referral program. Safe to run again. Run after 018_trial_14_days.sql.
+-- SaaS core: referral program. Safe to run again. Run after 018_trial_14_days.sql.
 -- A friend who registers with an invitation code gets +7 days of trial; whoever invited them gets
 -- +14 days of subscription when the friend's first invoice is paid (once per friend).
 

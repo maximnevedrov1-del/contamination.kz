@@ -1,4 +1,4 @@
--- Seller Hub: referral info for the admin panel. Safe to run again. Apply AFTER 019_referral_program.sql and 020_security_hardening_fixes.sql.
+-- SaaS core: referral info for the admin panel. Safe to run again. Apply AFTER 019_referral_program.sql and 020_security_hardening_fixes.sql.
 -- admin_invoices: rows get referred, referrer_email, referral_rewarded, referral_will_reward.
 -- admin_accounts: rows get referred, referrer_email, referrals_count, referral_bonus_days, referral_code.
 begin;

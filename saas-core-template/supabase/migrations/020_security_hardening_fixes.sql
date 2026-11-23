@@ -1,4 +1,4 @@
--- Seller Hub: security/reliability fixes. Safe to run again.
+-- SaaS core: security/reliability fixes. Safe to run again.
 -- MUST be applied AFTER 019_referral_program.sql (redefines its admin_confirm_invoice, reasserts its revokes).
 -- 1. Referral reward only for subscription invoices (manual/renewal), never for add-on (extra stores) invoices,
 --    and not to an inviter whose account is frozen or blocked (trial_blocked) or deleted.

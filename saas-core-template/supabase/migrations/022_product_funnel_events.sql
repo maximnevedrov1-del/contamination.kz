@@ -1,4 +1,4 @@
--- Seller Hub: product funnel events (one row per user per milestone, no business data). Safe to run again. Apply AFTER 021_admin_referral_info.sql.
+-- SaaS core: product funnel events (one row per user per milestone, no business data). Safe to run again. Apply AFTER 021_admin_referral_info.sql.
 -- Events: onboarding_completed, first_sync_done, trial_expired_view, invoice_created, referral_shared.
 -- The extension calls track_funnel_event(event) once per event; admins read counts via admin_funnel_events().
 begin;

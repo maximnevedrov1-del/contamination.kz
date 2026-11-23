@@ -441,7 +441,7 @@
       ? table(['Экран', 'Пользователей', 'Просмотров'], list.map((x) => el('tr', null, el('td', null, x.screen_key), el('td', { class: 'num' }, x.users), el('td', { class: 'num' }, x.views))))
       : el('p', { class: 'muted' }, 'Данных пока нет.');
     panel.replaceChildren(
-      el('p', { class: 'muted' }, 'Анонимные счётчики поведения (без текстов, адресов и данных Kaspi). Из топа затыков берите темы для подсказок бота и статей блога.'),
+      el('p', { class: 'muted' }, 'Анонимные счётчики поведения (без текстов, адресов и данных маркетплейса). Из топа затыков берите темы для подсказок бота и статей блога.'),
       el('h3', null, 'Затыки'),
       r.friction?.length
         ? table(['Что', 'Элемент', 'Экран', 'Пользователей', 'Раз'], r.friction.map((x) => el('tr', null,
@@ -698,7 +698,7 @@
     rpc('admin_growth_settings', { p: {} }).then((g) => {
       const f = {
         bot_username: el('input', { class: 'input', placeholder: '{{TELEGRAM_HANDLE}}_bot', value: g.bot_username || '' }),
-        app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
+        app_url: el('input', { class: 'input', placeholder: 'https://example.com', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
       };

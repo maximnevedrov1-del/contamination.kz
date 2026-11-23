@@ -1,5 +1,5 @@
--- Seller Hub: anonymous UX behaviour telemetry (where sellers get stuck). Safe to run again. Apply AFTER 023_client_errors_and_retention.sql.
--- Stores only counters keyed by short whitelisted codes: event type + control key + screen key. No text, URLs, values or Kaspi data.
+-- SaaS core: anonymous UX behaviour telemetry (where sellers get stuck). Safe to run again. Apply AFTER 023_client_errors_and_retention.sql.
+-- Stores only counters keyed by short whitelisted codes: event type + control key + screen key. No text, URLs, values or marketplace data.
 -- The extension calls track_ux_event(type, target_key, screen_key); admins read admin_ux_summary().
 begin;
 

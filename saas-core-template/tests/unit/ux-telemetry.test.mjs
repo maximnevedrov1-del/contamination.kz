@@ -21,7 +21,7 @@ function rig(opts = {}) {
 
 test('key validation: only short codes, never digits-only / URLs / text / cyrillic', () => {
   for (const ok of ['home', 'nav_orders', 'act_reason-send', 'a:b', 'a1', 'x'.repeat(64)]) assert.ok(isValidKey(ok), ok);
-  for (const bad of ['', '123456', 'https://kaspi.kz/x', 'kaspi.kz', 'has space', 'Upper', 'кнопка', 'a/b', 'a@b', 'x'.repeat(65), null, undefined, 5]) assert.ok(!isValidKey(bad), String(bad));
+  for (const bad of ['', '123456', 'https://example.com/x', 'example.com', 'has space', 'Upper', 'кнопка', 'a/b', 'a@b', 'x'.repeat(65), null, undefined, 5]) assert.ok(!isValidKey(bad), String(bad));
   assert.equal(normalizeKey('connectDialog'), 'connectdialog');
   assert.equal(normalizeKey('my dialog!'), 'my_dialog_');
   assert.equal(normalizeKey('12345'), null);

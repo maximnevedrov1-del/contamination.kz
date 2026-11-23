@@ -1,7 +1,7 @@
 -- 017: the Telegram-bot and ops-digest RPCs are for the server side only.
 -- They were callable with the public anon key (guarded only by a key argument); now EXECUTE is
 -- granted to service_role alone. Callers: the telegram-bot Edge Function (uses
--- SUPABASE_SERVICE_ROLE_KEY) and tools/ops-alert.mjs (GitHub secret SUPABASE_SERVICE_ROLE_KEY).
+-- SUPABASE_SERVICE_ROLE_KEY) and the ops-alert GitHub workflow (github-workflows/ops-alert.yml, secret SUPABASE_SERVICE_ROLE_KEY).
 -- Deploy the updated telegram-bot function BEFORE applying this migration.
 --
 -- NOT revoked on purpose: get_service_status(). The extension (anon / seller token) and the admin

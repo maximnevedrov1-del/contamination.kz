@@ -34,6 +34,8 @@ runs in developer mode (no login, no signature check). Never put private keys or
 
 ## Bootstrap a new product
 
+Short checklist: [NEW-SAAS-QUICKSTART.md](NEW-SAAS-QUICKSTART.md). GitHub workflow templates live in `github-workflows/` (no leading dot so they do not run here); copy them to `.github/workflows/` in the new repo.
+
 ```bash
 cp saas.config.example.json my.config.json     # edit values
 node scripts/init-new-saas.mjs --config my.config.json --out ../my-product --dry-run   # file list, counts, unreplaced tokens

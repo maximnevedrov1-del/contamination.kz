@@ -27,7 +27,7 @@ set role authenticated; set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000
 do $$ begin perform track_ux_event('keylogger', 'home', 'home'); raise notice 'FAIL unknown event type accepted'; exception when others then raise notice '% unknown event type rejected', case when sqlerrm = 'invalid_ux_event' then 'PASS' else 'FAIL' end; end $$;
 do $$ begin perform track_ux_event(null, 'home', 'home'); raise notice 'FAIL null event type accepted'; exception when others then raise notice '% null event type rejected', case when sqlerrm = 'invalid_ux_event' then 'PASS' else 'FAIL' end; end $$;
 do $$ declare k text; i int := 0; begin
-  foreach k in array array['https://kaspi.kz/x', 'kaspi.kz/shop', 'has space', 'Upper', 'a/b', 'a?b=1', '123456', '8000020011', repeat('a', 65), '', 'кнопка', 'a@b.kz', 'x.y']
+  foreach k in array array['https://example.com/x', 'example.com/shop', 'has space', 'Upper', 'a/b', 'a?b=1', '123456', '8000020011', repeat('a', 65), '', 'кнопка', 'a@b.example', 'x.y']
   loop
     begin perform track_ux_event('action_click', k, 'home'); raise notice 'FAIL bad target key accepted: %', k;
     exception when others then if sqlerrm = 'invalid_ux_key' then i := i + 1; else raise notice 'FAIL wrong error for %: %', k, sqlerrm; end if; end;

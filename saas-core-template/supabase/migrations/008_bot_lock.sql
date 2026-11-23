@@ -1,4 +1,4 @@
--- Seller Hub: one Telegram bot run at a time. Safe to run again. Run after 007_bot_batch.sql.
+-- SaaS core: one Telegram bot run at a time. Safe to run again. Run after 007_bot_batch.sql.
 -- Two runs at once (a cron retry while the first is still sending, a manual call) both got the
 -- same bot_jobs batch before either recorded it, and sellers received every message twice.
 -- bot_lock() takes a lease for `p_ttl` seconds; a crashed run never frees it, so it simply

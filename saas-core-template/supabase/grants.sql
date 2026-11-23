@@ -114,7 +114,7 @@ grant select (id, user_id, kind, stores, months, amount, phone, status, created_
 -- ---------- 7. Storage: price-list bucket and its rules (schema storage is NOT in the dump) ----------
 -- The files themselves live in Supabase Storage, outside the database dump: after a restore the
 -- extension re-uploads a feed only when its prices/stock change or on a forced re-publish (same feed_id → same URL
--- on the same project; a new project has a new URL that the seller must paste into Kaspi again).
+-- on the same project; a new project has a new URL that the seller must paste into the marketplace again).
 do $$ begin
   if exists (select 1 from pg_namespace where nspname = 'storage') then
     insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

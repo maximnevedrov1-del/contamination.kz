@@ -1,4 +1,4 @@
--- Seller Hub: Telegram bot sends in batches. Safe to run again. Run after 006_indexes.sql.
+-- SaaS core: Telegram bot sends in batches. Safe to run again. Run after 006_indexes.sql.
 -- bot_jobs returned every due message at once: with many users one run outlived the function's
 -- time limit and the caller's timeout, nothing was recorded and the next run sent it all again.
 -- Now at most `batch` items per call; the bot records results every 50 messages and calls
