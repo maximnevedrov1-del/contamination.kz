@@ -28,9 +28,11 @@ select case when (select status from public.invoices where id = 9001) = 'pending
 set role authenticated;
 -- matching values -> paid
 do $$ declare r jsonb; begin r := admin_confirm_invoice(9001, 'ok', 99000, 20); raise notice '% matching expected values confirm', case when r->>'status' = 'paid' then 'PASS' else 'FAIL' end; exception when others then raise notice 'FAIL matching confirm: %', sqlerrm; end $$;
--- nulls -> backwards compatible
-do $$ declare r jsonb; begin r := admin_confirm_invoice(9002, 'legacy'); raise notice '% two-argument call still works', case when r->>'status' = 'paid' then 'PASS' else 'FAIL' end; exception when others then raise notice 'FAIL legacy confirm: %', sqlerrm; end $$;
-do $$ declare r jsonb; begin r := admin_confirm_invoice(9003, null, null, null); raise notice '% null expected values skip the check', case when r->>'status' = 'paid' then 'PASS' else 'FAIL' end; exception when others then raise notice 'FAIL null confirm: %', sqlerrm; end $$;
+-- 026: legacy / null calls are refused (see test23 for the full matrix)
+do $$ begin perform admin_confirm_invoice(9002, 'legacy'); raise notice 'FAIL two-argument call confirmed';
+  exception when others then raise notice '% two-argument call refused (expected_values_required)', case when sqlerrm = 'expected_values_required' then 'PASS' else 'FAIL' end; end $$;
+do $$ begin perform admin_confirm_invoice(9003, null, null, null); raise notice 'FAIL null expected values confirmed';
+  exception when others then raise notice '% null expected values refused (expected_values_required)', case when sqlerrm = 'expected_values_required' then 'PASS' else 'FAIL' end; end $$;
 -- non-admin still refused
 reset role; set role authenticated; set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 do $$ begin perform admin_confirm_invoice(9001, null, 1, 1); raise notice 'FAIL non-admin confirm'; exception when others then raise notice '% non-admin refused (forbidden)', case when sqlerrm = 'forbidden' then 'PASS' else 'FAIL' end; end $$;

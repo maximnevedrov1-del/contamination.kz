@@ -1,7 +1,7 @@
 -- SaaS core: function, table and Storage privileges, deterministic and idempotent.
 -- Apply AFTER restoring a dump (pg_restore --no-owner ...):
 --   psql "$TARGET_DB_URL" -f supabase/grants.sql
--- Mirrors the grants of migrations 001..025 (verified against a database built from them).
+-- Mirrors the grants of migrations 001..026 (verified against a database built from them).
 -- Keep in sync: when a migration adds a function or changes who may call it, update this file too.
 
 -- 1. everything closed first (also for future functions)
@@ -20,6 +20,7 @@ grant execute on function
   public.admin_confirm_invoice(bigint,text,int,int),
   public.admin_delete_account(uuid,text),
   public.admin_delete_feature_flag(text),
+  public.admin_fail_storage_cleanup(bigint,text),
   public.admin_funnel_events(),
   public.admin_get_config(),
   public.admin_get_system_banner(),
@@ -29,8 +30,10 @@ grant execute on function
   public.admin_insights(int),
   public.admin_invoices(text,text,int,int),
   public.admin_list_feature_flags(),
+  public.admin_list_storage_cleanups(),
   public.admin_ops_settings(text,int,numeric),
   public.admin_purge_expired(),
+  public.admin_resolve_storage_cleanup(bigint),
   public.admin_set_feature_flag(text,boolean,int,text[],text),
   public.admin_set_status(text,text,int),
   public.admin_set_system_banner(boolean,text,text),

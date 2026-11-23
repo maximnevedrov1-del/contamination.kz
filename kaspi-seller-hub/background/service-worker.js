@@ -12,6 +12,8 @@
  *  - Notifications and the toolbar badge.
  */
 import '../shared/selectors.js';
+import { breakerOpen, nextApiHealth } from '../shared/api-breaker.js';
+import { apiTokenHash, apiStoreIdFromHash, findApiStore, storeKeySeed, storeKey } from '../shared/store-key.js';
 import {
   getSettings,
   saveSettings,
@@ -160,14 +162,11 @@ const storeKeyCache = new Map();
 async function storeKeys(stores) {
   const out = [];
   for (const st of stores) {
-    // normalised so the same shop always gives the same key
-    const id = String(st.id ?? '').trim().toLowerCase();
-    if (!id) continue;
-    if (!storeKeyCache.has(id)) {
-      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`ksh:${id}`));
-      storeKeyCache.set(id, [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join(''));
-    }
-    out.push(storeKeyCache.get(id));
+    // API stores: stable seed from the token hash (same key on any computer); tab stores: the store id
+    const seed = storeKeySeed(st);
+    if (!seed) continue;
+    if (!storeKeyCache.has(seed)) storeKeyCache.set(seed, await storeKey(st));
+    out.push(storeKeyCache.get(seed));
   }
   return out;
 }
@@ -474,6 +473,9 @@ async function syncNow() {
   // Stores connected by API token: fetched directly, no tab needed.
   const apiErrors = {};
   const [tokens, settingsNow, prevNow] = await Promise.all([getApiTokens(), getSettings(), getSnapshots()]);
+  // Stores are fetched concurrently; each finished store is saved at once (read-merge-write inside
+  // lock()), so one slow or failing store no longer holds back the others' fresh data.
+  const savedNow = new Set();
   await Promise.all(
     Object.entries(tokens).map(async ([shopId, token]) => {
       const store = settingsNow.stores[shopId];
@@ -486,6 +488,11 @@ async function syncNow() {
         const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
         B.trackFunnel('first_sync_done');
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
+        await lock(async () => {
+          const cur = await getSnapshots();
+          await setSnapshots({ ...cur, [shopId]: mergeStoreSnapshot(cur[shopId], byShop[shopId]) });
+        });
+        savedNow.add(shopId);
       } catch (e) {
         apiErrors[shopId] = e.code || e.message;
         console.warn(LOG, 'api sync failed', shopId, e.code, e.status, e.detail);
@@ -495,18 +502,20 @@ async function syncNow() {
   await recordApiHealth(Object.keys(tokens), apiErrors);
 
   await lock(async () => {
-    const [settings, prev] = await Promise.all([getSettings(), getSnapshots()]);
+    const [settings, cur] = await Promise.all([getSettings(), getSnapshots()]);
+    const prev = { ...cur, ...prevNow }; // state before this sync, for the change notifications
     const next = {};
     const shopIds = new Set([...Object.keys(settings.stores), ...Object.keys(byShop)]);
     for (const shopId of shopIds) {
-      if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(prev[shopId], byShop[shopId]);
+      if (savedNow.has(shopId)) next[shopId] = cur[shopId]; // already merged and saved above
+      else if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(cur[shopId], byShop[shopId]);
       else if (settings.stores[shopId]?.enabled && !allowed.has(shopId))
-        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'overLimit', checkedAt: Date.now() };
+        next[shopId] = { ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'overLimit', checkedAt: Date.now() };
       else if (apiErrors[shopId])
-        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
+        next[shopId] = { ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
       else
         next[shopId] = {
-          ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
+          ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
           // A store without a live tab is "tab closed". Logged-out cabinet tabs cannot be
           // attributed to a store, so they are reported separately (unauthTabs).
           status: 'noTab',
@@ -676,9 +685,7 @@ async function recordApiHealth(shopIds, errors) {
       const st = settings.stores[id];
       if (!st?.api) continue;
       if (breakerOpen(st.api) && errors[id]) continue; // skipped while resting: keep the counters
-      st.api = errors[id]
-        ? { ...st.api, error: errors[id], errorAt: Date.now(), fails: OUTAGE_CODES.has(errors[id]) ? (st.api.fails || 0) + 1 : 0 }
-        : { ...st.api, error: null, lastOkAt: Date.now(), fails: 0 };
+      st.api = nextApiHealth(st.api, errors[id], Date.now());
       changed = true;
     }
     if (changed) await saveSettings({ stores: settings.stores });
@@ -1156,10 +1163,7 @@ async function syncDue() {
  * rate limit, unexpected answer — not a wrong token), the store rests for 10 minutes; the last
  * data is shown with its time («Kaspi API временно недоступен, показываем данные от …»).
  */
-const OUTAGE_CODES = new Set(['apiNetwork', 'apiHttp', 'apiRateLimit', 'apiFormat', 'apiTimeout']);
-const BREAKER_FAILS = 3;
-const BREAKER_PAUSE = 10 * 60000;
-export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) >= BREAKER_FAILS && now - (api.errorAt || 0) < BREAKER_PAUSE;
+export { breakerOpen };
 
 /* ===================================================================== */
 /* Wiring                                                                 */
@@ -1230,9 +1234,12 @@ const uiHandlers = {
     } catch (e) {
       return { ok: false, error: e.code || e.message };
     }
+    const tokenHash = await apiTokenHash(token);
     const id = await lock(async () => {
       const settings = await getSettings();
-      const sid = shopId && settings.stores[shopId] ? shopId : `api-${uid('s').slice(-8)}`;
+      // "New store" with a token we already know → reconnect that store (no new slot, no surcharge)
+      const known = !shopId || !settings.stores[shopId] ? findApiStore(settings.stores, tokenHash) : null;
+      const sid = shopId && settings.stores[shopId] ? shopId : known?.id || apiStoreIdFromHash(tokenHash);
       const existing = settings.stores[sid];
       const used = Object.values(settings.stores).map((s) => s.color);
       settings.stores[sid] = {
@@ -1245,7 +1252,7 @@ const uiHandlers = {
         origin: existing?.origin || 'https://kaspi.kz',
         addedAt: existing?.addedAt || Date.now(),
         lastSeen: existing?.lastSeen || Date.now(),
-        api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null },
+        api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null, tokenHash },
       };
       await saveSettings({ stores: settings.stores });
       const tokens = await getApiTokens();

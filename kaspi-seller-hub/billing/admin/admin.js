@@ -161,6 +161,7 @@
     panel.replaceChildren(el('p', { class: 'muted' }, 'Загрузка…'));
     // tab counters in parallel with the tab itself (each request is a round trip to the server)
     rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 1, p_offset: 0 }).then((p) => ($('pendingCount').textContent = p.total || '')).catch(() => {});
+    refreshCleanupBanner();
     rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).then((o) => ($('ticketCount').textContent = o?.open || '')).catch(() => {});
     if (tab === 'tickets') return renderTickets(panel);
     if (tab === 'insights') return renderInsights(panel);
@@ -283,22 +284,61 @@
     return data;
   }
 
-  /** Removes the price-list files of deleted feeds (objects are <feed_id>/<shop_key>.xml in bucket «pricelists»). */
-  async function removeFeedFiles(feedIds) {
+  /** Removes every Storage object under <bucket>/<prefix>/ (price lists are <feed_id>/<shop_key>.xml). Throws on failure. */
+  async function removeStoragePrefix(bucket, prefix) {
+    const objs = (await storage('POST', 'object/list/' + bucket, { prefix: String(prefix), limit: 1000, offset: 0 })) || [];
+    const names = objs.filter((o) => o && o.name).map((o) => `${prefix}/${o.name}`);
+    if (names.length) await storage('DELETE', 'object/' + bucket, { prefixes: names });
+    return names.length;
+  }
+
+  /** Runs the queued cleanups: success → admin_resolve_storage_cleanup, failure → admin_fail_storage_cleanup. */
+  async function processCleanups(rows) {
     let removed = 0;
     let failed = 0;
-    for (const id of feedIds) {
+    for (const row of rows) {
       try {
-        const objs = (await storage('POST', 'object/list/pricelists', { prefix: String(id), limit: 1000, offset: 0 })) || [];
-        const names = objs.filter((o) => o && o.name).map((o) => `${id}/${o.name}`);
-        if (!names.length) continue;
-        await storage('DELETE', 'object/pricelists', { prefixes: names });
-        removed += names.length;
-      } catch {
+        removed += await removeStoragePrefix(row.bucket || 'pricelists', row.object_path);
+        await rpc('admin_resolve_storage_cleanup', { p_id: row.id });
+      } catch (e) {
         failed += 1;
+        await rpc('admin_fail_storage_cleanup', { p_id: row.id, p_error: String((e && e.message) || e) }).catch(() => {});
       }
     }
     return { removed, failed };
+  }
+
+  /** Persistent banner (not a toast) while price-list files of deleted accounts are still waiting for removal. */
+  async function refreshCleanupBanner() {
+    let rows = [];
+    try {
+      rows = (await rpc('admin_list_storage_cleanups')) || [];
+    } catch {
+      return; // migration 026 not applied yet or offline: no banner
+    }
+    let box = $('cleanupBanner');
+    if (!rows.length) return box && box.remove();
+    if (!box) {
+      box = el('div', { id: 'cleanupBanner', class: 'cleanup-banner', role: 'alert' });
+      $('panel').parentNode.insertBefore(box, $('panel'));
+    }
+    const last = rows.find((r) => r.last_error);
+    box.replaceChildren(
+      el('span', null, `Ожидают очистки Storage: ${rows.length}`, last ? ` · последняя ошибка: ${last.last_error}` : ''),
+      el('button', {
+        class: 'btn',
+        onclick: async (ev) => {
+          ev.target.disabled = true;
+          try {
+            const f = await processCleanups(rows);
+            toast(`Удалено файлов: ${f.removed}` + (f.failed ? `, не удалось очистить: ${f.failed}` : '') + '.', f.failed > 0);
+          } catch (e) {
+            toast(e.message, true);
+          }
+          await refreshCleanupBanner();
+        },
+      }, 'Повторить очистку'),
+    );
   }
 
   async function deleteAccount(a) {
@@ -308,9 +348,11 @@
     if (typed.trim().toLowerCase() !== String(a.email || '').trim().toLowerCase()) return toast('Email не совпал: аккаунт НЕ удалён.', true);
     try {
       const r = await rpc('admin_delete_account', { p_user: a.user_id, p_email: typed.trim() });
-      const feeds = Array.isArray(r && r.price_feeds_to_remove) ? r.price_feeds_to_remove : [];
-      const f = await removeFeedFiles(feeds);
-      toast(`Аккаунт удалён. Файлов прайс-листов удалено: ${f.removed}` + (f.failed ? `, не удалось очистить прайс-листов: ${f.failed} (удалите вручную в Storage → pricelists)` : '') + '.', f.failed > 0);
+      const feeds = new Set((Array.isArray(r && r.price_feeds_to_remove) ? r.price_feeds_to_remove : []).map(String));
+      // the server queued one cleanup row per feed in the same transaction; run them now
+      const queued = ((await rpc('admin_list_storage_cleanups').catch(() => [])) || []).filter((row) => feeds.has(String(row.object_path)));
+      const f = await processCleanups(queued);
+      toast(`Аккаунт удалён. Файлов прайс-листов удалено: ${f.removed}` + (f.failed ? `, не удалось очистить прайс-листов: ${f.failed} (останутся в очереди: нажмите «Повторить очистку»)` : '') + '.', f.failed > 0);
       await render();
     } catch (e) {
       toast(e.message, true);

@@ -1800,7 +1800,7 @@ function apiCard() {
   );
   const nameInput = !ui.shopId && h('input', { class: 'input', placeholder: t('settings.api.storeName'), 'aria-label': t('settings.api.storeName'), value: ui.name, dataset: { fkey: 'api-name' }, oninput: (e) => (ui.name = e.target.value) });
   // The token field is never pre-filled and its value is not kept in page state.
-  const tokenInput = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: t('settings.api.tokenLabel'), 'aria-label': t('settings.api.tokenLabel'), style: { flex: '1' } });
+  const tokenInput = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: t('settings.api.tokenLabel'), 'aria-label': t('settings.api.tokenLabel'), style: { flex: '1' }, dataset: { apiToken: '1' } });
   const connect = h(
     'button',
     {
@@ -2021,7 +2021,9 @@ function renderBanners() {
         { class: 'banner', role: 'status' },
         h('span', { class: 'banner__icon' }, icon('warn')),
         h('span', { class: 'banner__text' }, t('store.unavailable', { store: storeName(s.id), reason: status === 'error' && snap?.error ? errorText(snap.error) : t(`store.${status}`) }), snap?.ts ? h('span', { class: 'banner__meta' }, ` · ${t('store.lastData', { time: formatRelative(snap.ts) })}`) : null),
-        h('button', { type: 'button', class: 'btn btn--sm', onclick: () => send('ui:openStore', { shopId: s.id }) }, t('common.openStoreTab')),
+        api?.connected
+          ? h('button', { type: 'button', class: 'btn btn--sm btn--primary', dataset: { action: 'reconnect-api' }, onclick: () => reconnectApi(s.id) }, t('settings.api.reconnect'))
+          : h('button', { type: 'button', class: 'btn btn--sm', onclick: () => send('ui:openStore', { shopId: s.id }) }, t('common.openStoreTab')),
       ),
     );
   });
@@ -2749,6 +2751,18 @@ function sparkline(values, label) {
   return s('svg', { class: 'spark', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': label },
     s('path', { d: `M0,${H} L${pts.join(' L')} L${W},${H} Z`, class: 'spark__area' }),
     s('path', { d: `M${pts.join(' L')}`, class: 'spark__line' }));
+}
+
+/** Banner of an API store: open Settings with that store preselected in the API card and focus the token field. */
+function reconnectApi(shopId) {
+  const ui = (state.apiForm ??= { shopId: '', name: '', busy: false, error: null });
+  Object.assign(ui, { shopId, error: null });
+  location.hash = 'settings';
+  setTimeout(() => {
+    const el = document.querySelector('[data-api-token]');
+    el?.closest('.card')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    el?.focus();
+  }, 150);
 }
 
 /** Settings card (found by a selector inside it): open Settings, scroll to it, highlight it. */
