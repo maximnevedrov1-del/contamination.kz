@@ -595,7 +595,7 @@
     const box = el('div', { 'data-block': 'bot-settings' }, el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'), el('p', { class: 'muted' }, 'Загрузка…'));
     rpc('admin_growth_settings', { p: {} }).then((g) => {
       const f = {
-        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulse_bot', value: g.bot_username || '' }),
+        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulseBot', value: g.bot_username || '' }),
         app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
