@@ -287,7 +287,7 @@ async function injectContent(tabId) {
  * @returns {Promise<Array<object>>} live registry entries
  */
 async function discoverTabs() {
-  if (!FEATURES.cabinet) return; // API-only build: cabinet tabs are not read
+  if (!FEATURES.cabinet) return []; // API-only build: cabinet tabs are not read (callers iterate the result)
   const tabs = await chrome.tabs.query({ url: [...S.tabMatchPatterns] });
   const live = [];
   await Promise.all(
