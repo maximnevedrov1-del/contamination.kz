@@ -258,7 +258,10 @@ export async function assembleOrder(token, { id }, numberOfSpace = 1) {
 /** Download the waybill PDF as a data: URL. */
 export async function downloadWaybill(token, url) {
   // The token is sent only to the API's own host; any other host gets a plain request.
-  const sameHost = new URL(url).host === new URL(A().base).host;
+  const u = new URL(url);
+  const sameHost = u.host === new URL(A().base).host;
+  // a waybill link comes from Kaspi's order data (or a restored backup file): only the API host or kaspi.kz over https
+  if (!sameHost && !(u.protocol === 'https:' && (u.hostname === 'kaspi.kz' || u.hostname.endsWith('.kaspi.kz')))) throw new ApiError('apiHttp', 0);
   const res = sameHost
     ? await apiRequest(token, url, { accept: 'application/pdf, */*' })
     : await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(timeoutMs) }).then((r) => {

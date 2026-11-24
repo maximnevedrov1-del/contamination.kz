@@ -1445,6 +1445,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type.startsWith('content:') && !FEATURES.cabinet) return false;
   if (msg.type.startsWith('content:') && sender.tab?.id != null && !fromExtensionPage) {
     const tabId = sender.tab.id;
+    // where the tab really is comes from Chrome, not from the message (a page could tamper with what the script sends)
+    const tabUrl = sender.tab.url || sender.url || '';
+    if (!tabUrl || !TAB_PATTERNS.some((re) => re.test(tabUrl)) || !msg.payload || typeof msg.payload !== 'object') return false;
+    let tabOrigin;
+    try { const u = new URL(tabUrl); tabOrigin = u.protocol === 'file:' ? 'file://' : u.origin; } catch { return false; }   // demo mode: stores keep "file://"
+    msg.payload = { ...msg.payload, url: tabUrl, origin: tabOrigin };
     if (msg.type === 'content:hello') registerTab(tabId, msg.payload).then(() => broadcast('bg:registryChanged'));
     if (msg.type === 'content:update') registerTab(tabId, msg.payload).then(() => onContentUpdate(msg.payload));
     return false;

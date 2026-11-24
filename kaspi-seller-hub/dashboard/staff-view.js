@@ -378,7 +378,7 @@ export function teamCard(ctx) {
         } }, t('team.copy')),
         h('a', { class: 'btn btn--sm', href: `https://wa.me/?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
         h('a', { class: 'btn btn--sm', href: `https://t.me/share/url?url=${encodeURIComponent(' ')}&text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener' }, 'Telegram'),
-        h('a', { class: 'btn btn--sm', href: `mailto:${ui.lastInvite.email}?subject=${encodeURIComponent(t('team.mailSubject'))}&body=${encodeURIComponent(text)}` }, t('team.byMail'))));
+        h('a', { class: 'btn btn--sm', href: `mailto:${encodeURIComponent(ui.lastInvite.email)}?subject=${encodeURIComponent(t('team.mailSubject'))}&body=${encodeURIComponent(text)}` }, t('team.byMail'))));
     }
     // the team
     if (ui.list == null) body.append(h('p', { class: 'muted' }, t('common.loading')));

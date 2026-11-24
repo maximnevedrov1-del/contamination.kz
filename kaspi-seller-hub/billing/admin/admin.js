@@ -235,6 +235,7 @@
     amount_mismatch: 'сумма не совпадает со счётом',
     invoice_not_pending: 'счёт уже оплачен или отменён (возможна двойная оплата — проверьте возврат)',
     invoice_not_found: 'счёт с таким номером не найден',
+    phone_only: 'совпали телефон и сумма, но телефон в счёте вписал клиент — проверьте, что платил именно он, и подтвердите счёт вручную',
   };
   function paymentReview(events) {
     if (!events.length) return null;
@@ -641,7 +642,7 @@
             el('td', null, el('span', { class: 'badge ' + (RISK[x.reason]?.[1] || '') }, RISK[x.reason]?.[0] || x.reason)),
             el('td', null, x.last_active_at ? date(x.last_active_at, true) : 'не заходил'),
             el('td', null, date(x.created_at)),
-            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${x.email}?subject=${encodeURIComponent('SaudaPulse — чем помочь?')}` }, 'Написать'))))))
+            el('td', null, x.email && el('a', { class: 'btn', href: `mailto:${encodeURIComponent(x.email)}?subject=${encodeURIComponent('SaudaPulse — чем помочь?')}` }, 'Написать'))))))
       : el('p', { class: 'muted' }, 'Сейчас никого — все в порядке.');
     const riskMore = risk.length > 10 && !riskAll && el('button', { type: 'button', class: 'btn', 'data-action': 'risk-all', onclick: () => ((riskAll = true), render()) }, `Показать всех (${risk.length})`);
     const section = (title, hint, ...body) => el('section', { class: 'block' }, el('h2', null, title), hint && el('p', { class: 'muted' }, hint), ...body);

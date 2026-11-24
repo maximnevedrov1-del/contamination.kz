@@ -70,23 +70,23 @@ set role service_role;
 select pg_temp.ok('unknown invoice id → review invoice_not_found', (select r->>'reason' = 'invoice_not_found' from (select payment_received('aipay', 'p300', 5000, 999999) r) x));
 
 -- ===== by phone + amount =====
-select pg_temp.ok('phone in any format + amount, one pending invoice → confirmed', (payment_received('aipay', 'p400', 5000, null, '8 (703) 333-33-33'))->>'outcome' = 'confirmed');
+select pg_temp.ok('phone in any format + amount, one pending invoice → review phone_only with the candidate (030: a typed phone never confirms)', (select r->>'outcome' = 'review' and r->>'reason' = 'phone_only' and (r->>'invoice_id')::bigint = 8003 from (select payment_received('aipay', 'p400', 5000, null, '8 (703) 333-33-33') r) x));
 reset role;
-select pg_temp.ok('invoice 8003 paid by phone match', (select status from invoices where id = 8003) = 'paid');
+select pg_temp.ok('invoice 8003 NOT paid by a phone match', (select status from invoices where id = 8003) = 'pending');
 set role service_role;
 select pg_temp.ok('two pending invoices (two accounts, one phone) with this amount → review ambiguous', (select r->>'reason' = 'ambiguous' from (select payment_received('aipay', 'p500', 5000, null, '+77044444444') r) x));
-select pg_temp.ok('cancelled invoice is ignored, the pending one matches', (payment_received('aipay', 'p600', 5000, null, '77055555555'))->>'outcome' = 'confirmed');
+select pg_temp.ok('cancelled invoice is ignored, the pending one is the candidate', (select r->>'reason' = 'phone_only' and (r->>'invoice_id')::bigint = 8007 from (select payment_received('aipay', 'p600', 5000, null, '77055555555') r) x));
 select pg_temp.ok('phone with no invoice → review no_match', (select r->>'reason' = 'no_match' from (select payment_received('aipay', 'p700', 5000, null, '77099999999') r) x));
 select pg_temp.ok('no phone and no invoice id → review no_match', (select r->>'reason' = 'no_match' from (select payment_received('aipay', 'p701', 5000) r) x));
 select pg_temp.ok('phone matches but amount differs → no_match', (select r->>'reason' = 'no_match' from (select payment_received('aipay', 'p702', 24500, null, '77022222222') r) x));
 select pg_temp.ok('same payment id from another provider is a different payment', (select r->>'duplicate' = 'false' from (select payment_received('generic', 'p100', 5000) r) x));
 reset role;
 select pg_temp.ok('ambiguous invoices both still pending', (select count(*) from invoices where id in (8004, 8005) and status = 'pending') = 2);
-select pg_temp.ok('cancelled invoice stayed cancelled', (select status from invoices where id = 8006) = 'cancelled' and (select status from invoices where id = 8007) = 'paid');
+select pg_temp.ok('cancelled invoice stayed cancelled', (select status from invoices where id = 8006) = 'cancelled' and (select status from invoices where id = 8007) = 'pending');
 
 -- ===== admin review queue =====
 set role authenticated; set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000001';
-select pg_temp.ok('queue lists only review events', (select bool_and(e->>'outcome' = 'review') and count(*) = 9 from jsonb_array_elements(admin_payment_events()) e));
+select pg_temp.ok('queue lists only review events', (select bool_and(e->>'outcome' = 'review') and count(*) = 11 from jsonb_array_elements(admin_payment_events()) e));
 select pg_temp.ok('full history lists all 12 events', jsonb_array_length(admin_payment_events(false)) = 12);
 select pg_temp.ok('queue shows the invoice amount next to the paid amount', (select (e->>'invoice_amount')::int = 24000 from jsonb_array_elements(admin_payment_events()) e where e->>'payment_id' = 'p200'));
 reset role;
@@ -97,7 +97,7 @@ select pg_temp.ok('resolve an event', (admin_resolve_payment_event(:ev200, 'clie
 set t.ev200 = :ev200; set t.ev100 = :ev100;
 do $$ begin perform admin_resolve_payment_event(current_setting('t.ev200')::bigint); raise notice 'FAIL resolved twice'; exception when others then raise notice '% resolved event cannot be resolved again', case when sqlerrm = 'not_found' then 'PASS' else 'FAIL' end; end $$;
 do $$ begin perform admin_resolve_payment_event(current_setting('t.ev100')::bigint); raise notice 'FAIL confirmed event resolved'; exception when others then raise notice '% confirmed event is not in the queue', case when sqlerrm = 'not_found' then 'PASS' else 'FAIL' end; end $$;
-select pg_temp.ok('queue now 8', jsonb_array_length(admin_payment_events()) = 8);
+select pg_temp.ok('queue now 10', jsonb_array_length(admin_payment_events()) = 10);
 
 -- ===== refactored admin_confirm_invoice still works and keeps its checks =====
 do $$ begin perform admin_confirm_invoice(8002, null, 1, 2); raise notice 'FAIL stale amount'; exception when others then raise notice '% admin confirm still checks the amount', case when sqlerrm = 'amount_changed' then 'PASS' else 'FAIL' end; end $$;

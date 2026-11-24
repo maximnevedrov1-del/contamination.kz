@@ -595,16 +595,24 @@ function onTableKey(e, route, rows) {
   }
 }
 
-/** Open the order/return in its store tab. Scraped links are used only on the store's own https origin. */
-function openItem(row) {
+/** The payment QR from the server config: an https or inline image only (null otherwise). */
+const safeQrUrl = (u) => (typeof u === 'string' && /^(https:\/\/|data:image\/(png|jpeg|webp|gif|svg\+xml);base64,)/i.test(u.trim()) ? u.trim() : null);
+
+/** A scraped order link, only on the store's own https origin (null otherwise). */
+function safeItemUrl(row) {
   const origin = stores()[row.shopId]?.origin;
-  let url = null;
   try {
     const u = new URL(row.url);
-    if (u.protocol === 'file:' ? origin === 'file://' : (u.protocol === 'https:' || u.hostname === 'localhost') && u.origin === origin) url = u.href;
+    if (u.protocol === 'file:' ? origin === 'file://' : (u.protocol === 'https:' || u.hostname === 'localhost') && u.origin === origin) return u.href;
   } catch {
     /* no or invalid link */
   }
+  return null;
+}
+
+/** Open the order/return in its store tab. Scraped links are used only on the store's own https origin. */
+function openItem(row) {
+  const url = safeItemUrl(row);
   if (url) chrome.tabs.create({ url });
   else send('ui:openStore', { shopId: row.shopId });
 }
@@ -784,7 +792,7 @@ function openOrder(r) {
           ))
         : h('p', { class: 'muted' }, t('order.noItems')),
       h('div', { class: 'dialog__actions' },
-        r.url && h('a', { class: 'btn btn--ghost', href: r.url, target: '_blank', rel: 'noopener' }, t('order.openKaspi')),
+        safeItemUrl(r) && h('a', { class: 'btn btn--ghost', href: safeItemUrl(r), target: '_blank', rel: 'noopener' }, t('order.openKaspi')),
         h('span', { class: 'grow' }),
         h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, t('common.close')),
         r.status === 'new' && act('order.accept', () => doAccept(item)),
@@ -2268,8 +2276,8 @@ function renderPay() {
           h('div', { class: 'pay__details' }, t('pay.details', { id: inv.id, stores: inv.stores })),
           invoiceNumber(inv.id),
           h('p', { class: 'muted pay__hint', dataset: { block: 'pay-hint' } }, t('notices.payHint')),
-          lic.payment?.qr_url
-            ? h('img', { class: 'pay__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })
+          safeQrUrl(lic.payment?.qr_url)
+            ? h('img', { class: 'pay__qr', src: safeQrUrl(lic.payment.qr_url), alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })
             : h('div', { class: 'pay__noqr' }, t('pay.noQr')),
           h('p', { class: 'pay__instr' }, lic.payment?.instructions || t('pay.defaultInstr', { amount: formatMoney(inv.amount) })),
           h(
@@ -2604,7 +2612,7 @@ function viewAccount() {
             h('button', { type: 'button', class: 'btn btn--ghost btn--danger', disabled: ui.busy, onclick: () => run(async () => { const r = await send('ui:billingCancelInvoice', { id: inv.id }); await loadState(); return r; }) }, t('account.cancelInvoice')),
           ),
         ),
-        lic.payment?.qr_url && h('img', { class: 'pending-invoice__qr', src: lic.payment.qr_url, alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' }),
+        safeQrUrl(lic.payment?.qr_url) && h('img', { class: 'pending-invoice__qr', src: safeQrUrl(lic.payment.qr_url), alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' }),
       ),
     );
 

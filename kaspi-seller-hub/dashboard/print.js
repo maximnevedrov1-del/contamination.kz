@@ -23,7 +23,7 @@ const $ = (id) => document.getElementById(id);
 /** Strip anything executable or remote from captured invoice markup. */
 function sanitize(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script, iframe, object, embed, base, link, meta, form, noscript').forEach((el) => el.remove());
+  doc.querySelectorAll('script, iframe, object, embed, base, link, meta, form, noscript, set, animate, animatetransform, animateTransform, animatemotion, animateMotion, foreignobject, foreignObject').forEach((el) => el.remove());
   const URL_ATTRS = ['src', 'href', 'xlink:href', 'srcset', 'action', 'formaction', 'background', 'poster', 'ping', 'data', 'srcdoc', 'lowsrc', 'dynsrc'];
   // Remote url(...) in CSS would make the print page fetch from the network.
   const stripCssUrls = (css) => css.replace(/@import[^;]+;?/gi, '').replace(/url\((?!\s*['"]?data:image\/)[^)]*\)/gi, 'none');

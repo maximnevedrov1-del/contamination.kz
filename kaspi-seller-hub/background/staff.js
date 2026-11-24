@@ -21,8 +21,9 @@ const ROSTER_KEY = 'ksh.staffRoster'; // local: { [email]: { member, session, pi
 const ACTIVE_KEY = 'ksh.staffActive'; // session (cleared when the browser closes): { email, member, lastOkAt }
 const OWNER_PIN_KEY = 'ksh.ownerPin'; // local: { hash, salt }
 const OWNER_UNLOCK_KEY = 'ksh.ownerUnlocked'; // session: { until }
+const OWNER_FAILS_KEY = 'ksh.ownerPinFails'; // local: { fails, lockedUntil } — the owner PIN locks like a packer's
 const CHECK_MINUTES = 2;
-const OFFLINE_GRACE_MS = 15 * 60000; // no answer from the server for longer → the packer is logged out
+const OFFLINE_GRACE_MS = 5 * 60000; // no answer from the server for longer → the packer is logged out (a switched-off packer cannot keep working offline for long)
 const OWNER_UNLOCK_MS = 8 * 3600000;
 const MAX_PIN_FAILS = 5;
 const LOCK_MS = 15 * 60000;
@@ -205,19 +206,29 @@ export function staffHandlers() {
       if (enabled) {
         if (!validPin(pin)) return { ok: false, error: 'staffBadPin' };
         await local.set({ [OWNER_PIN_KEY]: await pinHash(pin) });
+        await local.remove(OWNER_FAILS_KEY);
         await saveSettings({ warehouse: { enabled: true } });
         await session.remove(OWNER_UNLOCK_KEY);
       } else {
         await saveSettings({ warehouse: { enabled: false } });
-        await local.remove(OWNER_PIN_KEY);
+        await local.remove([OWNER_PIN_KEY, OWNER_FAILS_KEY]);
       }
       return { ok: true };
     },
     'ui:ownerUnlock': async ({ pin }) => {
       const stored = await get(local, OWNER_PIN_KEY, null);
       if (!stored) return { ok: false, error: 'staffBadPin' };
+      // same lock as the packers' PIN: without it a 4-digit owner PIN falls to a scripted guess in minutes
+      const lock = await get(local, OWNER_FAILS_KEY, { fails: 0, lockedUntil: 0 });
+      if (lock.lockedUntil > Date.now()) return { ok: false, error: 'staffLocked' };
       const { hash } = await pinHash(pin, stored.salt);
-      if (!sameHash(hash, stored.hash)) return { ok: false, error: 'staffBadPin' };
+      if (!sameHash(hash, stored.hash)) {
+        lock.fails = (lock.fails || 0) + 1;
+        if (lock.fails >= MAX_PIN_FAILS) Object.assign(lock, { fails: 0, lockedUntil: Date.now() + LOCK_MS });
+        await local.set({ [OWNER_FAILS_KEY]: lock });
+        return { ok: false, error: lock.lockedUntil > Date.now() ? 'staffLocked' : 'staffBadPin' };
+      }
+      await local.remove(OWNER_FAILS_KEY);
       await session.set({ [OWNER_UNLOCK_KEY]: { until: Date.now() + OWNER_UNLOCK_MS } });
       const act = await activeStaff();
       if (act) await signOutStaff(act.email); // the owner takes over the computer

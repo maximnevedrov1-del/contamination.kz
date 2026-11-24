@@ -371,7 +371,11 @@ Settings → «Сотрудники» and «Режим склада».
 - **Режим склада.** Once the owner turns it on with their own PIN, the extension opens the lock screen.
   - A packer sees only the «Панель сборщика»: the queue of orders to pack for their stores, a scan field, and the «Проблема» button.
   - The worker (`background/staff.js`, `staffGate`) refuses every other action. Hiding buttons is not the protection.
-  - The owner unlocks with their PIN for 8 hours.
+  - The owner unlocks with their PIN for 8 hours. After 5 wrong owner PINs the unlock is closed for 15 minutes, as for the packers.
+  - **Limit: this is a lock on the screen, not a wall.** Orders, settings and the sessions live in this Chrome profile. Anyone who can open Chrome's developer tools there (`chrome://extensions` → «service worker», or F12 on the extension page) can read all of them. That includes the orders of stores the packer is not allowed to see. On a real warehouse computer:
+    1. Give the warehouse its own Windows/macOS user and its own Chrome profile, signed in to the store owner's extension only.
+    2. Turn off developer tools for that profile with the Chrome policy `DeveloperToolsAvailability = 2`. On Windows that is the registry value `HKLM\Software\Policies\Google\Chrome\DeveloperToolsAvailability` (DWORD 2); on macOS it is `defaults write com.google.Chrome DeveloperToolsAvailability -int 2` (or a managed profile).
+    3. Also block `chrome://extensions` (policy `URLBlocklist`: `chrome://extensions`), so the extension cannot be switched off or inspected.
 - **Scan-to-verify.**
   - Scanning the waybill opens the order.
   - Scanning item barcodes ticks the lines; the wrong item gives a red flash and a sound. An unknown code is bound to a product once.
@@ -379,7 +383,7 @@ Settings → «Сотрудники» and «Режим склада».
   - Every step goes to the journal (`ksh.packLog`, Settings → «Журнал упаковки»).
 - **Switching off.** «Отключить» works at once on the server.
   - The warehouse computer checks every 2 minutes and signs the packer out.
-  - With no internet, the packer keeps working for at most 15 minutes.
+  - With no internet, the packer keeps working for at most 5 minutes.
   - When the owner's subscription ends, packers stop too.
 
 Tests: `tests/sql/test7.sql`, `tests/e2e/team.js`.
