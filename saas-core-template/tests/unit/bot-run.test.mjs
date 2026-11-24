@@ -165,7 +165,11 @@ await t('bot replies: /start, /stop, help and order alerts in the client\'s lang
   await handle(msg('/stop'), henv, mk({ 9: 'kk' }));
   assert.equal(sentTexts.at(-1).text, TEXTS.kk.unlinked);
   await handle(msg('hi', { language_code: 'ru' }), henv, mk({}));
-  assert.equal(sentTexts.at(-1).text, TEXTS.ru.help);
+  assert.equal(sentTexts.at(-1).text, TEXTS.ru.help, 'not linked: how to connect');
+  await handle(msg('Салем', { language_code: 'ru' }), henv, mk({ 9: 'ru' }));
+  assert.equal(sentTexts.at(-1).text, TEXTS.ru.linkedHelp, 'linked: told it works, not asked to connect');
+  await handle(msg('Салем', { language_code: 'ru' }), henv, mk({ 9: 'kk' }));
+  assert.equal(sentTexts.at(-1).text, TEXTS.kk.linkedHelp, 'linked Kazakh account: Kazakh, whatever the Telegram app language');
   await handle(msg('hi', { language_code: 'kk' }), henv, mk({}));
   assert.equal(sentTexts.at(-1).text, TEXTS.kk.help);
   const alertReq = new Request('https://fn.test/telegram-bot/alert', { method: 'POST', headers: { authorization: 'Bearer seller-token' }, body: JSON.stringify({ code: '77', shop: 'S', minutes: 20 }) });

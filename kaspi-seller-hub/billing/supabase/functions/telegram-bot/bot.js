@@ -54,6 +54,7 @@ export const TEXTS = {
     linked: (shops) => `✅ Уведомления успешно подключены${shops.length ? ` для ${shops.length > 1 ? 'магазинов' : 'магазина'} ${shops.join(', ')}` : ''}!\n\nКаждое утро в 09:00 — сводка за вчера, а если заказ под угрозой просрочки — сразу сообщение. Отключить: /stop`,
     unlinked: 'Уведомления отключены. Подключить снова: SaudaPulse → Настройки → «Подключить Telegram».',
     help: 'Это бот уведомлений SaudaPulse. Чтобы подключить его, откройте SaudaPulse → Настройки → «Подключить Telegram».',
+    linkedHelp: '✅ Уведомления подключены: каждое утро в 09:00 — сводка за вчера, а если заказ под угрозой просрочки — сразу сообщение. Отключить: /stop',
   },
   kk: {
     btnOrders: '📦 Тапсырыстарды көру',
@@ -81,6 +82,7 @@ export const TEXTS = {
     linked: (shops) => `✅ Хабарламалар сәтті қосылды${shops.length ? ` (${shops.length > 1 ? 'дүкендер' : 'дүкен'}: ${shops.join(', ')})` : ''}!\n\nКүн сайын таңғы 09:00-де — кешегі қорытынды, ал тапсырыс мерзімі өтіп кету қаупінде болса — бірден хабарлама. Өшіру: /stop`,
     unlinked: 'Хабарламалар өшірілді. Қайта қосу: SaudaPulse → Баптаулар → «Telegram қосу».',
     help: 'Бұл — SaudaPulse хабарламалар боты. Қосу үшін SaudaPulse → Баптаулар → «Telegram қосу» ашыңыз.',
+    linkedHelp: '✅ Хабарламалар қосулы: күн сайын таңғы 09:00-де — кешегі қорытынды, ал тапсырыс мерзімі өтіп кету қаупінде болса — бірден хабарлама. Өшіру: /stop',
   },
 };
 export const langOf = (l) => (l === 'kk' ? 'kk' : 'ru');
@@ -201,12 +203,14 @@ async function webhook(update, env, f) {
     return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).linked(shops), reply_markup: buttons(r, 'orders', lang) }, f);
   }
   // still linked before /stop: the account's language; otherwise the Telegram app's
-  const lang = (await langs(env, f, { chats: [chat] })).chats[String(chat)] || tgLang(msg);
+  const linkedLang = (await langs(env, f, { chats: [chat] })).chats[String(chat)];
+  const lang = linkedLang || tgLang(msg);
   if (/^\/stop/.test(text)) {
     await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: chat, p_blocked: false }, null, f);
     return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).unlinked }, f);
   }
-  return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).help }, f);
+  // an already linked chat is told it works (not asked to connect again)
+  return tg(env, 'sendMessage', { chat_id: chat, text: linkedLang ? T(lang).linkedHelp : T(lang).help }, f);
 }
 
 /**
