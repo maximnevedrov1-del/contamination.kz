@@ -138,7 +138,7 @@ export function staffHandlers() {
     /** Step 1 of the first sign-in: a code to the packer's e-mail. */
     'ui:staffRequestCode': async ({ email, captchaToken }) => {
       if (!B.isConfigured()) return { ok: false, error: 'billingNotConfigured' };
-      await B.requestCode(email, captchaToken);
+      await B.requestCode(email, captchaToken, (await chrome.storage.local.get('ksh.settings'))['ksh.settings']?.lang);
       return { ok: true };
     },
 

@@ -91,17 +91,17 @@ async function saveSession(s, fallbackUser = {}) {
 }
 
 /** Body of /auth/v1/otp; the captcha token (captcha.js) goes where Supabase Auth reads it. */
-export function otpBody(email, captchaToken) {
-  const body = { email, create_user: true };
+export function otpBody(email, captchaToken, lang) {
+  const body = { email, create_user: true, data: { lang: uiLang(lang) } };
   if (typeof captchaToken === 'string' && captchaToken && captchaToken.length < 4096) body.gotrue_meta_security = { captcha_token: captchaToken };
   return body;
 }
 
 /** Step 1: e-mail a one-time code (creates the account on first login → trial starts). */
-export async function requestCode(email, captchaToken) {
+export async function requestCode(email, captchaToken, lang) {
   email = String(email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BillingError('billingBadEmail');
-  await http('/auth/v1/otp', { body: otpBody(email, captchaToken) });
+  await http('/auth/v1/otp', { body: otpBody(email, captchaToken, lang) });
   return { ok: true };
 }
 
@@ -119,6 +119,32 @@ export async function verifyCode(email, code) {
   if (s.user?.id) await set(LAST_USER_KEY, s.user.id);
   await chrome.storage.session.remove('app.feedbackDue').catch(() => {});
   return { ok: true };
+}
+
+/* ---------- the interface language on the server (029_client_language.sql) ----------
+ * The Telegram bot and the login e-mail speak the language the seller chose in the extension.
+ * Sent on sign-in and whenever it changes; remembered per user so it is not resent on every wake-up.
+ * Fire-and-forget: a failure is retried on the next sign-in, language change or browser start.
+ */
+const LANG_SYNC_KEY = 'ksh.langSynced';
+export const uiLang = (l) => (l === 'kk' ? 'kk' : 'ru');
+export async function syncLang(lang) {
+  try {
+    if (!isConfigured()) return false;
+    const l = uiLang(lang);
+    const s = await get(SESSION_KEY);
+    if (!s?.user_id) return false;
+    const mark = `${s.user_id}:${l}`;
+    if ((await get(LANG_SYNC_KEY)) === mark) return false;
+    await rpc('set_my_lang', { p_lang: l });
+    // the login e-mail template reads it from the user's metadata ({{ .Data.lang }})
+    const token = await accessToken();
+    if (token) await http('/auth/v1/user', { method: 'PUT', body: { data: { lang: l } }, token }).catch(() => {});
+    await set(LANG_SYNC_KEY, mark);
+    return true;
+  } catch {
+    return false; // older server without set_my_lang, offline, signed out: try again next time
+  }
 }
 
 /* ---------- staff (packers): a second, separate session on the owner's computer ----------

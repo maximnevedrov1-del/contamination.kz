@@ -251,21 +251,21 @@ await t('server down and no cache → offline view, still signed in', async () =
 const OTP = '/auth/v1/otp';
 await t('code request with a captcha token → sent as gotrue_meta_security.captcha_token', async () => {
   routes = { [OTP]: [[200, {}]] };
-  await B.requestCode(' A@B.kz ', 'tok_1234567890');
-  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, gotrue_meta_security: { captcha_token: 'tok_1234567890' } });
+  await B.requestCode(' A@B.kz ', 'tok_1234567890', 'kk');
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, data: { lang: 'kk' }, gotrue_meta_security: { captcha_token: 'tok_1234567890' } });
 });
 await t('code request without a token (captcha off / page down) → plain body', async () => {
   routes = { [OTP]: [[200, {}]] };
   await B.requestCode('a@b.kz', null);
-  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true });
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } }, 'no language → Russian');
 });
 await t('Supabase refuses the captcha → billingCaptcha', async () => {
   routes = { [OTP]: [[400, { code: 400, error_code: 'captcha_failed', msg: 'captcha protection: request disallowed (no captcha response)' }]] };
   await assert.rejects(B.requestCode('a@b.kz'), (e) => e.code === 'billingCaptcha');
 });
 await t('oversized or non-string token is not sent', async () => {
-  assert.deepEqual(B.otpBody('a@b.kz', 'x'.repeat(5000)), { email: 'a@b.kz', create_user: true });
-  assert.deepEqual(B.otpBody('a@b.kz', { evil: 1 }), { email: 'a@b.kz', create_user: true });
+  assert.deepEqual(B.otpBody('a@b.kz', 'x'.repeat(5000), 'ru'), { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } });
+  assert.deepEqual(B.otpBody('a@b.kz', { evil: 1 }, 'en'), { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } }, 'unknown language → Russian');
 });
 
 // ---------- UX telemetry: one request per batch ----------
@@ -295,6 +295,31 @@ await t('UX batch: server without track_ux_events (404) → dropped silently, no
   B.trackUxEvents([{ t: 'screen_view', k: 'home', s: 'home', n: 3 }]);
   await new Promise((r) => setTimeout(r, 50));
   assert.deepEqual(calls, [UXB]);
+});
+
+// ---------- interface language → server (bot, e-mails) ----------
+const LANG = '/rest/v1/rpc/set_my_lang';
+const META = '/auth/v1/user';
+await t('language sent once per user and value: set_my_lang + user metadata', async () => {
+  await signIn();
+  routes = { [LANG]: [[200, { lang: 'kk' }]], [META]: [[200, {}]] };
+  assert.equal(await B.syncLang('kk'), true);
+  assert.deepEqual(calls, [LANG, META]);
+  assert.deepEqual(sent[0], { p_lang: 'kk' });
+  assert.deepEqual(sent[1], { data: { lang: 'kk' } });
+  assert.equal(await B.syncLang('kk'), false, 'same language again: nothing sent');
+  assert.equal(calls.length, 2);
+  routes = { [LANG]: [[200, { lang: 'ru' }]], [META]: [[200, {}]] };
+  assert.equal(await B.syncLang('ru'), true, 'changed back: sent');
+});
+await t('language: signed out → nothing sent; server error → retried next time', async () => {
+  assert.equal(await B.syncLang('kk'), false);
+  assert.equal(calls.length, 0);
+  await signIn();
+  routes = { [LANG]: [[404, { message: 'Could not find the function' }]] };
+  assert.equal(await B.syncLang('kk'), false);
+  routes = { [LANG]: [[200, { lang: 'kk' }]], [META]: [[500, {}]] };
+  assert.equal(await B.syncLang('kk'), true, 'retried; a metadata failure does not block it');
 });
 
 console.log(`\n${n} passed`);

@@ -681,9 +681,12 @@
   }
 
   function ticketBox(x) {
-    const reply = el('textarea', { placeholder: 'Ответ клиенту — он увидит его в расширении и получит уведомление' }, x.reply || '');
-    const tpl = el('select', { 'aria-label': 'Шаблон ответа', onchange: (e) => { const t = templates()[e.target.value]; if (t) reply.value = t.text; e.target.value = ''; } },
-      el('option', { value: '' }, 'Шаблон…'), templates().map((t, i) => el('option', { value: i }, t.name)));
+    const kk = x.lang === 'kk';
+    const reply = el('textarea', { placeholder: kk ? 'Клиент пользуется расширением на казахском — ответьте на казахском' : 'Ответ клиенту — он увидит его в расширении и получит уведомление' }, x.reply || '');
+    const tplText = (t) => (kk ? t.kk || t.text : t.text || t.kk);
+    const tpl = el('select', { 'aria-label': 'Шаблон ответа', onchange: (e) => { const t = templates()[e.target.value]; if (t) reply.value = tplText(t); e.target.value = ''; } },
+      el('option', { value: '' }, kk ? 'Шаблон (қазақша)…' : 'Шаблон…'), templates().map((t, i) => el('option', { value: i }, t.name + (kk && !t.kk ? ' (только RU)' : !kk && !t.text ? ' (только KZ)' : ''))));
+
     const save = (close) => async () => {
       try {
         await rpc('admin_ticket_reply', { p_id: x.id, p_reply: reply.value, p_close: close });
@@ -697,6 +700,7 @@
     return el('section', { class: 'ticket', 'data-ticket': x.id },
       el('div', { class: 'row', style: 'margin:0' },
         el('b', null, `№${x.id}`), el('span', { class: 'badge ' + st[1] }, st[0]), el('span', { class: 'badge' }, TOPIC[x.topic] || x.topic),
+        el('span', { class: 'badge ' + (kk ? 'badge--warn' : ''), title: 'Язык интерфейса клиента — отвечайте на нём' }, kk ? 'KZ · қазақша' : 'RU'),
         el('span', null, x.email || '—'), el('span', { class: 'muted' }, date(x.created_at, true) + (x.version ? ' · v' + x.version : ''))),
       el('p', { class: 'ticket__msg' }, x.message),
       x.report && el('details', null, el('summary', { class: 'muted' }, 'Технический отчёт'), el('pre', { class: 'mono report' }, x.report)),
@@ -704,7 +708,7 @@
         el('button', { type: 'button', class: 'btn btn--ghost', onclick: () => {
           const name = prompt('Название шаблона', '');
           if (!name || !reply.value.trim()) return;
-          store.set(TPL_KEY, [...templates(), { name: name.slice(0, 40), text: reply.value.trim() }]);
+          store.set(TPL_KEY, [...templates(), { name: name.slice(0, 40), [kk ? 'kk' : 'text']: reply.value.trim() }]);
           toast('Шаблон сохранён');
           render();
         } }, 'Сохранить как шаблон')),
@@ -803,17 +807,18 @@
         app_url: el('input', { class: 'input', placeholder: 'https://example.com', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
+        whats_new_kk: el('textarea', { placeholder: 'То же на казахском — для клиентов с казахским интерфейсом (пусто → уйдёт русский текст)' }, g.whats_new_kk || ''),
       };
       const keyOut = el('div', { class: 'row', hidden: true });
       const c = g.cancellations || {};
       box.replaceChildren(
         el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'),
         el('p', { class: 'muted' }, `Подключили: ${g.linked}, заблокировали бота: ${g.blocked}. Отмены за 90 дней: скидка ${c.discount || 0}, «Старт» ${c.downgrade || 0}, заморозка ${c.freeze || 0}, отменили ${c.cancelled || 0}. Инструкция: billing/README.md → «Telegram-бот для продавцов».`),
-        el('div', { class: 'grid2' }, 'Имя бота (без @)', f.bot_username, 'Сайт (кнопка «Посмотреть заказы» → /open)', f.app_url, 'Поддержка (кнопка «Поддержка»)', f.support_url, 'Что нового (win-back через 30 дней)', f.whats_new),
+        el('div', { class: 'grid2' }, 'Имя бота (без @)', f.bot_username, 'Сайт (кнопка «Посмотреть заказы» → /open)', f.app_url, 'Поддержка (кнопка «Поддержка»)', f.support_url, 'Что нового (win-back через 30 дней)', f.whats_new, 'Что нового — қазақша', f.whats_new_kk),
         el('div', { class: 'row' },
           el('button', { type: 'button', class: 'btn btn--primary', 'data-action': 'bot-save', onclick: async () => {
             try {
-              await rpc('admin_growth_settings', { p: { bot_username: f.bot_username.value, app_url: f.app_url.value, support_url: f.support_url.value, whats_new: f.whats_new.value } });
+              await rpc('admin_growth_settings', { p: { bot_username: f.bot_username.value, app_url: f.app_url.value, support_url: f.support_url.value, whats_new: f.whats_new.value, whats_new_kk: f.whats_new_kk.value } });
               toast('Сохранено');
             } catch (e) {
               toast(e.message, true);

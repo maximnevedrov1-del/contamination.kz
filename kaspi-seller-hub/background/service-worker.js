@@ -1356,12 +1356,13 @@ const uiHandlers = {
       sync().catch((e) => console.warn(LOG, 'sync after consent', e));
       return { ok: true, license: lic };
     }),
-  'ui:billingRequestCode': ({ email, captchaToken }) => billingCall(() => B.requestCode(email, captchaToken)),
+  'ui:billingRequestCode': ({ email, captchaToken }) => billingCall(async () => B.requestCode(email, captchaToken, (await getSettings()).lang)),
   'ui:billingVerify': ({ email, code, consent }) =>
     billingCall(async () => {
       await B.verifyCode(email, code);
       // The box was ticked on the login screen before the code was requested.
       if (consent) await B.acceptTerms().catch((e) => console.warn(LOG, 'accept terms', e));
+      B.syncLang((await getSettings()).lang); // the bot and the e-mails follow the interface language
       const lic = await currentLicense(true);
       sync().catch((e) => console.warn(LOG, 'sync after login', e));
       return { ok: true, license: lic };
@@ -1507,6 +1508,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const a = changes[KEYS.settings].oldValue?.chatPollSec;
     const b = changes[KEYS.settings].newValue?.chatPollSec;
     if (a !== b) scheduleAlarms();
+    const la = changes[KEYS.settings].oldValue?.lang;
+    const lb = changes[KEYS.settings].newValue?.lang;
+    if (lb && la !== lb) B.syncLang(lb);
   }
 });
 
@@ -1556,6 +1560,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   discoverTabs().catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => {
+  getSettings().then((st) => B.syncLang(st.lang)).catch(() => {}); // a change made while offline
   scheduleAlarms();
   scheduleStaffCheck().catch(() => {});
   scheduleHealth();

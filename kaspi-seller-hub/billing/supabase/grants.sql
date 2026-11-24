@@ -20,6 +20,7 @@ grant execute on function
   public.admin_confirm_invoice(bigint,text,int,int),
   public.admin_payment_events(boolean,int),
   public.admin_resolve_payment_event(bigint,text),
+  public.set_my_lang(text),
   public.admin_delete_account(uuid,text),
   public.admin_delete_feature_flag(text),
   public.admin_fail_storage_cleanup(bigint,text),
@@ -90,7 +91,7 @@ to authenticated;
 grant execute on function
   public.bot_link(text, text, bigint, text), public.bot_unlink(text, bigint, boolean), public.bot_jobs(text), public.bot_sent(text, jsonb),
   public.bot_lock(text, text, int), public.bot_unlock(text, text), public.bot_key_ok(text), public.ops_digest(text),
-  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text)
+  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.bot_langs(text,uuid[],bigint[])
 to service_role;
 
 -- 5. only Supabase Auth may run the access-token hook
