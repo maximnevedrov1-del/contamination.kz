@@ -383,3 +383,30 @@ No IDOR was found on subscriptions, invoices, store keys, feeds or tickets.
 2. **M-4** (scope `getState`, warehouse profile with DevTools disabled), **M-6** (backup to private storage / public-key encryption).
 3. **M-5** and **M-8** (server-verified store identity, proportional referral reward).
 4. The Low items, as hardening alongside regular releases.
+
+---
+
+## 5. Fix status (24.11.2026, after the audit)
+
+| Finding | Status |
+|---|---|
+| M-1 phone-only auto-confirm | **Fixed.** `030_audit_fixes.sql`: a phone match goes to review (`phone_only`) and names the candidate invoice. Only our invoice number confirms automatically. |
+| M-2 discount on multi-month invoices | **Fixed.** `030`: −30 % applies to one month of each discounted invoice, and the offer expires after 60 days. |
+| M-3 owner PIN brute force | **Fixed.** `background/staff.js`: 5 wrong tries lock the unlock for 15 minutes. |
+| M-4 warehouse mode is client-side | **Mitigated.** Offline grace cut from 15 to 5 minutes. README documents the separate profile plus `DeveloperToolsAvailability=2` / `URLBlocklist` policy. A full fix needs server-side order access (architecture). |
+| M-5 trial anti-abuse | Open. Needs a server-verified store identity. |
+| M-6 backup artifact | Open. Owner action: private repo or private bucket, public-key encryption. |
+| M-7 | Withdrawn (not a finding). |
+| M-8 referral farming | Open. Product decision on a proportional reward. |
+| L-3 content-script origin | **Fixed.** The worker uses `sender.tab.url`. |
+| L-7 order link, L-11 QR URL | **Fixed.** Rendered only for safe URLs. |
+| L-8 mailto | **Fixed.** In both admin pages and the staff view. |
+| L-9 print sanitizer | **Hardened.** SVG animation tags and `foreignObject` are removed. |
+| L-10 waybill from a backup | **Fixed.** The download is allowed only from the API host or https `*.kaspi.kz`. |
+| L-1, L-2, L-5, L-6, L-12 | Open. These are hosting or config changes; see the table above. |
+
+Verification:
+- SQL: 605 checks pass in both the product and the template, including the new `test27.sql`.
+- Unit: all 15 suites pass.
+- Browser: billtest2, team, orchestra, growth, hack, apitest, run2, demofile, photoprint and uxtest all pass.
+- `APPLY-PROD-2026-11-24-c.sql` runs twice on the same database without errors.
