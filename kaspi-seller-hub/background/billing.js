@@ -442,24 +442,29 @@ const UX_KEY = /^[a-z0-9_:-]{1,64}$/;
 const uxOk = (k) => typeof k === 'string' && UX_KEY.test(k) && !/^[0-9]+$/.test(k);
 /**
  * Anonymous UX counters from the dashboard (shared/ux-telemetry.js): a batch of {t, k, s, n}.
- * Only whitelisted codes pass (re-validated here); each event calls track_ux_event min(n, 5) times
- * (the RPC adds 1 per call, so very large counts are capped), at most 50 events per batch.
- * Fire-and-forget: never throws, skips when signed out / not configured.
+ * Only whitelisted codes pass (re-validated here and again on the server), at most 50 events,
+ * n capped at 5. The whole batch goes in ONE request (track_ux_events, 027_ux_events_batch.sql);
+ * before it was one request per event and repeat — up to 250 per batch.
+ * Fire-and-forget: never throws, skips when signed out / not configured. If the server has no
+ * track_ux_events yet (migration not applied), the batch is dropped: telemetry must not add load.
  */
 export function trackUxEvents(events) {
   (async () => {
     try {
-      if (!isConfigured() || !Array.isArray(events)) return;
-      const list = events.filter((e) => e && UX_TYPES.has(e.t) && uxOk(e.k) && uxOk(e.s)).slice(0, 50);
-      if (!list.length || !(await accessToken())) return;
-      for (const e of list) {
-        const n = Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5);
-        for (let i = 0; i < n; i++) {
-          try { await rpc('track_ux_event', { p_event_type: e.t, p_target_key: e.k, p_screen_key: e.s }); } catch { break; }
-        }
-      }
+      const batch = uxBatch(events);
+      if (!batch.length || !isConfigured() || !(await accessToken())) return;
+      await rpc('track_ux_events', { p_events: batch });
     } catch { /* telemetry must never break anything */ }
   })();
+}
+
+/** Valid events only, as sent to track_ux_events: [{t, k, s, n 1..5}], at most 50. */
+export function uxBatch(events) {
+  if (!Array.isArray(events)) return [];
+  return events
+    .filter((e) => e && UX_TYPES.has(e.t) && uxOk(e.k) && uxOk(e.s))
+    .slice(0, 50)
+    .map((e) => ({ t: e.t, k: e.k, s: e.s, n: Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5) }));
 }
 
 const funnelPending = new Set();

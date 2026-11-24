@@ -4,7 +4,7 @@ S="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$(cd "$S/.." && pwd)"
 copyext() { mkdir -p "$1" && tar -C "$SRC" --exclude=./tests --exclude=./dist -cf - . | tar -C "$1" -xf - \
   && sed -i -E "s#supabaseUrl: '[^']*'#supabaseUrl: ''#; s#supabaseAnonKey: '[^']*'#supabaseAnonKey: ''#" "$1/shared/billing-config.js" \
-  && perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m; s/offerUrl: '[^']*'/offerUrl: ''/; s/privacyUrl: '[^']*'/privacyUrl: ''/" "$1/shared/billing-config.js"; }  # the extension without tests/ and dist/, in developer mode
+  && perl -0pi -e "s/^  licenseKeys: \[[^\]]*\]/  licenseKeys: []/m; s/offerUrl: '[^']*'/offerUrl: ''/; s/privacyUrl: '[^']*'/privacyUrl: ''/; s/pageUrl: '[^']*'/pageUrl: ''/" "$1/shared/billing-config.js"; }  # the extension without tests/ and dist/, in developer mode
 cd $S/e2e
 TOTAL=0; PASSED=0
 # prints "name: result" and counts the suite as passed only if it printed ALL PASS and nothing else

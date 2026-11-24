@@ -268,4 +268,33 @@ await t('oversized or non-string token is not sent', async () => {
   assert.deepEqual(B.otpBody('a@b.kz', { evil: 1 }), { email: 'a@b.kz', create_user: true });
 });
 
+// ---------- UX telemetry: one request per batch ----------
+const UXB = '/rest/v1/rpc/track_ux_events';
+await t('UX batch → one track_ux_events request, invalid events dropped, n capped at 5', async () => {
+  await signIn();
+  routes = { [UXB]: [[200, 2]] };
+  B.trackUxEvents([
+    { t: 'rage_click', k: 'btn_sync', s: 'orders', n: 99 },
+    { t: 'evil', k: 'a1', s: 'home', n: 1 },
+    { t: 'action_click', k: 'https://x', s: 'home', n: 1 },
+    { t: 'screen_view', k: 'orders', s: 'orders' },
+  ]);
+  for (let i = 0; i < 20 && !calls.length; i++) await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(calls, [UXB]);
+  assert.deepEqual(sent[0], { p_events: [{ t: 'rage_click', k: 'btn_sync', s: 'orders', n: 5 }, { t: 'screen_view', k: 'orders', s: 'orders', n: 1 }] });
+});
+await t('UX batch: more than 50 events → first 50 in one request', async () => {
+  const many = Array.from({ length: 80 }, (_, i) => ({ t: 'action_click', k: `btn_${i}`, s: 'home', n: 1 }));
+  assert.equal(B.uxBatch(many).length, 50);
+  assert.deepEqual(B.uxBatch(null), []);
+});
+await t('UX batch: server without track_ux_events (404) → dropped silently, no per-event fallback', async () => {
+  await signIn();
+  routes = { [UXB]: [[404, { code: 'PGRST202', message: 'Could not find the function' }]] };
+  B.trackUxEvents([{ t: 'screen_view', k: 'home', s: 'home', n: 3 }]);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(calls, [UXB]);
+});
+
 console.log(`\n${n} passed`);

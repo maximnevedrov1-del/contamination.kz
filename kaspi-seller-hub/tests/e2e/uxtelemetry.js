@@ -1,5 +1,5 @@
 // Anonymous UX telemetry: the dashboard batches counters in memory, flushes them (timer / page hidden),
-// the worker calls track_ux_event (real SQL via mock Supabase). Verifies batching, rage click, abandoned
+// the worker sends each batch in one track_ux_events call (real SQL via mock Supabase). Verifies batching, rage click, abandoned
 // form, and that only whitelisted codes (no text, URLs or typed values) reach the database.
 // Uses ../billcopy (mock Supabase :8098 with the real SQL).
 const { chromium } = require('playwright'); require('./offline');

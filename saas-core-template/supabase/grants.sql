@@ -79,6 +79,7 @@ grant execute on function
   public.ticket_seen(bigint),
   public.track_funnel_event(text),
   public.track_ux_event(text,text,text),
+  public.track_ux_events(jsonb),
   public.upgrade_quote(int),
   public.usage_report(jsonb,jsonb,text)
 to authenticated;

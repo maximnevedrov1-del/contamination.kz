@@ -8,7 +8,7 @@ modules. Product identity is parameterized; nothing here belongs to one brand.
 
 | Path | What |
 |---|---|
-| `supabase/migrations/001…024_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, client error telemetry, Telegram retention nudges, security hardening, anonymous UX behaviour telemetry (`track_ux_event`, `admin_ux_summary`). Apply in order. |
+| `supabase/migrations/001…027_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, client error telemetry, Telegram retention nudges, security hardening, anonymous UX behaviour telemetry (`track_ux_events` batch, `admin_ux_summary`). Apply in order. |
 | `supabase/functions/telegram-bot/` | Edge Function (`bot.js` logic, `index.js` Deno entry): digest, alerts, win-back, retention nudges (`enqueue_retention_nudges`: no first sync, trial ending, trial expired), `/start` linking; reads/writes only via `bot_*` RPCs. |
 | `admin/` | Static owner panel (`index.html`, `admin.js`, `admin.css`): invoices, config, tickets, status/banner, bot settings. Payment is generic (`payment_url` + `payment_instructions`). |
 | `extension-core/billing.js` | Licence client (OTP login, cached licence, offline grace, invoices, support RPCs). |

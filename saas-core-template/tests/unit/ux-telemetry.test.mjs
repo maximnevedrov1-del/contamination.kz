@@ -131,8 +131,8 @@ test('help opened', () => {
   const calls = [];
   const rep = createUxReporter({ configured: () => true, getToken: async () => 'tok', rpc: async (...a) => { calls.push(a); } });
   await rep([{ t: 'rage_click', k: 'btn_x1', s: 'home', n: 99 }, { t: 'evil', k: 'a1', s: 'home', n: 1 }, { t: 'action_click', k: 'https://x', s: 'home', n: 1 }, { t: 'help_opened', k: 'tour', s: 'home', n: 1 }]);
-  assert.equal(calls.length, 6, '5 (capped) + 1');
-  assert.deepEqual(calls[0], ['tok', 'track_ux_event', { p_event_type: 'rage_click', p_target_key: 'btn_x1', p_screen_key: 'home' }]);
+  assert.equal(calls.length, 1, 'one request per batch');
+  assert.deepEqual(calls[0], ['tok', 'track_ux_events', { p_events: [{ t: 'rage_click', k: 'btn_x1', s: 'home', n: 5 }, { t: 'help_opened', k: 'tour', s: 'home', n: 1 }] }]);
   const off = []; await createUxReporter({ configured: () => true, getToken: async () => null, rpc: async (...a) => off.push(a) })([{ t: 'screen_view', k: 'home', s: 'home', n: 1 }]);
   await createUxReporter({ configured: () => false, getToken: async () => 'tok', rpc: async (...a) => off.push(a) })([{ t: 'screen_view', k: 'home', s: 'home', n: 1 }]);
   assert.equal(off.length, 0);

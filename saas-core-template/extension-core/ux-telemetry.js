@@ -97,8 +97,9 @@ export function createUxTracker({
 }
 
 /**
- * Background side: takes a batch from the UI page and calls track_ux_event (same DI style as error-telemetry.js).
- * Re-validates every event, calls the RPC min(n, 5) times per event (the RPC adds 1 per call), at most 50 events.
+ * Background side: takes a batch from the UI page and sends it in ONE call to track_ux_events
+ * (027_ux_events_batch.sql; same DI style as error-telemetry.js). Re-validates every event, n capped at 5,
+ * at most 50 events. Before 027 it was one track_ux_event call per event and repeat (up to 250 per batch).
  * Never throws, skips when signed out / not configured. Returns a promise only for tests.
  */
 export function createUxReporter({ configured, getToken, rpc } = {}) {
@@ -106,16 +107,15 @@ export function createUxReporter({ configured, getToken, rpc } = {}) {
     return (async () => {
       try {
         if (!configured?.() || !Array.isArray(events)) return;
-        const list = events.filter((e) => e && UX_EVENT_TYPES.includes(e.t) && isValidKey(e.k) && isValidKey(e.s)).slice(0, 50);
-        if (!list.length) return;
+        const batch = events
+          .filter((e) => e && UX_EVENT_TYPES.includes(e.t) && isValidKey(e.k) && isValidKey(e.s))
+          .slice(0, 50)
+          .map((e) => ({ t: e.t, k: e.k, s: e.s, n: Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5) }));
+        if (!batch.length) return;
         const token = await getToken();
         if (!token) return;
-        for (const e of list) {
-          const n = Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5);
-          for (let i = 0; i < n; i++) {
-            try { await rpc(token, 'track_ux_event', { p_event_type: e.t, p_target_key: e.k, p_screen_key: e.s }); } catch { break; }
-          }
-        }
+        // one request per batch (track_ux_events, 027_ux_events_batch.sql)
+        await rpc(token, 'track_ux_events', { p_events: batch });
       } catch { /* telemetry must never break anything */ }
     })();
   };
