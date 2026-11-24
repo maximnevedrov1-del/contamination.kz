@@ -156,10 +156,12 @@ await t('bot replies: /start, /stop, help and order alerts in the client\'s lang
   const msg = (text, extra = {}) => hook(JSON.stringify({ message: { chat: { id: 9, type: 'private' }, from: { id: 9, ...extra }, text } }));
   const token = 'a'.repeat(64);
   await handle(msg(`/start ${token}`), henv, mk({ 9: 'kk' }));
-  assert.ok(sentTexts.at(-1).text.startsWith('✅ Хабарламалар сәтті қосылды'), sentTexts.at(-1).text);
-  assert.equal(sentTexts.at(-1).reply_markup.inline_keyboard[0][0].text, TEXTS.kk.btnOrders);
+  assert.ok(sentTexts.at(-2).text.startsWith('✅ Хабарламалар сәтті қосылды'), sentTexts.at(-2).text);
+  assert.equal(sentTexts.at(-2).reply_markup.inline_keyboard[0][0].text, TEXTS.kk.btnOrders);
+  assert.equal(sentTexts.at(-1).text, TEXTS.kk.askPhone, 'after linking: asked to confirm the phone');
+  assert.equal(sentTexts.at(-1).reply_markup.keyboard[0][0].request_contact, true);
   await handle(msg(`/start ${token}`), henv, mk({ 9: 'ru' }));
-  assert.ok(sentTexts.at(-1).text.startsWith('✅ Уведомления успешно подключены'));
+  assert.ok(sentTexts.at(-2).text.startsWith('✅ Уведомления успешно подключены'));
   await handle(msg(`/start ${token}`, { language_code: 'kk' }), henv, mk({}, false));
   assert.equal(sentTexts.at(-1).text, TEXTS.kk.linkExpired, 'expired link: Telegram app language');
   await handle(msg('/stop'), henv, mk({ 9: 'kk' }));
@@ -231,4 +233,33 @@ await t('Kazakh «what\'s new» replaces the Russian one for Kazakh users', asyn
   assert.ok(byChat[1].includes('Новое RU') && byChat[1].startsWith('👋 Здравствуйте'));
 });
 
+
+await t('phone confirmation: only the sender\'s own contact, only in a linked chat', async () => {
+  const out = [];
+  const calls = [];
+  const mk = (chatLangs, verify = { ok: true, phone: '77015554433' }) => async (url, opts) => {
+    const body = opts?.body ? JSON.parse(opts.body) : {};
+    if (url.endsWith('/rpc/bot_langs')) return new Response(JSON.stringify({ users: {}, chats: chatLangs }), { status: 200 });
+    if (url.endsWith('/rpc/bot_verify_phone')) { calls.push(body); return new Response(JSON.stringify(verify), { status: 200 }); }
+    out.push(body);
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  const contact = (owner, phone = '+7 701 555 44 33') => hook(JSON.stringify({ message: { chat: { id: 9, type: 'private' }, from: { id: 9 }, contact: { user_id: owner, phone_number: phone } } }));
+  await handle(contact(9), henv, mk({ 9: 'ru' }));
+  assert.equal(calls.length, 1);
+  assert.deepEqual([calls[0].p_chat_id, calls[0].p_phone], [9, '+7 701 555 44 33']);
+  assert.equal(out.at(-1).text, TEXTS.ru.phoneOk('+7 701 555 44 33'));
+  assert.equal(out.at(-1).reply_markup.remove_keyboard, true);
+  await handle(contact(12345), henv, mk({ 9: 'ru' }));
+  assert.equal(calls.length, 1, 'someone else\'s contact is never sent to the database');
+  assert.equal(out.at(-1).text, TEXTS.ru.phoneNotOwn);
+  await handle(contact(9), henv, mk({}));
+  assert.equal(calls.length, 1, 'not linked: nothing stored');
+  assert.equal(out.at(-1).text, TEXTS.ru.phoneNotLinked);
+  await handle(contact(9, '+1 202 555 0100'), henv, mk({ 9: 'kk' }, { ok: false, error: 'invalid_phone' }));
+  assert.equal(out.at(-1).text, TEXTS.kk.phoneBad);
+  await handle(hook(JSON.stringify({ message: { chat: { id: 9, type: 'private' }, from: { id: 9 }, text: '/phone' } })), henv, mk({ 9: 'kk' }));
+  assert.equal(out.at(-1).text, TEXTS.kk.askPhone);
+  assert.equal(out.at(-1).reply_markup.keyboard[0][0].text, TEXTS.kk.btnSharePhone);
+});
 console.log(`\n${n} passed`);

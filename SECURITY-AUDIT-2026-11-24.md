@@ -390,7 +390,7 @@ No IDOR was found on subscriptions, invoices, store keys, feeds or tickets.
 
 | Finding | Status |
 |---|---|
-| M-1 phone-only auto-confirm | **Fixed.** `030_audit_fixes.sql`: a phone match goes to review (`phone_only`) and names the candidate invoice. Only our invoice number confirms automatically. |
+| M-1 phone-only auto-confirm | **Fixed.** `030_audit_fixes.sql` + `031_phone_verified.sql`: our invoice number confirms automatically. A phone + amount match confirms automatically only if the account confirmed that phone in the Telegram bot («Поделиться номером»; Telegram sends only the user's own SMS-verified number, and the bot accepts only a contact whose `user_id` is the sender's). Any other phone match goes to review (`phone_only`) with the candidate invoice. |
 | M-2 discount on multi-month invoices | **Fixed.** `030`: −30 % applies to one month of each discounted invoice, and the offer expires after 60 days. |
 | M-3 owner PIN brute force | **Fixed.** `background/staff.js`: 5 wrong tries lock the unlock for 15 minutes. |
 | M-4 warehouse mode is client-side | **Mitigated.** Offline grace cut from 15 to 5 minutes. README documents the separate profile plus `DeveloperToolsAvailability=2` / `URLBlocklist` policy. A full fix needs server-side order access (architecture). |
@@ -406,7 +406,7 @@ No IDOR was found on subscriptions, invoices, store keys, feeds or tickets.
 | L-1, L-2, L-5, L-6, L-12 | Open. These are hosting or config changes; see the table above. |
 
 Verification:
-- SQL: 605 checks pass in both the product and the template, including the new `test27.sql`.
+- SQL: 622 checks pass in both the product and the template, including the new `test27.sql` and `test28.sql`.
 - Unit: all 15 suites pass.
 - Browser: billtest2, team, orchestra, growth, hack, apitest, run2, demofile, photoprint and uxtest all pass.
 - `APPLY-PROD-2026-11-24-c.sql` runs twice on the same database without errors.

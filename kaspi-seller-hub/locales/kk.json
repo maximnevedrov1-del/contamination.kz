@@ -136,6 +136,8 @@
     "monthsLabel": "Айлар",
     "phoneLabel": "Шот үшін Kaspi нөмірі",
     "phonePlaceholder": "+7 7XX XXX XX XX",
+    "phoneVerified": "✓ Нөмір Telegram-да расталды — одан төлем автоматты түрде есептеледі.",
+    "phoneVerifyHint": "Төлем бірден есептелуі үшін нөміріңізді Telegram-ботымызда растаңыз: оны баптауларда қосып, «📱 Нөмірмен бөлісу» батырмасын басыңыз. Әйтпесе шот қолмен расталады.",
     "priceLine": "{baseStores} дүкен үшін {base} + {extraCount} × {extra}",
     "priceLineBase": "{baseStores} дүкенге дейін {base}",
     "total": "Барлығы: {amount}",

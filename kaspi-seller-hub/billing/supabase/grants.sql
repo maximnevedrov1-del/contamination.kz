@@ -91,7 +91,7 @@ to authenticated;
 grant execute on function
   public.bot_link(text, text, bigint, text), public.bot_unlink(text, bigint, boolean), public.bot_jobs(text), public.bot_sent(text, jsonb),
   public.bot_lock(text, text, int), public.bot_unlock(text, text), public.bot_key_ok(text), public.ops_digest(text),
-  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.bot_langs(text,uuid[],bigint[])
+  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.bot_langs(text,uuid[],bigint[]), public.bot_verify_phone(text,bigint,text)
 to service_role;
 
 -- 5. only Supabase Auth may run the access-token hook

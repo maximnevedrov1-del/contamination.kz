@@ -52,7 +52,14 @@ const BOT_KEY = 'bot-key-0123456789abcdef0123456789abcdef';
   check('1 bot token only in the URL path', sent[0]?.token === 'bot123:abc');
   check('1 database: chat linked with the name', (await q("select chat_id, tg_name from tg_links"))[0]?.tg_name === 'Алишер');
   await call('webhook', { message: { chat: { id: 5555, type: 'private' }, from: { first_name: 'Чужой' }, text: `/start ${token}` } }, { 'x-telegram-bot-api-secret-token': env.WEBHOOK_SECRET });
-  check('1 the same link again → «ссылка устарела»', /Ссылка устарела/.test(sent[1]?.text || '') && (await q('select count(*)::int n from tg_links'))[0].n === 1);
+  check('1 then asks to confirm the payer phone with Telegram\'s contact button', /Поделиться номером/.test(sent[1]?.text || '') && sent[1]?.reply_markup?.keyboard?.[0]?.[0]?.request_contact === true, JSON.stringify(sent[1]));
+  check('1 the same link again → «ссылка устарела»', /Ссылка устарела/.test(sent[2]?.text || '') && (await q('select count(*)::int n from tg_links'))[0].n === 1);
+  // «Поделиться номером»: someone else's contact is refused, the user's own is stored as the confirmed phone
+  await call('webhook', { message: { chat: { id: 4242, type: 'private' }, from: { id: 4242, first_name: 'Алишер' }, contact: { user_id: 999, phone_number: '+77019990000' } } }, { 'x-telegram-bot-api-secret-token': env.WEBHOOK_SECRET });
+  check('1 a forwarded contact is not accepted', /только свой номер/.test(sent.at(-1)?.text || '') && (await q("select phone_verified from accounts where email = 'alisher@example.kz'"))[0].phone_verified === null);
+  await call('webhook', { message: { chat: { id: 4242, type: 'private' }, from: { id: 4242, first_name: 'Алишер' }, contact: { user_id: 4242, phone_number: '77015554433' } } }, { 'x-telegram-bot-api-secret-token': env.WEBHOOK_SECRET });
+  check('1 own contact → phone confirmed in the database', /Номер \+7 701 555 44 33 подтверждён/.test(sent.at(-1)?.text || '') && (await q("select phone_verified from accounts where email = 'alisher@example.kz'"))[0].phone_verified === '77015554433', sent.at(-1)?.text);
+  check('1 licence reports the confirmed phone', (await rpc(tok, 'get_license'))?.phone_verified === true);
 
   // 2. 09:00: morning digest
   const noKey = await call('run', {}, { 'x-bot-key': 'x'.repeat(40) });

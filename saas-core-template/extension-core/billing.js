@@ -425,6 +425,7 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     renewalDue: status === 'expired' || msLeft <= remindDays * DAY,
     email: lic.email || session.email,
     phone: lic.phone,
+    phoneVerified: lic.phone_verified === true,
     trialEndsAt: trialEnds,
     paidUntil,
     pricing: lic.pricing,

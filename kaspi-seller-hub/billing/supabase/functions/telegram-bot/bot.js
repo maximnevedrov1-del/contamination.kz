@@ -2,7 +2,8 @@
  * SaudaPulse — the seller's Telegram bot (Supabase Edge Function, also runs in Node for tests).
  *
  * Routes (POST):
- *   …/telegram-bot/webhook  Telegram updates: /start <token> links the chat, /stop unlinks;
+ *   …/telegram-bot/webhook  Telegram updates: /start <token> links the chat, /stop unlinks, /phone and the
+ *                           «share my number» contact confirm the payer phone (031_phone_verified.sql);
  *                           checked with the X-Telegram-Bot-Api-Secret-Token header.
  *   …/telegram-bot/alert    from the extension with the SELLER's token: «order at risk» right now
  *                           (the database decides whether to send: linked, alerts on, once per order).
@@ -54,7 +55,13 @@ export const TEXTS = {
     linked: (shops) => `✅ Уведомления успешно подключены${shops.length ? ` для ${shops.length > 1 ? 'магазинов' : 'магазина'} ${shops.join(', ')}` : ''}!\n\nКаждое утро в 09:00 — сводка за вчера, а если заказ под угрозой просрочки — сразу сообщение. Отключить: /stop`,
     unlinked: 'Уведомления отключены. Подключить снова: SaudaPulse → Настройки → «Подключить Telegram».',
     help: 'Это бот уведомлений SaudaPulse. Чтобы подключить его, откройте SaudaPulse → Настройки → «Подключить Telegram».',
-    linkedHelp: '✅ Уведомления подключены: каждое утро в 09:00 — сводка за вчера, а если заказ под угрозой просрочки — сразу сообщение. Отключить: /stop',
+    linkedHelp: '✅ Уведомления подключены: каждое утро в 09:00 — сводка за вчера, а если заказ под угрозой просрочки — сразу сообщение. Подтвердить номер для оплаты: /phone. Отключить: /stop',
+    btnSharePhone: '📱 Поделиться номером',
+    askPhone: 'Подтвердите номер телефона, с которого платите за SaudaPulse: нажмите кнопку «📱 Поделиться номером» внизу. Тогда оплата по этому номеру будет засчитываться автоматически, без ожидания.',
+    phoneOk: (ph) => `✅ Номер ${ph} подтверждён. Оплата с него будет засчитываться автоматически.`,
+    phoneNotOwn: 'Можно подтвердить только свой номер — нажмите кнопку «📱 Поделиться номером», а не отправляйте чужой контакт.',
+    phoneBad: 'Этот номер не похож на казахстанский мобильный. Платить можно и так — счёт подтвердят вручную.',
+    phoneNotLinked: 'Сначала подключите бота: SaudaPulse → Настройки → «Подключить Telegram».',
   },
   kk: {
     btnOrders: '📦 Тапсырыстарды көру',
@@ -82,7 +89,13 @@ export const TEXTS = {
     linked: (shops) => `✅ Хабарламалар сәтті қосылды${shops.length ? ` (${shops.length > 1 ? 'дүкендер' : 'дүкен'}: ${shops.join(', ')})` : ''}!\n\nКүн сайын таңғы 09:00-де — кешегі қорытынды, ал тапсырыс мерзімі өтіп кету қаупінде болса — бірден хабарлама. Өшіру: /stop`,
     unlinked: 'Хабарламалар өшірілді. Қайта қосу: SaudaPulse → Баптаулар → «Telegram қосу».',
     help: 'Бұл — SaudaPulse хабарламалар боты. Қосу үшін SaudaPulse → Баптаулар → «Telegram қосу» ашыңыз.',
-    linkedHelp: '✅ Хабарламалар қосулы: күн сайын таңғы 09:00-де — кешегі қорытынды, ал тапсырыс мерзімі өтіп кету қаупінде болса — бірден хабарлама. Өшіру: /stop',
+    linkedHelp: '✅ Хабарламалар қосулы: күн сайын таңғы 09:00-де — кешегі қорытынды, ал тапсырыс мерзімі өтіп кету қаупінде болса — бірден хабарлама. Төлем нөмірін растау: /phone. Өшіру: /stop',
+    btnSharePhone: '📱 Нөмірмен бөлісу',
+    askPhone: 'SaudaPulse үшін төлейтін телефон нөміріңізді растаңыз: төмендегі «📱 Нөмірмен бөлісу» батырмасын басыңыз. Сонда осы нөмірден төлем күтпестен автоматты түрде есептеледі.',
+    phoneOk: (ph) => `✅ ${ph} нөмірі расталды. Осы нөмірден төлем автоматты түрде есептеледі.`,
+    phoneNotOwn: 'Тек өз нөміріңізді растай аласыз — басқа біреудің контактісін жібермей, «📱 Нөмірмен бөлісу» батырмасын басыңыз.',
+    phoneBad: 'Бұл нөмір қазақстандық ұялы нөмірге ұқсамайды. Бәрібір төлей беруге болады — шотты қолмен растайды.',
+    phoneNotLinked: 'Алдымен ботты қосыңыз: SaudaPulse → Баптаулар → «Telegram қосу».',
   },
 };
 export const langOf = (l) => (l === 'kk' ? 'kk' : 'ru');
@@ -95,6 +108,10 @@ export function buttons({ app_url, support_url }, route = 'orders', lang = 'ru')
   if (support_url) row.push({ text: T(lang).btnSupport, url: support_url });
   return row.length ? { inline_keyboard: [row] } : undefined;
 }
+
+/** Reply keyboard with Telegram's own «share my number» button (request_contact: the user's number, verified by Telegram). */
+export const phoneKeyboard = (lang = 'ru') => ({ keyboard: [[{ text: T(lang).btnSharePhone, request_contact: true }]], resize_keyboard: true, one_time_keyboard: true });
+const fmtPhone = (p) => { const d = String(p || ''); return /^77\d{9}$/.test(d) ? `+7 ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}` : d; };
 
 /** Text of each message kind, in `lang` ('ru' | 'kk'). */
 export function format(item, lang = 'ru') {
@@ -200,11 +217,24 @@ async function webhook(update, env, f) {
     const shops = (r.shops || []).filter(Boolean);
     // linked now: the account's interface language
     const lang = (await langs(env, f, { chats: [chat] })).chats[String(chat)] || tgLang(msg);
-    return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).linked(shops), reply_markup: buttons(r, 'orders', lang) }, f);
+    await tg(env, 'sendMessage', { chat_id: chat, text: T(lang).linked(shops), reply_markup: buttons(r, 'orders', lang) }, f);
+    return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).askPhone, reply_markup: phoneKeyboard(lang) }, f);
   }
   // still linked before /stop: the account's language; otherwise the Telegram app's
   const linkedLang = (await langs(env, f, { chats: [chat] })).chats[String(chat)];
   const lang = linkedLang || tgLang(msg);
+  // «Поделиться номером»: only the sender's OWN contact counts (a forwarded or picked contact has another user_id)
+  if (msg.contact) {
+    if (!linkedLang) return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).phoneNotLinked, reply_markup: { remove_keyboard: true } }, f);
+    if (!msg.from?.id || msg.contact.user_id !== msg.from.id) return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).phoneNotOwn, reply_markup: phoneKeyboard(lang) }, f);
+    const v = await rpc(env, 'bot_verify_phone', { p_key: env.BOT_KEY, p_chat_id: chat, p_phone: String(msg.contact.phone_number || '').slice(0, 32) }, null, f);
+    const out = v?.ok ? T(lang).phoneOk(fmtPhone(v.phone)) : v?.error === 'not_linked' ? T(lang).phoneNotLinked : T(lang).phoneBad;
+    return tg(env, 'sendMessage', { chat_id: chat, text: out, reply_markup: { remove_keyboard: true } }, f);
+  }
+  if (/^\/phone/.test(text)) {
+    if (!linkedLang) return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).phoneNotLinked }, f);
+    return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).askPhone, reply_markup: phoneKeyboard(lang) }, f);
+  }
   if (/^\/stop/.test(text)) {
     await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: chat, p_blocked: false }, null, f);
     return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).unlinked }, f);

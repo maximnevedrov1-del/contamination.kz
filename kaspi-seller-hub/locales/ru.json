@@ -144,6 +144,8 @@
     "monthsLabel": "Месяцев",
     "phoneLabel": "Номер Kaspi для счёта",
     "phonePlaceholder": "+7 7XX XXX XX XX",
+    "phoneVerified": "✓ Номер подтверждён в Telegram — оплата с него засчитывается автоматически.",
+    "phoneVerifyHint": "Чтобы оплата засчитывалась сразу, подтвердите номер в нашем Telegram-боте: подключите его в настройках и нажмите «📱 Поделиться номером». Без этого счёт подтверждается вручную.",
     "priceLine": "{base} за {baseStores} магазина + {extraCount} × {extra}",
     "priceLineBase": "{base} за до {baseStores} магазинов",
     "total": "Итого: {amount}",

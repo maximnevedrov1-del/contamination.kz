@@ -2563,6 +2563,8 @@ function viewAccount() {
       ),
       h('label', { class: 'check' }, t('account.phoneLabel'), h('input', { class: 'input', type: 'tel', autocomplete: 'tel', placeholder: t('account.phonePlaceholder'), value: ui.phone, style: { width: '190px' }, dataset: { fkey: 'acct-phone' }, oninput: (e) => (ui.phone = e.target.value) })),
     ),
+    // a confirmed phone (Telegram «Поделиться номером», 031_phone_verified.sql) lets a payment confirm itself
+    h('div', { class: 'muted', dataset: { fkey: 'acct-phone-verified' } }, lic.phoneVerified ? t('account.phoneVerified') : t('account.phoneVerifyHint')),
     h('div', { class: 'muted' }, extraCount ? t('account.priceLine', { base: formatMoney(pr.base_price), baseStores: pr.base_stores, extraCount, extra: formatMoney(pr.extra_store_price) }) : t('account.priceLineBase', { base: formatMoney(pr.base_price), baseStores: pr.base_stores }), ` = ${t('account.perMonth', { amount: formatMoney(monthly) })}`),
     h(
       'div',
