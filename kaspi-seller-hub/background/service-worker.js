@@ -1356,7 +1356,7 @@ const uiHandlers = {
       sync().catch((e) => console.warn(LOG, 'sync after consent', e));
       return { ok: true, license: lic };
     }),
-  'ui:billingRequestCode': ({ email }) => billingCall(() => B.requestCode(email)),
+  'ui:billingRequestCode': ({ email, captchaToken }) => billingCall(() => B.requestCode(email, captchaToken)),
   'ui:billingVerify': ({ email, code, consent }) =>
     billingCall(async () => {
       await B.verifyCode(email, code);

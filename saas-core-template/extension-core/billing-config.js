@@ -47,6 +47,18 @@ Object.freeze(BILLING.licenseKeys);
 BILLING.licenseKeys.forEach(Object.freeze);
 
 /**
+ * Captcha before the e-mail code (Cloudflare Turnstile, checked by Supabase Auth).
+ * pageUrl — our site page with the widget (source: captcha/index.html). Empty → no captcha.
+ * Publish the page BEFORE releasing a version with this URL; turn captcha on in Supabase
+ * (Authentication → Attack Protection) only AFTER most clients have updated.
+ * readyTimeoutMs — if the page does not answer in this time, the code is requested without a token.
+ */
+export const CAPTCHA = Object.freeze({
+  pageUrl: 'https://{{APP_DOMAIN}}/captcha',
+  readyTimeoutMs: 6000,
+});
+
+/**
  * Public offer and privacy policy shown next to the consent checkbox.
  * Empty URL → the copy bundled in the extension (legal/terms.html) is opened.
  * After publishing the texts on your site, put the links here; when the texts

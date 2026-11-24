@@ -307,6 +307,8 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--focus); 
 .catalog-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 .catalog-toolbar .input[type=search] { width: 240px; }
 .catalog-table td { vertical-align: top; }
+.captcha-dialog { width: 360px; }
+.captcha-frame { display: block; border: 0; margin: var(--space-4) auto var(--space-2); width: 304px; height: 72px; color-scheme: normal; }
 .dialog--wide { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
 .catalog-form { padding: var(--space-5); display: grid; gap: var(--space-4); }
 .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }

@@ -8,7 +8,8 @@
  * No money, profit, payments, settings, tokens or other stores.
  */
 import { h, clear, deadlineOf, urgencyOf } from '../shared/utils.js';
-import { t, formatDate } from '../shared/i18n.js';
+import { t, formatDate, getLang } from '../shared/i18n.js';
+import { getCaptchaToken } from '../shared/captcha.js';
 import { svgIcon } from '../shared/icons.js';
 
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
@@ -123,7 +124,9 @@ export function renderLockScreen(root, ctx) {
     body = h('form', { class: 'lock__form', onsubmit: async (e) => {
       e.preventDefault();
       ui.email = email.value.trim().toLowerCase();
-      const res = await send('ui:staffRequestCode', { email: ui.email });
+      let captchaToken = null;
+      try { captchaToken = await getCaptchaToken({ t, lang: getLang() }); } catch { return; }
+      const res = await send('ui:staffRequestCode', { email: ui.email, captchaToken });
       if (!res?.ok) return fail(res);
       Object.assign(ui, { error: '', step: 'code' });
       renderLockScreen(root, ctx);

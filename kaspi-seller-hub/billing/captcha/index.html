@@ -1,0 +1,58 @@
+<!doctype html>
+<!--
+  SaudaPulse — captcha page. Publish it on the site at https://saudapulse.kz/captcha
+  (the address in shared/billing-config.js → CAPTCHA.pageUrl).
+
+  The extension and the admin page show it in a small frame and receive the Turnstile token via
+  postMessage. Requirements for the site:
+    - the page may be shown in a frame: no "X-Frame-Options: DENY/SAMEORIGIN" and no
+      "Content-Security-Policy: frame-ancestors" header that blocks chrome-extension:// for this path;
+    - the inline script below and https://challenges.cloudflare.com must be allowed if the site sets a CSP.
+
+  Replace SITE_KEY with the "Site Key" of your widget: Cloudflare → Turnstile → Add widget,
+  hostname saudapulse.kz, mode "Managed". The "Secret Key" goes ONLY into Supabase
+  (Authentication → Attack Protection → Enable Captcha protection → Turnstile).
+-->
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Проверка — SaudaPulse</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+    body { display: flex; justify-content: center; align-items: flex-start; min-height: 72px; font: 14px system-ui, sans-serif; }
+    noscript { color: #a00; padding: 8px; }
+  </style>
+  <script>
+    (function () {
+      var SITE_KEY = 'SITE_KEY';
+      function post(msg) {
+        msg.source = 'saudapulse-captcha';
+        // Only the window that framed this page receives it. The token is single-use and expires
+        // in 5 minutes; Supabase checks it on the server.
+        try { if (window.parent !== window) window.parent.postMessage(msg, '*'); } catch (e) { /* ignore */ }
+      }
+      var lang = (new URLSearchParams(location.search).get('lang') || 'ru').toLowerCase();
+      window.onTurnstileLoad = function () {
+        window.turnstile.render('#widget', {
+          sitekey: SITE_KEY,
+          theme: 'auto',
+          language: lang === 'kk' ? 'auto' : 'ru',
+          callback: function (token) { post({ type: 'token', token: token }); },
+          'error-callback': function () { post({ type: 'error' }); return true; },
+          'expired-callback': function () { post({ type: 'expired' }); },
+          'timeout-callback': function () { post({ type: 'expired' }); },
+        });
+      };
+      // tells the extension the page exists; without it the extension goes on without a token
+      post({ type: 'ready' });
+    })();
+  </script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit" async defer></script>
+</head>
+<body>
+  <div id="widget"></div>
+  <noscript>Включите JavaScript</noscript>
+</body>
+</html>

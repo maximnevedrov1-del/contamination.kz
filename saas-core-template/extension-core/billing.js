@@ -70,6 +70,8 @@ async function http(path, { method = 'POST', body, token } = {}) {
       'boost_used', 'boost_not_needed', 'offer_used', 'invalid_choice', 'bot_not_configured'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`, msg, res.status);
+    // Supabase Auth: "captcha protection: request disallowed (...)", error_code captcha_failed
+    if (/captcha/i.test(msg) || data?.error_code === 'captcha_failed') throw new BillingError('billingCaptcha', msg, res.status);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg, res.status);
     if (res.status === 429) throw new BillingError('billingRateLimit', msg, res.status);
     if (res.status === 401 || res.status === 403) throw new BillingError('billingAuth', msg, res.status);
@@ -88,11 +90,18 @@ async function saveSession(s, fallbackUser = {}) {
   });
 }
 
+/** Body of /auth/v1/otp; the captcha token (captcha.js) goes where Supabase Auth reads it. */
+export function otpBody(email, captchaToken) {
+  const body = { email, create_user: true };
+  if (typeof captchaToken === 'string' && captchaToken && captchaToken.length < 4096) body.gotrue_meta_security = { captcha_token: captchaToken };
+  return body;
+}
+
 /** Step 1: e-mail a one-time code (creates the account on first login → trial starts). */
-export async function requestCode(email) {
+export async function requestCode(email, captchaToken) {
   email = String(email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BillingError('billingBadEmail');
-  await http('/auth/v1/otp', { body: { email, create_user: true } });
+  await http('/auth/v1/otp', { body: otpBody(email, captchaToken) });
   return { ok: true };
 }
 

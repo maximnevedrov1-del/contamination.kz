@@ -71,6 +71,6 @@
     "matches": ["https://saudapulse.kz/*", "https://*.saudapulse.kz/*"]
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' blob:"
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' blob: https://saudapulse.kz"
   }
 }

@@ -45,9 +45,11 @@ globalThis.chrome = {
 // Scripted server: each route answers from its queue (status, body) or throws (no network).
 let routes = {};
 let calls = [];
-globalThis.fetch = async (url) => {
+let sent = [];
+globalThis.fetch = async (url, opts) => {
   const route = Object.keys(routes).find((r) => String(url).includes(r));
   calls.push(route || String(url));
+  sent.push(opts?.body ? JSON.parse(opts.body) : null);
   const next = route && routes[route].shift();
   if (!next) throw new Error(`unexpected request ${url}`);
   if (next === 'offline') throw new TypeError('Failed to fetch');
@@ -80,7 +82,7 @@ const fresh = async (ksh = { pu: now + 30 * DAY, sl: 3, tsl: 1 }) => ({ access_t
 
 let n = 0;
 const t = async (name, fn) => {
-  store = {}; routes = {}; calls = [];
+  store = {}; routes = {}; calls = []; sent = [];
   await fn();
   n++;
   console.log('ok', name);
@@ -243,6 +245,27 @@ await t('server down and no cache → offline view, still signed in', async () =
   const v = await B.licenseView({ force: true });
   assert.equal(v.status, 'offline');
   assert.ok(store['ksh.session'], 'session kept');
+});
+
+// ---------- captcha on the e-mail code request ----------
+const OTP = '/auth/v1/otp';
+await t('code request with a captcha token → sent as gotrue_meta_security.captcha_token', async () => {
+  routes = { [OTP]: [[200, {}]] };
+  await B.requestCode(' A@B.kz ', 'tok_1234567890');
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, gotrue_meta_security: { captcha_token: 'tok_1234567890' } });
+});
+await t('code request without a token (captcha off / page down) → plain body', async () => {
+  routes = { [OTP]: [[200, {}]] };
+  await B.requestCode('a@b.kz', null);
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true });
+});
+await t('Supabase refuses the captcha → billingCaptcha', async () => {
+  routes = { [OTP]: [[400, { code: 400, error_code: 'captcha_failed', msg: 'captcha protection: request disallowed (no captcha response)' }]] };
+  await assert.rejects(B.requestCode('a@b.kz'), (e) => e.code === 'billingCaptcha');
+});
+await t('oversized or non-string token is not sent', async () => {
+  assert.deepEqual(B.otpBody('a@b.kz', 'x'.repeat(5000)), { email: 'a@b.kz', create_user: true });
+  assert.deepEqual(B.otpBody('a@b.kz', { evil: 1 }), { email: 'a@b.kz', create_user: true });
 });
 
 console.log(`\n${n} passed`);

@@ -25,6 +25,7 @@ import {
 import '../shared/selectors.js';
 import { startUx } from './ux-wire.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
+import { getCaptchaToken } from '../shared/captcha.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
 import { svgIcon } from '../shared/icons.js';
@@ -2475,7 +2476,12 @@ function viewAccount() {
               onsubmit: async (e) => {
                 e.preventDefault();
                 if (!ui.consent) return;
-                const res = await run(() => send('ui:billingRequestCode', { email: ui.email }));
+                const res = await run(async () => {
+                  let captchaToken = null;
+                  try { captchaToken = await getCaptchaToken({ t, lang: getLang() }); } catch { return { ok: true, cancelled: true }; }
+                  return send('ui:billingRequestCode', { email: ui.email, captchaToken });
+                });
+                if (res?.cancelled) return;
                 if (res?.ok) ui.step = 'code';
                 renderView();
               },

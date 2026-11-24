@@ -31,6 +31,53 @@
       }
     },
   };
+  // Captcha page on the site (same as CAPTCHA.pageUrl in shared/billing-config.js); '' turns it off.
+  const CAPTCHA_URL = 'https://saudapulse.kz/captcha';
+  /** Shows the Turnstile page in a frame; resolves the token, or null if the page did not answer. */
+  function captchaToken() {
+    if (!CAPTCHA_URL) return Promise.resolve(null);
+    const origin = new URL(CAPTCHA_URL).origin;
+    return new Promise((resolve, reject) => {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1000';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#fff;color:#111;border-radius:12px;padding:20px;width:340px;font:14px system-ui,sans-serif';
+      const title = document.createElement('b');
+      title.textContent = 'Проверка, что вы не робот';
+      const frame = document.createElement('iframe');
+      frame.src = CAPTCHA_URL + '?lang=ru';
+      frame.title = 'Проверка';
+      frame.style.cssText = 'display:block;border:0;width:304px;height:72px;margin:12px auto';
+      const status = document.createElement('div');
+      status.style.cssText = 'color:#a00;min-height:1em';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'Отмена';
+      card.append(title, frame, status, cancel);
+      box.append(card);
+      document.body.append(box);
+      let done = false;
+      const finish = (fn, v) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
+        box.remove();
+        fn(v);
+      };
+      const timer = setTimeout(() => finish(resolve, null), 6000);
+      const onMsg = (e) => {
+        if (e.origin !== origin || e.source !== frame.contentWindow) return;
+        const d = e.data;
+        if (!d || d.source !== 'saudapulse-captcha') return;
+        if (d.type === 'ready') clearTimeout(timer);
+        else if (d.type === 'token' && typeof d.token === 'string' && d.token.length < 4096) finish(resolve, d.token);
+        else if (d.type === 'error' || d.type === 'expired') status.textContent = 'Проверка не прошла — отметьте галочку ещё раз';
+      };
+      window.addEventListener('message', onMsg);
+      cancel.addEventListener('click', () => finish(reject, new Error('Проверка отменена')));
+    });
+  }
   let tab = 'pending';
   // Lists come in pages of 100 rows: search + «Показать ещё» instead of loading everything.
   const PAGE = 100;
@@ -909,7 +956,10 @@
   });
   $('sendCode').addEventListener('click', async () => {
     try {
-      await http('/auth/v1/otp', { email: $('email').value.trim().toLowerCase(), create_user: false });
+      const body = { email: $('email').value.trim().toLowerCase(), create_user: false };
+      const captcha = await captchaToken();
+      if (captcha) body.gotrue_meta_security = { captcha_token: captcha };
+      await http('/auth/v1/otp', body);
       $('codeRow').hidden = false;
       toast('Код отправлен на почту');
     } catch (e) {
