@@ -26,13 +26,12 @@ def load(name):
 
 
 def paint(img, box, fill=None, text=None):
-    """Cover a personal value with the colour just left of it (the page background)."""
+    """Cover a personal value with a solid grey plate marked «скрыто», so it is plainly hidden."""
     d = ImageDraw.Draw(img)
     x0, y0, x1, y1 = box
-    color = fill or img.getpixel((max(0, x0 - 4), (y0 + y1) // 2))
-    d.rectangle(box, fill=color)
-    if text:
-        d.text((x0 + 6, (y0 + y1) // 2), text, fill=(150, 150, 150), font=REG, anchor='lm')
+    d.rounded_rectangle(box, radius=6, fill=(205, 208, 214))
+    font = REG if y1 - y0 < 40 else BOLD
+    d.text(((x0 + x1) // 2, (y0 + y1) // 2), 'скрыто', fill=(90, 94, 102), font=font, anchor='mm')
 
 
 def hide_top_bar(img):
@@ -74,10 +73,10 @@ k1, k2, k3, k4 = (load(f'k{i}') for i in range(1, 5))
 for k in (k1, k2, k3, k4):
     hide_top_bar(k)
 # «Информация о магазине»: partner ID, shop name, logo, phone
-for box in [(636, 282, 712, 303), (636, 317, 760, 338), (650, 344, 748, 432), (636, 634, 780, 656)]:
-    paint(k3, box, text='•••••' if box[3] - box[1] < 30 else None)
+for box in [(632, 280, 760, 305), (632, 315, 760, 340), (632, 342, 760, 434), (632, 632, 790, 658)]:
+    paint(k3, box)
 # «Токен API»: the token itself
-paint(k4, (318, 238, 662, 266), fill=(242, 242, 242), text='••••••••••••••••••••••••••')
+paint(k4, (316, 236, 664, 268))
 
 e1, e2 = load('e1'), load('e2')
 frames = [
