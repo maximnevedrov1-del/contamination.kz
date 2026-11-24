@@ -52,6 +52,18 @@ const hasSigningKey = /["']?kty["']?\s*:\s*["'](EC|RSA)["']/.test(keysBlock);
 if (!supabaseUrl || !anonKey) fail('shared/billing-config.js: supabaseUrl / supabaseAnonKey are empty — the build would run in DEVELOPER MODE (free, no limits).');
 if (supabaseUrl && !/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(supabaseUrl)) fail(`supabaseUrl must be an https address without a path: ${supabaseUrl}`);
 if (!hasSigningKey) fail('shared/billing-config.js: licenseKeys is empty — without the public signing key a subscription can be faked by editing browser storage. See billing/README.md → «Подписанная лицензия».');
+// captcha page (CAPTCHA.pageUrl): its https origin is the one extra frame source the pages may embed
+const captchaUrl = str('pageUrl');
+let captchaOrigin = '';
+if (captchaUrl) {
+  try {
+    const u = new URL(captchaUrl);
+    if (u.protocol !== 'https:') throw new Error('not https');
+    captchaOrigin = u.origin;
+  } catch {
+    fail(`shared/billing-config.js: CAPTCHA.pageUrl must be an https address: ${captchaUrl}`);
+  }
+}
 
 // The anon key is public by design; a service_role / secret key would give full database access to anyone.
 if (/^sb_secret_/i.test(anonKey)) fail('supabaseAnonKey is a SECRET key (sb_secret_…). Use the publishable/anon key.');
@@ -130,7 +142,7 @@ manifest.content_security_policy = {
   extension_pages: [
     "script-src 'self'",
     "object-src 'self'",
-    "frame-src 'self' blob:",
+    `frame-src 'self' blob:${captchaOrigin ? ' ' + captchaOrigin : ''}`, // the captcha page (shared/captcha.js) is framed, never run here
     `connect-src 'self' https://kaspi.kz https://mc.shop.kaspi.kz https://idmc.shop.kaspi.kz ${supa}`,
     // product photos: Kaspi's own image hosts only (shared/photos.js → PHOTO_HOSTS)
     `img-src 'self' data: blob: ${supa} https://kaspi.kz https://*.cdn-kaspi.kz`,

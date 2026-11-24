@@ -14,3 +14,5 @@ interprof*/
 roprof*/
 loadcopy/
 relmock/
+run2copy/
+e2e/backup-test.json*

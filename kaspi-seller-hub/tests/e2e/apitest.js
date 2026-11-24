@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const EXT = __dirname + '/../apicopy';
 let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', n, i); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -14,12 +14,30 @@ const mlog = () => fetch('http://localhost:8099/__log').then((r) => r.json());
   const clear = () => d.evaluate(() => document.querySelectorAll('.toast').forEach((t) => t.remove()));
   const waitToast = async () => { await d.waitForSelector('.toast', { timeout: 90000 }); await sleep(400); return toasts(); };
 
+  // The mock must answer before the first check: otherwise «no connection» is shown instead of «token rejected».
+  for (let i = 0; ; i++) {
+    if (await mlog().then(() => true, () => false)) break;
+    if (i > 100) throw new Error('mock API on :8099 is not answering');
+    await sleep(100);
+  }
+  // Wait for the outcome of a connect attempt: a toast (connected) or an error banner, whichever comes first.
+  // The bound is above the extension's own worst case for verifying a token: 3 attempts × 30 s + 1.5 s + 4 s
+  // (background/kaspi-api.js API_TIMEOUT_MS, RETRY_DELAYS), so a slow runner is not mistaken for a failure.
+  const CONNECT_MS = 3 * 30000 + 1500 + 4000 + 15000;
+  // `stale`: banner text left by the previous attempt, ignored while waiting
+  const outcome = async (stale = []) => {
+    await d.waitForFunction((old) => document.querySelector('.toast')
+      || [...document.querySelectorAll('#view .banner[role=alert]')].some((b) => !old.includes(b.innerText)), stale, { timeout: CONNECT_MS });
+    await sleep(400);
+    return { toasts: await toasts(), banner: await d.locator('#view .banner[role=alert]').allInnerTexts() };
+  };
+
   // 1. wrong token
   await d.fill('input[placeholder="Название магазина"]', 'Автозапчасти (API)');
   await d.fill('input[type=password]', 'WRONG');
   await d.click('button:has-text("Проверить и подключить")');
-  await d.waitForSelector('.banner[role=alert]', { timeout: 15000 });
-  check('1 wrong token rejected with a clear message', (await d.locator('#view .banner[role=alert]').innerText()).includes('отклонил токен'));
+  const o1 = await outcome();
+  check('1 wrong token rejected with a clear message', o1.banner.some((b) => b.includes('отклонил токен')), JSON.stringify(o1));
   check('1 token field not kept in the page after failure', (await d.inputValue('input[type=password]').catch(() => '')) === '');
 
   // 2. good token
@@ -27,8 +45,8 @@ const mlog = () => fetch('http://localhost:8099/__log').then((r) => r.json());
   await d.fill('input[type=password]', 'GOOD-TOKEN-1234');
   await clear();
   await d.click('button:has-text("Проверить и подключить")');
-  const t2 = await waitToast();
-  check('2 connected toast', t2.some((x) => x.includes('подключен по API')), JSON.stringify(t2));
+  const o2 = await outcome(o1.banner);
+  check('2 connected toast', o2.toasts.some((x) => x.includes('подключен по API')), JSON.stringify(o2));
   await d.waitForFunction(() => document.body.innerText.includes('токен …1234'), null, { timeout: 15000 });
   check('2 settings show masked token only', (await d.locator('body').innerText()).includes('…1234') && !(await d.locator('body').innerText()).includes('GOOD-TOKEN'));
 

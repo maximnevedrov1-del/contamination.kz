@@ -31,6 +31,53 @@
       }
     },
   };
+  // Captcha page on the site (same as CAPTCHA.pageUrl in shared/billing-config.js); '' turns it off.
+  const CAPTCHA_URL = 'https://saudapulse.kz/captcha';
+  /** Shows the Turnstile page in a frame; resolves the token, or null if the page did not answer. */
+  function captchaToken() {
+    if (!CAPTCHA_URL) return Promise.resolve(null);
+    const origin = new URL(CAPTCHA_URL).origin;
+    return new Promise((resolve, reject) => {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1000';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#fff;color:#111;border-radius:12px;padding:20px;width:340px;font:14px system-ui,sans-serif';
+      const title = document.createElement('b');
+      title.textContent = 'Проверка, что вы не робот';
+      const frame = document.createElement('iframe');
+      frame.src = CAPTCHA_URL + '?lang=ru';
+      frame.title = 'Проверка';
+      frame.style.cssText = 'display:block;border:0;width:304px;height:72px;margin:12px auto';
+      const status = document.createElement('div');
+      status.style.cssText = 'color:#a00;min-height:1em';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'Отмена';
+      card.append(title, frame, status, cancel);
+      box.append(card);
+      document.body.append(box);
+      let done = false;
+      const finish = (fn, v) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
+        box.remove();
+        fn(v);
+      };
+      const timer = setTimeout(() => finish(resolve, null), 6000);
+      const onMsg = (e) => {
+        if (e.origin !== origin || e.source !== frame.contentWindow) return;
+        const d = e.data;
+        if (!d || d.source !== 'saudapulse-captcha') return;
+        if (d.type === 'ready') clearTimeout(timer);
+        else if (d.type === 'token' && typeof d.token === 'string' && d.token.length < 4096) finish(resolve, d.token);
+        else if (d.type === 'error' || d.type === 'expired') status.textContent = 'Проверка не прошла — отметьте галочку ещё раз';
+      };
+      window.addEventListener('message', onMsg);
+      cancel.addEventListener('click', () => finish(reject, new Error('Проверка отменена')));
+    });
+  }
   let tab = 'pending';
   // Lists come in pages of 100 rows: search + «Показать ещё» instead of loading everything.
   const PAGE = 100;
@@ -53,7 +100,7 @@
     return el('div', { class: 'row', style: 'margin:0 0 12px' }, input, el('span', { class: 'muted' }, `показано ${shown} из ${total}`));
   }
   function moreButton(total, shown) {
-    if (shown >= total) return null;
+    if (shown >= total) return ''; // not null: replaceChildren(null) would print "null"
     return el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', onclick: () => ((view.limit += PAGE), render()) }, `Показать ещё (${Math.min(PAGE, total - shown)})`));
   }
 
@@ -161,6 +208,7 @@
     panel.replaceChildren(el('p', { class: 'muted' }, 'Загрузка…'));
     // tab counters in parallel with the tab itself (each request is a round trip to the server)
     rpc('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 1, p_offset: 0 }).then((p) => ($('pendingCount').textContent = p.total || '')).catch(() => {});
+    refreshCleanupBanner();
     rpc('admin_tickets', { p_status: 'open', p_search: null, p_limit: 1, p_offset: 0 }).then((o) => ($('ticketCount').textContent = o?.open || '')).catch(() => {});
     if (tab === 'tickets') return renderTickets(panel);
     if (tab === 'insights') return renderInsights(panel);
@@ -168,8 +216,65 @@
     if (tab === 'accounts') return renderAccounts(panel);
     if (tab === 'config') return renderConfig(panel);
     if (tab === 'flags') return renderFlags(panel);
-    const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
+    if (tab === 'errors') return renderErrors(panel);
+    if (tab === 'ux') return renderUx(panel);
+    const [page, review] = await Promise.all([
+      rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 }),
+      // automatic payments that need a look (migration 028; before it the call fails → no block)
+      tab === 'pending' ? rpc('admin_payment_events', { p_only_review: true, p_limit: 100 }).catch(() => []) : [],
+    ]);
     renderInvoices(panel, page);
+    const box = paymentReview(review || []);
+    if (box) panel.prepend(box);
+  }
+
+  // Payments the webhook could not match safely (028_payment_autoconfirm.sql → payment_received).
+  const REVIEW_REASON = {
+    no_match: 'не найден счёт с таким телефоном и суммой',
+    ambiguous: 'подходят несколько счетов — выберите вручную',
+    amount_mismatch: 'сумма не совпадает со счётом',
+    invoice_not_pending: 'счёт уже оплачен или отменён (возможна двойная оплата — проверьте возврат)',
+    invoice_not_found: 'счёт с таким номером не найден',
+  };
+  function paymentReview(events) {
+    if (!events.length) return null;
+    const rows = events.map((e) =>
+      el(
+        'tr',
+        null,
+        el('td', null, date(e.received_at, true), el('div', { class: 'muted mono' }, `${e.provider} · ${e.payment_id}`)),
+        el('td', { class: 'mono' }, phone(e.phone)),
+        el('td', { class: 'num big' }, money(e.amount)),
+        el('td', null, e.invoice_id ? `№ ${e.invoice_id}` : '—', e.invoice_amount != null && el('div', { class: 'muted' }, `по счёту ${money(e.invoice_amount)}`)),
+        el('td', null, REVIEW_REASON[e.reason] || e.reason || '—'),
+        el(
+          'td',
+          null,
+          el('button', {
+            type: 'button',
+            class: 'btn',
+            onclick: async () => {
+              const note = prompt('Что сделано с этим платежом? (например: «подтвердил счёт № 123 вручную», «вернул деньги»)', '');
+              if (note === null) return;
+              try {
+                await rpc('admin_resolve_payment_event', { p_id: e.id, p_note: note || null });
+                toast('Платёж отмечен как разобранный');
+                render();
+              } catch (err) {
+                toast(err.message, true);
+              }
+            },
+          }, 'Разобрано'),
+        ),
+      ),
+    );
+    return el(
+      'section',
+      { class: 'card' },
+      el('h3', null, `Платежи на проверку: ${events.length}`),
+      el('p', { class: 'muted' }, 'Эти оплаты пришли автоматически, но не подтверждены: что-то не совпало. Найдите счёт ниже, подтвердите его кнопкой «Оплата получена» (или верните деньги клиенту) и нажмите «Разобрано».'),
+      el('table', null, el('thead', null, el('tr', null, ['Пришла', 'Телефон', 'Сумма', 'Счёт', 'Почему не подтверждено', ''].map((h, n) => el('th', { class: n === 2 ? 'num' : null }, h)))), el('tbody', null, rows)),
+    );
   }
 
   function renderInvoices(panel, page) {
@@ -189,7 +294,7 @@
         null,
         el('td', { class: 'mono' }, '№ ' + i.id, el('div', { class: 'muted' }, { renewal: 'продление', addon: 'доп. магазины', manual: 'выбран клиентом' }[i.kind] || '')),
         el('td', null, date(i.created_at, true)),
-        el('td', null, i.email || '—', el('div', { class: 'muted mono' }, phone(i.phone))),
+        el('td', null, i.email || '—', el('div', { class: 'muted mono' }, phone(i.phone)), i.status === 'pending' && referralNote(i)),
         el('td', null, i.kind === 'addon' ? `до ${i.stores} маг., доплата до конца периода` : `${i.stores} маг. × ${i.months} мес.`, el('div', { class: 'muted' }, `подключено магазинов: ${i.last_store_count ?? '—'}`)),
         el('td', { class: 'num big' }, money(i.amount)),
         el(
@@ -220,15 +325,33 @@
     );
   }
 
+  // referral hint on a pending invoice (fields come from admin_invoices, migration 021; absent before it)
+  function referralNote(i) {
+    if (!i.referred) return null;
+    const who = i.referrer_email || 'пользователь удалён';
+    const tail = i.referral_will_reward
+      ? 'пригласившему +14 дн. при подтверждении'
+      : i.referral_rewarded
+        ? 'бонус уже начислен'
+        : i.kind === 'addon'
+          ? 'бонус не положен (доп. магазины)'
+          : 'бонус не положен';
+    return el('div', { class: 'refnote' + (i.referral_will_reward ? ' refnote--on' : '') }, `Реферал: ${who} · ${tail}`);
+  }
+
   async function confirmInvoice(i) {
     const note = prompt(`Подтвердить оплату счёта № ${i.id} на ${money(i.amount)} от ${i.email || phone(i.phone)}?\n\nМожно добавить заметку (например, номер операции Kaspi):`, '');
     if (note === null) return;
     try {
-      const r = await rpc('admin_confirm_invoice', { p_id: i.id, p_note: note || null });
+      // pass what was displayed: the server refuses if the invoice was rewritten since (amount / stores)
+      const r = await rpc('admin_confirm_invoice', { p_id: i.id, p_note: note || null, p_expected_amount: i.amount, p_expected_stores: i.stores });
       toast(`Оплачено до ${date(r.period_to)}. Клиент увидит это в расширении при следующей проверке.`);
       await render();
     } catch (e) {
-      toast(e.message, true);
+      if (/amount_changed/.test(e.message)) {
+        toast('Сумма или число магазинов в счёте изменились, пока вы его смотрели. Оплата НЕ подтверждена. Список обновлён: проверьте новую сумму и подтвердите снова.', true);
+        await render();
+      } else toast(e.message, true);
     }
   }
 
@@ -236,6 +359,102 @@
     if (!confirm(`Отменить счёт № ${i.id}?`)) return;
     try {
       await rpc('admin_cancel_invoice', { p_id: i.id, p_note: null });
+      await render();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  /** Raw Storage API call with the admin's token (DELETE / POST with JSON). */
+  async function storage(method, path, body) {
+    const tk = await token();
+    if (!tk) throw new Error('Войдите снова');
+    const { url, key } = cfg();
+    const res = await fetch(url + '/storage/v1/' + path, {
+      method,
+      headers: { apikey: key, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    if (!res.ok) throw new Error((data && (data.message || data.error)) || 'HTTP ' + res.status);
+    return data;
+  }
+
+  /** Removes every Storage object under <bucket>/<prefix>/ (price lists are <feed_id>/<shop_key>.xml). Throws on failure. */
+  async function removeStoragePrefix(bucket, prefix) {
+    const objs = (await storage('POST', 'object/list/' + bucket, { prefix: String(prefix), limit: 1000, offset: 0 })) || [];
+    const names = objs.filter((o) => o && o.name).map((o) => `${prefix}/${o.name}`);
+    if (names.length) await storage('DELETE', 'object/' + bucket, { prefixes: names });
+    return names.length;
+  }
+
+  /** Runs the queued cleanups: success → admin_resolve_storage_cleanup, failure → admin_fail_storage_cleanup. */
+  async function processCleanups(rows) {
+    let removed = 0;
+    let failed = 0;
+    for (const row of rows) {
+      try {
+        removed += await removeStoragePrefix(row.bucket || 'pricelists', row.object_path);
+        await rpc('admin_resolve_storage_cleanup', { p_id: row.id });
+      } catch (e) {
+        failed += 1;
+        await rpc('admin_fail_storage_cleanup', { p_id: row.id, p_error: String((e && e.message) || e) }).catch(() => {});
+      }
+    }
+    return { removed, failed };
+  }
+
+  /** Persistent banner (not a toast) while price-list files of deleted accounts are still waiting for removal. */
+  async function refreshCleanupBanner() {
+    let rows = [];
+    try {
+      rows = (await rpc('admin_list_storage_cleanups')) || [];
+    } catch {
+      return; // migration 026 not applied yet or offline: no banner
+    }
+    let box = $('cleanupBanner');
+    if (!rows.length) return box && box.remove();
+    if (!box) {
+      box = el('div', { id: 'cleanupBanner', class: 'cleanup-banner', role: 'alert' });
+      $('panel').parentNode.insertBefore(box, $('panel'));
+    }
+    const last = rows.find((r) => r.last_error);
+    box.replaceChildren(
+      el('span', null, `Ожидают очистки Storage: ${rows.length}`, last ? ` · последняя ошибка: ${last.last_error}` : ''),
+      el('button', {
+        class: 'btn',
+        onclick: async (ev) => {
+          ev.target.disabled = true;
+          try {
+            const f = await processCleanups(rows);
+            toast(`Удалено файлов: ${f.removed}` + (f.failed ? `, не удалось очистить: ${f.failed}` : '') + '.', f.failed > 0);
+          } catch (e) {
+            toast(e.message, true);
+          }
+          await refreshCleanupBanner();
+        },
+      }, 'Повторить очистку'),
+    );
+  }
+
+  async function deleteAccount(a) {
+    if (!confirm(`УДАЛИТЬ аккаунт ${a.email}?\n\nЭто необратимо: данные клиента, магазины, обращения и файлы прайс-листов будут стёрты. Счета и согласия сохранятся без email.`)) return;
+    const typed = prompt(`Для подтверждения введите email аккаунта точно так же:\n${a.email}`, '');
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== String(a.email || '').trim().toLowerCase()) return toast('Email не совпал: аккаунт НЕ удалён.', true);
+    try {
+      const r = await rpc('admin_delete_account', { p_user: a.user_id, p_email: typed.trim() });
+      const feeds = new Set((Array.isArray(r && r.price_feeds_to_remove) ? r.price_feeds_to_remove : []).map(String));
+      // the server queued one cleanup row per feed in the same transaction; run them now
+      const queued = ((await rpc('admin_list_storage_cleanups').catch(() => [])) || []).filter((row) => feeds.has(String(row.object_path)));
+      const f = await processCleanups(queued);
+      toast(`Аккаунт удалён. Файлов прайс-листов удалено: ${f.removed}` + (f.failed ? `, не удалось очистить прайс-листов: ${f.failed} (останутся в очереди: нажмите «Повторить очистку»)` : '') + '.', f.failed > 0);
       await render();
     } catch (e) {
       toast(e.message, true);
@@ -251,7 +470,9 @@
         'tr',
         null,
         el('td', null, a.email || '—', el('div', { class: 'muted mono' }, phone(a.phone))),
-        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1]), a.trial_blocked && el('div', { class: 'muted' }, 'пробный уже был на этом магазине')),
+        el('td', null, el('span', { class: 'badge ' + badge[a.status][0] }, badge[a.status][1]), a.trial_blocked && el('div', { class: 'muted' }, 'пробный уже был на этом магазине'),
+          a.referral_code && el('div', { class: 'muted' }, `Код: ${a.referral_code} · приглашено: ${a.referrals_count || 0} · бонус: ${a.referral_bonus_days || 0} дн.`),
+          a.referred && el('div', { class: 'muted' }, `пришёл по ссылке ${a.referrer_email || '(пользователь удалён)'}`)),
         el('td', null, a.status === 'active' ? 'до ' + date(a.paid_until) : 'пробный до ' + date(a.trial_ends_at)),
         el('td', { class: 'num' }, `${a.last_store_count ?? '—'} / ${a.status === 'active' ? a.store_limit : '—'}`),
         el('td', null, date(a.last_seen_at, true)),
@@ -279,6 +500,8 @@
             },
             '+ дни',
           ),
+          ' ',
+          el('button', { type: 'button', class: 'btn btn--danger', onclick: () => deleteAccount(a) }, 'Удалить аккаунт'),
         ),
       ),
     );
@@ -309,6 +532,39 @@
     el('ul', { class: 'quotes' }, list.slice(0, 8).map(item)),
     list.length > 8 && el('details', null, el('summary', { class: 'muted' }, `ещё ${list.length - 8}`), el('ul', { class: 'quotes' }, list.slice(8).map(item))),
   ];
+
+  const UX_TYPE = { rage_click: 'Ярость-клики', form_abandoned: 'Бросили форму', help_opened: 'Открыли помощь' };
+  async function renderUx(panel) {
+    const r = (await rpc('admin_ux_summary', {})) || {};
+    const table = (head, rows) => el('table', null,
+      el('thead', null, el('tr', null, head.map((h, n) => el('th', { class: n >= head.length - 2 ? 'num' : null }, h)))),
+      el('tbody', null, rows));
+    const screens = (list) => list?.length
+      ? table(['Экран', 'Пользователей', 'Просмотров'], list.map((x) => el('tr', null, el('td', null, x.screen_key), el('td', { class: 'num' }, x.users), el('td', { class: 'num' }, x.views))))
+      : el('p', { class: 'muted' }, 'Данных пока нет.');
+    panel.replaceChildren(
+      el('p', { class: 'muted' }, 'Анонимные счётчики поведения (без текстов, адресов и данных Kaspi). Из топа затыков берите темы для подсказок бота и статей блога.'),
+      el('h3', null, 'Затыки'),
+      r.friction?.length
+        ? table(['Что', 'Элемент', 'Экран', 'Пользователей', 'Раз'], r.friction.map((x) => el('tr', null,
+            el('td', null, UX_TYPE[x.event_type] || x.event_type), el('td', null, x.target_key), el('td', { class: 'muted' }, x.screen_key),
+            el('td', { class: 'num' }, x.users), el('td', { class: 'num' }, x.occurrences))))
+        : el('p', { class: 'muted' }, 'Затыков пока не видно.'),
+      el('h3', null, 'Самые используемые экраны'), screens(r.top_screens),
+      el('h3', null, 'Реже всего открывают'), screens(r.least_screens));
+  }
+
+  async function renderErrors(panel) {
+    const list = (await rpc('admin_client_errors', { p_limit: 200 })) || [];
+    if (!list.length) return panel.replaceChildren(el('p', { class: 'muted' }, 'Ошибок пока нет.'));
+    const rows = list.map((r) => el('tr', null,
+      el('td', null, r.error_code), el('td', { class: 'muted' }, r.context || '—'),
+      el('td', { class: 'num' }, r.users), el('td', { class: 'num' }, r.occurrences),
+      el('td', null, r.app_version || '—'), el('td', { class: 'muted' }, new Date(r.last_seen).toLocaleString('ru-RU'))));
+    panel.replaceChildren(el('table', null,
+      el('thead', null, el('tr', null, ['Код', 'Контекст', 'Пользователей', 'Повторов', 'Версия', 'Последний раз'].map((h, n) => el('th', { class: n === 2 || n === 3 ? 'num' : null }, h)))),
+      el('tbody', null, rows)));
+  }
 
   async function renderInsights(panel) {
     const r = await rpc('admin_insights', { p_days: insightDays });
@@ -404,11 +660,16 @@
   /* ---------- «Вопросы»: support tickets from the extension ---------- */
   // Ready answers for repeated questions (kept in this browser): one click instead of typing.
   const TPL_KEY = 'kshAdmin.templates';
+  // each template in both languages: a Kazakh-speaking client gets the `kk` text (029: tickets remember the client's language)
   const DEFAULT_TEMPLATES = [
-    { name: 'Токен', text: 'Токен API создаёт руководитель магазина: кабинет продавца Kaspi → Настройки → Токен API → «Сформировать». Скопируйте его целиком и вставьте в расширении: «+ Подключить магазин».' },
-    { name: 'Принтер', text: 'Настройки → «Печать накладных»: выберите свой принтер и размер этикетки, затем «Пробная печать». В окне печати поставьте масштаб 100 % и поля «Нет».' },
-    { name: 'Оплата', text: 'Оплату получили, подписка продлена. Если окно оплаты не закрылось — нажмите «Обновить» в разделе «Подписка».' },
-    { name: 'Сбой Kaspi', text: 'Сейчас сбой на стороне Kaspi, заказы обновятся сами, как только Kaspi заработает. Ничего делать не нужно.' },
+    { name: 'Токен', text: 'Токен API создаёт руководитель магазина: кабинет продавца Kaspi → Настройки → Токен API → «Сформировать». Скопируйте его целиком и вставьте в расширении: «+ Подключить магазин».',
+      kk: 'API токенін дүкен басшысы жасайды: Kaspi сатушы кабинеті → Баптаулар → API токені → «Жасау». Оны толығымен көшіріп, кеңейтімге қойыңыз: «+ Дүкенді қосу».' },
+    { name: 'Принтер', text: 'Настройки → «Печать накладных»: выберите свой принтер и размер этикетки, затем «Пробная печать». В окне печати поставьте масштаб 100 % и поля «Нет».',
+      kk: 'Баптаулар → «Жүкқұжаттарды басып шығару»: принтеріңіз бен затбелгі өлшемін таңдап, «Сынама басып шығару» басыңыз. Басып шығару терезесінде масштабты 100 %, ал жиектерді «Жоқ» деп қойыңыз.' },
+    { name: 'Оплата', text: 'Оплату получили, подписка продлена. Если окно оплаты не закрылось — нажмите «Обновить» в разделе «Подписка».',
+      kk: 'Төлем алынды, жазылым ұзартылды. Төлем терезесі жабылмаса — «Жазылым» бөлімінде «Жаңарту» батырмасын басыңыз.' },
+    { name: 'Сбой Kaspi', text: 'Сейчас сбой на стороне Kaspi, заказы обновятся сами, как только Kaspi заработает. Ничего делать не нужно.',
+      kk: 'Қазір Kaspi жағында ақау бар, Kaspi қалпына келген бойда тапсырыстар өздігінен жаңарады. Ештеңе істеудің қажеті жоқ.' },
   ];
   const templates = () => store.get(TPL_KEY) || DEFAULT_TEMPLATES;
   const TOPIC = { connect: 'Подключение', orders: 'Заказы', print: 'Печать', payment: 'Оплата', warehouse: 'Склад', idea: 'Предложение', other: 'Другое' };
@@ -426,9 +687,11 @@
   }
 
   function ticketBox(x) {
-    const reply = el('textarea', { placeholder: 'Ответ клиенту — он увидит его в расширении и получит уведомление' }, x.reply || '');
-    const tpl = el('select', { 'aria-label': 'Шаблон ответа', onchange: (e) => { const t = templates()[e.target.value]; if (t) reply.value = t.text; e.target.value = ''; } },
-      el('option', { value: '' }, 'Шаблон…'), templates().map((t, i) => el('option', { value: i }, t.name)));
+    const kk = x.lang === 'kk';
+    const reply = el('textarea', { placeholder: kk ? 'Клиент пользуется расширением на казахском — ответьте на казахском' : 'Ответ клиенту — он увидит его в расширении и получит уведомление' }, x.reply || '');
+    const tplText = (t) => (kk ? t.kk || t.text : t.text || t.kk);
+    const tpl = el('select', { 'aria-label': 'Шаблон ответа', onchange: (e) => { const t = templates()[e.target.value]; if (t) reply.value = tplText(t); e.target.value = ''; } },
+      el('option', { value: '' }, kk ? 'Шаблон (қазақша)…' : 'Шаблон…'), templates().map((t, i) => el('option', { value: i }, t.name + (kk && !t.kk ? ' (только RU)' : !kk && !t.text ? ' (только KZ)' : ''))));
     const save = (close) => async () => {
       try {
         await rpc('admin_ticket_reply', { p_id: x.id, p_reply: reply.value, p_close: close });
@@ -442,6 +705,7 @@
     return el('section', { class: 'ticket', 'data-ticket': x.id },
       el('div', { class: 'row', style: 'margin:0' },
         el('b', null, `№${x.id}`), el('span', { class: 'badge ' + st[1] }, st[0]), el('span', { class: 'badge' }, TOPIC[x.topic] || x.topic),
+        el('span', { class: 'badge ' + (kk ? 'badge--warn' : ''), title: 'Язык интерфейса клиента — отвечайте на нём' }, kk ? 'KZ · қазақша' : 'RU'),
         el('span', null, x.email || '—'), el('span', { class: 'muted' }, date(x.created_at, true) + (x.version ? ' · v' + x.version : ''))),
       el('p', { class: 'ticket__msg' }, x.message),
       x.report && el('details', null, el('summary', { class: 'muted' }, 'Технический отчёт'), el('pre', { class: 'mono report' }, x.report)),
@@ -449,7 +713,7 @@
         el('button', { type: 'button', class: 'btn btn--ghost', onclick: () => {
           const name = prompt('Название шаблона', '');
           if (!name || !reply.value.trim()) return;
-          store.set(TPL_KEY, [...templates(), { name: name.slice(0, 40), text: reply.value.trim() }]);
+          store.set(TPL_KEY, [...templates(), { name: name.slice(0, 40), [kk ? 'kk' : 'text']: reply.value.trim() }]);
           toast('Шаблон сохранён');
           render();
         } }, 'Сохранить как шаблон')),
@@ -544,21 +808,22 @@
     const box = el('div', { 'data-block': 'bot-settings' }, el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'), el('p', { class: 'muted' }, 'Загрузка…'));
     rpc('admin_growth_settings', { p: {} }).then((g) => {
       const f = {
-        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulse_bot', value: g.bot_username || '' }),
+        bot_username: el('input', { class: 'input', placeholder: 'SaudaPulseBot', value: g.bot_username || '' }),
         app_url: el('input', { class: 'input', placeholder: 'https://ваш-сайт.kz', value: g.app_url || '' }),
         support_url: el('input', { class: 'input', placeholder: 'https://t.me/ваш_менеджер', value: g.support_url || '' }),
         whats_new: el('textarea', { placeholder: 'Что нового за месяц — уйдёт клиентам через 30 дней после отмены' }, g.whats_new || ''),
+        whats_new_kk: el('textarea', { placeholder: 'То же на казахском — для клиентов с казахским интерфейсом (пусто → уйдёт русский текст)' }, g.whats_new_kk || ''),
       };
       const keyOut = el('div', { class: 'row', hidden: true });
       const c = g.cancellations || {};
       box.replaceChildren(
         el('h2', { style: 'margin-top:24px' }, 'Telegram-бот для продавцов'),
         el('p', { class: 'muted' }, `Подключили: ${g.linked}, заблокировали бота: ${g.blocked}. Отмены за 90 дней: скидка ${c.discount || 0}, «Старт» ${c.downgrade || 0}, заморозка ${c.freeze || 0}, отменили ${c.cancelled || 0}. Инструкция: billing/README.md → «Telegram-бот для продавцов».`),
-        el('div', { class: 'grid2' }, 'Имя бота (без @)', f.bot_username, 'Сайт (кнопка «Посмотреть заказы» → /open)', f.app_url, 'Поддержка (кнопка «Поддержка»)', f.support_url, 'Что нового (win-back через 30 дней)', f.whats_new),
+        el('div', { class: 'grid2' }, 'Имя бота (без @)', f.bot_username, 'Сайт (кнопка «Посмотреть заказы» → /open)', f.app_url, 'Поддержка (кнопка «Поддержка»)', f.support_url, 'Что нового (win-back через 30 дней)', f.whats_new, 'Что нового — қазақша', f.whats_new_kk),
         el('div', { class: 'row' },
           el('button', { type: 'button', class: 'btn btn--primary', 'data-action': 'bot-save', onclick: async () => {
             try {
-              await rpc('admin_growth_settings', { p: { bot_username: f.bot_username.value, app_url: f.app_url.value, support_url: f.support_url.value, whats_new: f.whats_new.value } });
+              await rpc('admin_growth_settings', { p: { bot_username: f.bot_username.value, app_url: f.app_url.value, support_url: f.support_url.value, whats_new: f.whats_new.value, whats_new_kk: f.whats_new_kk.value } });
               toast('Сохранено');
             } catch (e) {
               toast(e.message, true);
@@ -755,7 +1020,10 @@
   });
   $('sendCode').addEventListener('click', async () => {
     try {
-      await http('/auth/v1/otp', { email: $('email').value.trim().toLowerCase(), create_user: false });
+      const body = { email: $('email').value.trim().toLowerCase(), create_user: false };
+      const captcha = await captchaToken();
+      if (captcha) body.gotrue_meta_security = { captcha_token: captcha };
+      await http('/auth/v1/otp', body);
       $('codeRow').hidden = false;
       toast('Код отправлен на почту');
     } catch (e) {

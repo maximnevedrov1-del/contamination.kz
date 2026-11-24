@@ -1,7 +1,7 @@
 // «Пульт»: usage counts and first steps reach the server; NPS card → answer; «Ответ помог?»;
 // «Почему не продлеваете?» inside the blocking payment window; the admin panel shows it all.
 // Uses ../billcopy (mock Supabase on :8098 with the REAL 001–004 SQL, mock Kaspi on :8099).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const { Client } = require('pg');
 const EXT = path.join(__dirname, '../billcopy');

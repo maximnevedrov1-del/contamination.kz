@@ -1,6 +1,6 @@
 // «Первые шаги» on Home: progress, the right button for each step, steps done in other tabs
 // (test print) update Home by themselves; «why the token is safe» and «send to the owner».
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../apicopy');
 let fails = 0;

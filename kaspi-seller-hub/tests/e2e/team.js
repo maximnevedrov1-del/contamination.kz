@@ -1,7 +1,7 @@
 // Staff (packers): owner invites → «Компьютер склада» → packer signs in with the e-mail code and
 // a PIN → scan-to-verify packing → journal → owner switches the packer off → packer is out.
 // Uses ../billcopy (mock Supabase on :8098 with the REAL 001+002 SQL, mock Kaspi on :8099).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const { Client } = require('pg');
 const EXT = path.join(__dirname, '../billcopy');

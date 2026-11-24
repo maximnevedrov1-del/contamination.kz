@@ -1,7 +1,17 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const fixture = require('./fixture');
-const EXT = require('path').join(__dirname, '../..');
+// The demo shops live on a./b./c.kaspi.kz, but the shipped manifest (bfac6b4) only allows kaspi.kz, mc.shop and idmc.shop.
+// So run on a throw-away copy of the developer copy (../apicopy: subscription server cleared) with the host patterns widened again.
+const EXT = require('path').join(__dirname, '../run2copy');
+{
+  const fs = require('fs'); const src = require('path').join(__dirname, '../apicopy');
+  fs.rmSync(EXT, { recursive: true, force: true }); fs.cpSync(src, EXT, { recursive: true });
+  const widen = (f, fn) => fs.writeFileSync(EXT + '/' + f, fn(fs.readFileSync(EXT + '/' + f, 'utf8')));
+  const W = "https://kaspi.kz/mc/*\", \"https://*.kaspi.kz/*";
+  widen('manifest.json', (t) => t.replace(/"https:\/\/kaspi\.kz\/\*",\s*"https:\/\/mc\.shop\.kaspi\.kz\/\*",\s*"https:\/\/idmc\.shop\.kaspi\.kz\/\*"/g, '"' + W + '"'));
+  widen('shared/selectors.js', (t) => t.replace("'https://kaspi.kz/*', 'https://mc.shop.kaspi.kz/*', 'https://idmc.shop.kaspi.kz/*'", "'https://kaspi.kz/mc/*', 'https://*.kaspi.kz/*'"));
+}
 const OUT = __dirname;
 let fails = 0;
 const check = (name, ok, info = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', name, info); };
@@ -39,12 +49,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const pop = await ctx.newPage();
   await pop.goto(`chrome-extension://${id}/popup/popup.html`);
   await pop.waitForTimeout(1500);
-  const [dash] = await Promise.all([ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null), pop.click('#openDashboard')]);
+  // the install already opened the dashboard tab: then the button just focuses it instead of opening another
+  let [dash] = await Promise.all([ctx.waitForEvent('page', { timeout: 3000 }).catch(() => null), pop.click('#openDashboard')]);
+  if (!dash) dash = ctx.pages().find((p) => p.url().includes('/dashboard/dashboard.html')) || null;
   check('T1 popup opens dashboard tab', !!dash && dash.url().includes('/dashboard/dashboard.html'), dash?.url());
   const d = dash || (await ctx.newPage());
   d.on('pageerror', (e) => errors.push('[dash] ' + e.message));
   d.on('console', (m) => m.type() === 'error' && errors.push('[dash console] ' + m.text()));
-  if (!dash) await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#orders`);
+  await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#orders`); await d.reload();
   await d.waitForSelector('table.data tbody tr', { timeout: 20000 });
   await d.waitForFunction(() => !document.querySelector('#refreshBtn').disabled, null, { timeout: 30000 });
 
@@ -147,7 +159,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await d.evaluate(() => (location.hash = 'settings')); await sleep(600);
   const aliasInput = d.locator('tr', { hasText: 'Электроника Плюс' }).locator('input.input');
   await aliasInput.fill('Электроника (осн.)'); await aliasInput.dispatchEvent('change'); await sleep(600);
-  await d.locator('tr', { hasText: 'HomeStyle KZ' }).locator('.color-pick > summary').click(); await d.locator('tr', { hasText: 'HomeStyle KZ' }).locator('.color-pick__menu .swatch').nth(6).click(); await sleep(600);
+  { // the table re-renders after the alias change and may close the colour menu: open it again until a swatch is visible
+    const row = d.locator('tr', { hasText: 'HomeStyle KZ' }); const sw6 = row.locator('.color-pick__menu .swatch').nth(6);
+    for (let k = 0; k < 4 && !(await sw6.isVisible().catch(() => false)); k++) { await row.locator('.color-pick > summary').click(); await sleep(300); }
+    await sw6.click(); await sleep(600);
+  }
   await d.evaluate(() => (location.hash = 'orders')); await sleep(600);
   const storesInTable = new Set((await rowsData()).map((r) => r.store));
   check('T12 alias shown in orders table', storesInTable.has('Электроника (осн.)'), [...storesInTable].join(', '));
@@ -203,7 +219,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // T16 remove store
   await d.evaluate(() => (location.hash = 'settings')); await sleep(500);
   await d.locator('tr', { hasText: 'Детский мир' }).locator('button:has-text("Удалить")').click(); await d.click('#confirmDialog button[value=ok]'); await sleep(1000);
-  const left = await sw.evaluate(async () => ({ s: Object.keys((await chrome.storage.local.get('ksh.settings'))['ksh.settings'].stores).length, snap: Object.keys((await chrome.storage.local.get('ksh.snapshots'))['ksh.snapshots']).length }));
+  const left = await sw.evaluate(async () => ({ s: Object.keys((await chrome.storage.local.get('ksh.settings'))['ksh.settings'].stores).length, snap: Object.keys(await chrome.storage.local.get(null)).filter((k) => k.startsWith('ksh.snap.')).length /* per-store snapshot keys */ }));
   check('T16 remove store deletes settings + cache', left.s === 2 && left.snap === 2, JSON.stringify(left));
 
   // T17 orphaned content script (simulated: old instance reports its context as dead)

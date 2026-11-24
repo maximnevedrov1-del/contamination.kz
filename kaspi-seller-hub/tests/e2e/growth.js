@@ -4,7 +4,7 @@
 // through the bot function, Kaspi circuit breaker banner, smart polling alarm.
 // Uses ../billcopy (mock Supabase :8098 with the real SQL and the real bot function, mock Kaspi :8099,
 // mock Telegram :8095).
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const http = require('http');
 const { Client } = require('pg');
@@ -154,7 +154,9 @@ const BOT_KEY = 'bot-key-0123456789abcdef0123456789abcdef';
 
   // 10. Kaspi down 3 times → banner «показываем данные от …», the 4th sync does not call Kaspi
   await fetch('http://localhost:8099/__down?on=1');
-  for (let i = 0; i < 3; i++) { await msg('ui:sync'); await sleep(7000); }
+  // failures closer than BREAKER_MIN_GAP (60 s) count once, so space them: age the last counted error by 2 min before each sync
+  const ageErr = () => ctx.serviceWorkers()[0].evaluate(async () => { const s = (await chrome.storage.local.get('ksh.settings'))['ksh.settings']; Object.values(s.stores).forEach((x) => x.api && x.api.errorAt && (x.api.errorAt -= 2 * 60000)); await chrome.storage.local.set({ 'ksh.settings': s }); });
+  for (let i = 0; i < 3; i++) { if (i) await ageErr(); await msg('ui:sync'); await sleep(7000); }
   const before = (await (await fetch('http://localhost:8099/__log')).json()).length;
   await msg('ui:sync'); await sleep(1500);
   const after = (await (await fetch('http://localhost:8099/__log')).json()).length;

@@ -1,5 +1,5 @@
 // Which elements are wider than a 390px viewport (horizontal scroll culprits)?
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = process.argv[2];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

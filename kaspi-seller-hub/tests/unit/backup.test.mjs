@@ -78,4 +78,48 @@ await t('malformed snapshots are skipped', async () => {
   assert.equal((await S.getSnapshots()).A, undefined);
 });
 
+await t('reserved keys (__proto__, constructor) are not imported as skus', async () => {
+  const evil = JSON.parse('{"app":"kaspi-seller-hub","version":1,"catalog":{"x":{"sku":"__proto__","title":"t","brand":"b","price":100,"stock":1},"y":{"sku":"constructor","title":"t","brand":"b","price":100,"stock":1}}}');
+  const r = await H['ui:backupImport']({ backup: evil });
+  assert.equal(r.ok, true);
+  assert.equal(r.products, 0);
+  assert.equal(({}).title, undefined);
+  assert.equal(Object.keys(await S.getCatalog()).includes('__proto__'), false);
+});
+
+await t('quota failure on a write is reported, not ok:true', async () => {
+  const realSet = chrome.storage.local.set;
+  chrome.storage.local.set = async () => { const e = new Error('QUOTA_BYTES quota exceeded'); e.name = 'QuotaExceededError'; throw e; };
+  try {
+    const r = await H['ui:backupImport']({ backup });
+    assert.equal(r.ok, false);
+    assert.equal(r.error, 'quota');
+  } finally { chrome.storage.local.set = realSet; }
+});
+
+await t('partial failure rolls every section back to the pre-import state', async () => {
+  await S.setCosts({ 'OLD-1': 700 });
+  await S.setCatalog({});
+  await S.saveSettings({ theme: 'light' });
+  const before = { costs: await S.getCosts(), catalog: await S.getCatalog(), settings: structuredClone(data['ksh.settings']) };
+  const big = { ...backup, costs: { 'NEW-1': 99 }, theme: 'dark', settings: { ...backup.settings, theme: 'dark' } };
+  const realSet = chrome.storage.local.set;
+  let calls = 0;
+  // 1st write (costs) succeeds; the next one fails; later writes (the rollback) succeed again
+  chrome.storage.local.set = async (o) => {
+    calls++;
+    if (calls === 2) { const e = new Error('QUOTA_BYTES quota exceeded'); e.name = 'QuotaExceededError'; throw e; }
+    return realSet(o);
+  };
+  try {
+    const r = await H['ui:backupImport']({ backup: big });
+    assert.equal(r.ok, false);
+    assert.equal(r.error, 'quota');
+    assert.equal(r.rolledBack, true);
+  } finally { chrome.storage.local.set = realSet; }
+  assert.deepEqual(await S.getCosts(), before.costs);
+  assert.deepEqual(await S.getCatalog(), before.catalog);
+  assert.deepEqual(data['ksh.settings'], before.settings);
+});
+
 console.log(`${n} passed`);

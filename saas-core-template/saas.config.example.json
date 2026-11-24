@@ -1,0 +1,13 @@
+{
+  "APP_NAME": "Acme Pulse",
+  "APP_SLUG": "acme-pulse",
+  "APP_DOMAIN": "acmepulse.example",
+  "SUPABASE_PROJECT_ID": "your-project-ref",
+  "SUPABASE_ANON_KEY": "",
+  "CURRENCY": "USD",
+  "CURRENCY_SYMBOL": "$",
+  "SUPPORT_EMAIL": "support@acmepulse.example",
+  "TELEGRAM_HANDLE": "AcmePulse",
+  "TRIAL_DAYS": 14,
+  "LICENSE_PUBLIC_JWK": "[]"
+}

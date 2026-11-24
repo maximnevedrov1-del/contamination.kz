@@ -19,6 +19,7 @@ const dir = mkdtempSync(path.join(tmpdir(), 'ksh-flow-'));
 mkdirSync(path.join(dir, 'background'));
 mkdirSync(path.join(dir, 'shared'));
 writeFileSync(path.join(dir, 'background/billing.js'), readFileSync(path.join(ROOT, 'background/billing.js')));
+writeFileSync(path.join(dir, 'shared/license-signature.js'), readFileSync(path.join(ROOT, 'shared/license-signature.js')));
 const cfg = readFileSync(path.join(ROOT, 'shared/billing-config.js'), 'utf8')
   .replace(/supabaseUrl: '[^']*'/, `supabaseUrl: '${URL_}'`)
   .replace(/supabaseAnonKey: '[^']*'/, "supabaseAnonKey: 'anon'")
@@ -44,9 +45,11 @@ globalThis.chrome = {
 // Scripted server: each route answers from its queue (status, body) or throws (no network).
 let routes = {};
 let calls = [];
-globalThis.fetch = async (url) => {
+let sent = [];
+globalThis.fetch = async (url, opts) => {
   const route = Object.keys(routes).find((r) => String(url).includes(r));
   calls.push(route || String(url));
+  sent.push(opts?.body ? JSON.parse(opts.body) : null);
   const next = route && routes[route].shift();
   if (!next) throw new Error(`unexpected request ${url}`);
   if (next === 'offline') throw new TypeError('Failed to fetch');
@@ -79,7 +82,7 @@ const fresh = async (ksh = { pu: now + 30 * DAY, sl: 3, tsl: 1 }) => ({ access_t
 
 let n = 0;
 const t = async (name, fn) => {
-  store = {}; routes = {}; calls = [];
+  store = {}; routes = {}; calls = []; sent = [];
   await fn();
   n++;
   console.log('ok', name);
@@ -242,6 +245,81 @@ await t('server down and no cache → offline view, still signed in', async () =
   const v = await B.licenseView({ force: true });
   assert.equal(v.status, 'offline');
   assert.ok(store['ksh.session'], 'session kept');
+});
+
+// ---------- captcha on the e-mail code request ----------
+const OTP = '/auth/v1/otp';
+await t('code request with a captcha token → sent as gotrue_meta_security.captcha_token', async () => {
+  routes = { [OTP]: [[200, {}]] };
+  await B.requestCode(' A@B.kz ', 'tok_1234567890', 'kk');
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, data: { lang: 'kk' }, gotrue_meta_security: { captcha_token: 'tok_1234567890' } });
+});
+await t('code request without a token (captcha off / page down) → plain body', async () => {
+  routes = { [OTP]: [[200, {}]] };
+  await B.requestCode('a@b.kz', null);
+  assert.deepEqual(sent[0], { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } }, 'no language → Russian');
+});
+await t('Supabase refuses the captcha → billingCaptcha', async () => {
+  routes = { [OTP]: [[400, { code: 400, error_code: 'captcha_failed', msg: 'captcha protection: request disallowed (no captcha response)' }]] };
+  await assert.rejects(B.requestCode('a@b.kz'), (e) => e.code === 'billingCaptcha');
+});
+await t('oversized or non-string token is not sent', async () => {
+  assert.deepEqual(B.otpBody('a@b.kz', 'x'.repeat(5000), 'ru'), { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } });
+  assert.deepEqual(B.otpBody('a@b.kz', { evil: 1 }, 'en'), { email: 'a@b.kz', create_user: true, data: { lang: 'ru' } }, 'unknown language → Russian');
+});
+
+// ---------- UX telemetry: one request per batch ----------
+const UXB = '/rest/v1/rpc/track_ux_events';
+await t('UX batch → one track_ux_events request, invalid events dropped, n capped at 5', async () => {
+  await signIn();
+  routes = { [UXB]: [[200, 2]] };
+  B.trackUxEvents([
+    { t: 'rage_click', k: 'btn_sync', s: 'orders', n: 99 },
+    { t: 'evil', k: 'a1', s: 'home', n: 1 },
+    { t: 'action_click', k: 'https://x', s: 'home', n: 1 },
+    { t: 'screen_view', k: 'orders', s: 'orders' },
+  ]);
+  for (let i = 0; i < 20 && !calls.length; i++) await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(calls, [UXB]);
+  assert.deepEqual(sent[0], { p_events: [{ t: 'rage_click', k: 'btn_sync', s: 'orders', n: 5 }, { t: 'screen_view', k: 'orders', s: 'orders', n: 1 }] });
+});
+await t('UX batch: more than 50 events → first 50 in one request', async () => {
+  const many = Array.from({ length: 80 }, (_, i) => ({ t: 'action_click', k: `btn_${i}`, s: 'home', n: 1 }));
+  assert.equal(B.uxBatch(many).length, 50);
+  assert.deepEqual(B.uxBatch(null), []);
+});
+await t('UX batch: server without track_ux_events (404) → dropped silently, no per-event fallback', async () => {
+  await signIn();
+  routes = { [UXB]: [[404, { code: 'PGRST202', message: 'Could not find the function' }]] };
+  B.trackUxEvents([{ t: 'screen_view', k: 'home', s: 'home', n: 3 }]);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(calls, [UXB]);
+});
+
+// ---------- interface language → server (bot, e-mails) ----------
+const LANG = '/rest/v1/rpc/set_my_lang';
+const META = '/auth/v1/user';
+await t('language sent once per user and value: set_my_lang + user metadata', async () => {
+  await signIn();
+  routes = { [LANG]: [[200, { lang: 'kk' }]], [META]: [[200, {}]] };
+  assert.equal(await B.syncLang('kk'), true);
+  assert.deepEqual(calls, [LANG, META]);
+  assert.deepEqual(sent[0], { p_lang: 'kk' });
+  assert.deepEqual(sent[1], { data: { lang: 'kk' } });
+  assert.equal(await B.syncLang('kk'), false, 'same language again: nothing sent');
+  assert.equal(calls.length, 2);
+  routes = { [LANG]: [[200, { lang: 'ru' }]], [META]: [[200, {}]] };
+  assert.equal(await B.syncLang('ru'), true, 'changed back: sent');
+});
+await t('language: signed out → nothing sent; server error → retried next time', async () => {
+  assert.equal(await B.syncLang('kk'), false);
+  assert.equal(calls.length, 0);
+  await signIn();
+  routes = { [LANG]: [[404, { message: 'Could not find the function' }]] };
+  assert.equal(await B.syncLang('kk'), false);
+  routes = { [LANG]: [[200, { lang: 'kk' }]], [META]: [[500, {}]] };
+  assert.equal(await B.syncLang('kk'), true, 'retried; a metadata failure does not block it');
 });
 
 console.log(`\n${n} passed`);

@@ -1,7 +1,12 @@
 # Seller Hub: daily encrypted dump of the billing database (Supabase) kept 30 days as a workflow artifact.
 # Secrets: SUPABASE_DB_URL (Supabase → Project Settings → Database → connection string, session pooler),
 # BACKUP_PASSPHRASE (any long random string, keep a copy outside GitHub — without it the dump cannot be read).
-# Restore: gpg -d billing-*.dump.gpg > db.dump && pg_restore --no-owner -d "$TARGET_DB_URL" db.dump  (the «schema "public" already exists» error is harmless)
+# Restore (drill 2026-11-23): gpg -d billing-*.dump.gpg > db.dump && pg_restore --no-owner -d "$TARGET_DB_URL" db.dump  (on a fresh Supabase project the
+#   «schema public/auth already exists», «relation users already exists» and «function uid already exists» errors are expected), THEN
+#   psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql  — required: Supabase default privileges open every restored table/function
+#   to anon/authenticated; grants.sql closes them again and recreates the «pricelists» bucket + Storage rules (schema storage is not dumped).
+# Not in this backup: Storage files (price-list XML: re-uploaded only on the next price/stock change or a forced re-publish — until then Kaspi gets 404),
+#   Edge Function secrets, Auth settings (email/OTP, access-token hook). A NEW project also changes the Supabase URL and signing keys: new extension build.
 name: seller-hub-db-backup
 
 on:
@@ -33,7 +38,7 @@ jobs:
       - name: Dump and encrypt
         run: |
           f="billing-$(date -u +%Y%m%d-%H%M).dump"
-          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --no-privileges --schema=public --schema=auth -f "$f"
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" -Fc --no-owner --schema=public --schema=auth -f "$f"
           test "$(stat -c %s "$f")" -gt 1024
           gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o "$f.gpg" "$f"
           rm -f "$f"
@@ -47,6 +52,6 @@ jobs:
       - name: Tell the owner the backup failed
         if: failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
         run: |
-          curl -sS --retry 3 --max-time 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          curl -sS --fail-with-body --retry 3 --max-time 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=⚠️ seller-hub-db-backup failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > /dev/null

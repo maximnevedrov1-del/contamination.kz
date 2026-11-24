@@ -1,6 +1,6 @@
 // Interactive dashboard: every number leads to its orders, charts are clickable, count-up.
 // Uses ../apicopy (API mode) and mockapi.js on :8099.
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../apicopy');
 let fails = 0;

@@ -1,5 +1,5 @@
 // Layout on real device sizes: every screen, no horizontal scroll, no hidden controls.
-const { chromium, devices } = require('playwright');
+const { chromium, devices } = require('playwright'); require('./offline');
 const path = require('path');
 const fs = require('fs');
 const EXT = path.join(__dirname, '../apicopy');

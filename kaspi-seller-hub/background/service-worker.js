@@ -12,6 +12,8 @@
  *  - Notifications and the toolbar badge.
  */
 import '../shared/selectors.js';
+import { breakerOpen, nextApiHealth } from '../shared/api-breaker.js';
+import { apiTokenHash, apiStoreIdFromHash, findApiStore, storeKeySeed, storeKey } from '../shared/store-key.js';
 import {
   getSettings,
   saveSettings,
@@ -160,14 +162,11 @@ const storeKeyCache = new Map();
 async function storeKeys(stores) {
   const out = [];
   for (const st of stores) {
-    // normalised so the same shop always gives the same key
-    const id = String(st.id ?? '').trim().toLowerCase();
-    if (!id) continue;
-    if (!storeKeyCache.has(id)) {
-      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`ksh:${id}`));
-      storeKeyCache.set(id, [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join(''));
-    }
-    out.push(storeKeyCache.get(id));
+    // API stores: stable seed from the token hash (same key on any computer); tab stores: the store id
+    const seed = storeKeySeed(st);
+    if (!seed) continue;
+    if (!storeKeyCache.has(seed)) storeKeyCache.set(seed, await storeKey(st));
+    out.push(storeKeyCache.get(seed));
   }
   return out;
 }
@@ -199,6 +198,7 @@ async function billingMaintenance(force = false, reconcile = force) {
       if (await B.reconcileInvoice(count, lic)) lic = await currentLicense(true);
     } catch (e) {
       console.warn(LOG, 'billing reconcile', e.code || e.message);
+      B.reportClientError(`billing_${e.code || 'error'}`, 'maintenance');
     }
   }
   await notifyPayment(lic).catch((e) => console.warn(LOG, 'pay notify', e));
@@ -286,7 +286,7 @@ async function injectContent(tabId) {
  * @returns {Promise<Array<object>>} live registry entries
  */
 async function discoverTabs() {
-  if (!FEATURES.cabinet) return; // API-only build: cabinet tabs are not read
+  if (!FEATURES.cabinet) return []; // API-only build: cabinet tabs are not read (callers iterate the result)
   const tabs = await chrome.tabs.query({ url: [...S.tabMatchPatterns] });
   const live = [];
   await Promise.all(
@@ -473,6 +473,9 @@ async function syncNow() {
   // Stores connected by API token: fetched directly, no tab needed.
   const apiErrors = {};
   const [tokens, settingsNow, prevNow] = await Promise.all([getApiTokens(), getSettings(), getSnapshots()]);
+  // Stores are fetched concurrently; each finished store is saved at once (read-merge-write inside
+  // lock()), so one slow or failing store no longer holds back the others' fresh data.
+  const savedNow = new Set();
   await Promise.all(
     Object.entries(tokens).map(async ([shopId, token]) => {
       const store = settingsNow.stores[shopId];
@@ -483,7 +486,13 @@ async function syncNow() {
       }
       try {
         const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
+        B.trackFunnel('first_sync_done');
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
+        await lock(async () => {
+          const cur = await getSnapshots();
+          await setSnapshots({ ...cur, [shopId]: mergeStoreSnapshot(cur[shopId], byShop[shopId]) });
+        });
+        savedNow.add(shopId);
       } catch (e) {
         apiErrors[shopId] = e.code || e.message;
         console.warn(LOG, 'api sync failed', shopId, e.code, e.status, e.detail);
@@ -493,18 +502,20 @@ async function syncNow() {
   await recordApiHealth(Object.keys(tokens), apiErrors);
 
   await lock(async () => {
-    const [settings, prev] = await Promise.all([getSettings(), getSnapshots()]);
+    const [settings, cur] = await Promise.all([getSettings(), getSnapshots()]);
+    const prev = { ...cur, ...prevNow }; // state before this sync, for the change notifications
     const next = {};
     const shopIds = new Set([...Object.keys(settings.stores), ...Object.keys(byShop)]);
     for (const shopId of shopIds) {
-      if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(prev[shopId], byShop[shopId]);
+      if (savedNow.has(shopId)) next[shopId] = cur[shopId]; // already merged and saved above
+      else if (byShop[shopId]) next[shopId] = mergeStoreSnapshot(cur[shopId], byShop[shopId]);
       else if (settings.stores[shopId]?.enabled && !allowed.has(shopId))
-        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'overLimit', checkedAt: Date.now() };
+        next[shopId] = { ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'overLimit', checkedAt: Date.now() };
       else if (apiErrors[shopId])
-        next[shopId] = { ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
+        next[shopId] = { ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }), status: 'error', error: apiErrors[shopId], checkedAt: Date.now() };
       else
         next[shopId] = {
-          ...(prev[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
+          ...(cur[shopId] || { shopId, shopName: settings.stores[shopId]?.name || shopId, sections: {}, missingSelectors: [] }),
           // A store without a live tab is "tab closed". Logged-out cabinet tabs cannot be
           // attributed to a store, so they are reported separately (unauthTabs).
           status: 'noTab',
@@ -674,9 +685,7 @@ async function recordApiHealth(shopIds, errors) {
       const st = settings.stores[id];
       if (!st?.api) continue;
       if (breakerOpen(st.api) && errors[id]) continue; // skipped while resting: keep the counters
-      st.api = errors[id]
-        ? { ...st.api, error: errors[id], errorAt: Date.now(), fails: OUTAGE_CODES.has(errors[id]) ? (st.api.fails || 0) + 1 : 0 }
-        : { ...st.api, error: null, lastOkAt: Date.now(), fails: 0 };
+      st.api = nextApiHealth(st.api, errors[id], Date.now());
       changed = true;
     }
     if (changed) await saveSettings({ stores: settings.stores });
@@ -1154,10 +1163,7 @@ async function syncDue() {
  * rate limit, unexpected answer — not a wrong token), the store rests for 10 minutes; the last
  * data is shown with its time («Kaspi API временно недоступен, показываем данные от …»).
  */
-const OUTAGE_CODES = new Set(['apiNetwork', 'apiHttp', 'apiRateLimit', 'apiFormat', 'apiTimeout']);
-const BREAKER_FAILS = 3;
-const BREAKER_PAUSE = 10 * 60000;
-export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) >= BREAKER_FAILS && now - (api.errorAt || 0) < BREAKER_PAUSE;
+export { breakerOpen };
 
 /* ===================================================================== */
 /* Wiring                                                                 */
@@ -1166,6 +1172,16 @@ export const breakerOpen = (api, now = Date.now()) => !!api && (api.fails || 0) 
 /** UI → worker message handlers. */
 const uiHandlers = {
   /** Errors of extension pages go to the same journal. */
+  /** Funnel milestone from the dashboard (fire-and-forget, deduplicated in billing.js). */
+  'ui:trackFunnel': async ({ event }) => {
+    B.trackFunnel(String(event || ''));
+    return { ok: true };
+  },
+  /** Anonymous UX counters from the dashboard (whitelisted codes only, fire-and-forget). */
+  'ui:trackUx': async ({ events }) => {
+    B.trackUxEvents(events);
+    return { ok: true };
+  },
   'ui:logError': async ({ where, message }) => {
     await logError(`page:${String(where || '').slice(0, 30)}`, String(message || ''));
     return { ok: true };
@@ -1218,9 +1234,12 @@ const uiHandlers = {
     } catch (e) {
       return { ok: false, error: e.code || e.message };
     }
+    const tokenHash = await apiTokenHash(token);
     const id = await lock(async () => {
       const settings = await getSettings();
-      const sid = shopId && settings.stores[shopId] ? shopId : `api-${uid('s').slice(-8)}`;
+      // "New store" with a token we already know → reconnect that store (no new slot, no surcharge)
+      const known = !shopId || !settings.stores[shopId] ? findApiStore(settings.stores, tokenHash) : null;
+      const sid = shopId && settings.stores[shopId] ? shopId : known?.id || apiStoreIdFromHash(tokenHash);
       const existing = settings.stores[sid];
       const used = Object.values(settings.stores).map((s) => s.color);
       settings.stores[sid] = {
@@ -1233,7 +1252,7 @@ const uiHandlers = {
         origin: existing?.origin || 'https://kaspi.kz',
         addedAt: existing?.addedAt || Date.now(),
         lastSeen: existing?.lastSeen || Date.now(),
-        api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null },
+        api: { connected: true, last4: token.slice(-4), connectedAt: Date.now(), error: null, tokenHash },
       };
       await saveSettings({ stores: settings.stores });
       const tokens = await getApiTokens();
@@ -1337,15 +1356,28 @@ const uiHandlers = {
       sync().catch((e) => console.warn(LOG, 'sync after consent', e));
       return { ok: true, license: lic };
     }),
-  'ui:billingRequestCode': ({ email }) => billingCall(() => B.requestCode(email)),
+  'ui:billingRequestCode': ({ email, captchaToken }) => billingCall(async () => B.requestCode(email, captchaToken, (await getSettings()).lang)),
   'ui:billingVerify': ({ email, code, consent }) =>
     billingCall(async () => {
       await B.verifyCode(email, code);
       // The box was ticked on the login screen before the code was requested.
       if (consent) await B.acceptTerms().catch((e) => console.warn(LOG, 'accept terms', e));
+      B.syncLang((await getSettings()).lang); // the bot and the e-mails follow the interface language
       const lic = await currentLicense(true);
       sync().catch((e) => console.warn(LOG, 'sync after login', e));
       return { ok: true, license: lic };
+    }),
+  'ui:billingReferral': () =>
+    billingCall(async () => {
+      const info = await B.referralInfo();
+      const { pendingRefCode } = await chrome.storage.local.get('pendingRefCode');
+      return { ok: true, referral: info, pending: pendingRefCode || '' };
+    }),
+  'ui:billingApplyReferral': ({ code }) =>
+    billingCall(async () => {
+      const r = await B.applyReferral(code);
+      await chrome.storage.local.remove('pendingRefCode').catch(() => {});
+      return { ok: true, result: r };
     }),
   'ui:billingCreateInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.createInvoice(p) })),
   'ui:billingCancelInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.cancelInvoice(p) })),
@@ -1453,7 +1485,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   await dataReady;
   if (alarm.name === ALARM_CHAT && (await currentLicense().catch(() => ({}))).canUse) pollChat().catch((e) => report('chat poll', e));
-  if (alarm.name === ALARM_SYNC && (await syncDue())) sync().catch((e) => report('sync', e));
+  if (alarm.name === ALARM_SYNC && (await syncDue())) sync().catch((e) => { report('sync', e); B.reportClientError(`sync_${e?.code || 'error'}`, 'alarm'); });
   if (alarm.name === ALARM_IMPORTS) pollImports().catch((e) => report('card imports', e));
   if (alarm.name === ALARM_STAFF) checkStaff().catch((e) => report('staff check', e));
   if (alarm.name === ALARM_HEALTH) {
@@ -1476,6 +1508,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     const a = changes[KEYS.settings].oldValue?.chatPollSec;
     const b = changes[KEYS.settings].newValue?.chatPollSec;
     if (a !== b) scheduleAlarms();
+    const la = changes[KEYS.settings].oldValue?.lang;
+    const lb = changes[KEYS.settings].newValue?.lang;
+    if (lb && la !== lb) B.syncLang(lb);
   }
 });
 
@@ -1503,6 +1538,8 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   if (!isSaudaPulseOrigin(sender?.origin || sender?.url)) { sendResponse({ ok: false }); return false; }
   if (msg?.type === 'PING') { sendResponse({ ok: true, version: chrome.runtime.getManifest().version }); return false; }
   if (msg?.type === 'OPEN_DASHBOARD') {
+    const ref = typeof msg.ref === 'string' ? msg.ref.trim().toUpperCase() : '';
+    if (/^SP-[A-Z0-9]{6}$/.test(ref)) chrome.storage.local.set({ pendingRefCode: ref }).catch(() => {});
     openDashboard('').then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true; // async response
   }
@@ -1523,6 +1560,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   discoverTabs().catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => {
+  getSettings().then((st) => B.syncLang(st.lang)).catch(() => {}); // a change made while offline
   scheduleAlarms();
   scheduleStaffCheck().catch(() => {});
   scheduleHealth();

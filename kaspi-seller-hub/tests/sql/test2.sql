@@ -1,3 +1,5 @@
+-- 026: admin_confirm_invoice needs the expected amount/stores; cf() reads them from the invoice itself
+create or replace function pg_temp.cf(p_id bigint, p_note text default null) returns jsonb language plpgsql security definer as $$ declare a int; s int; begin select amount, stores into a, s from public.invoices where id = p_id; return public.admin_confirm_invoice(p_id, p_note, a, s); end $$;
 \set ON_ERROR_STOP off
 \pset format unaligned
 \pset tuples_only on
@@ -6,6 +8,7 @@ insert into auth.users (id, email) values ('33333333-3333-3333-3333-333333333333
 insert into public.admins values ('88888888-8888-8888-8888-888888888888');
 
 -- ===== trial, 30 days left =====
+reset role; update accounts set trial_ends_at = now() + interval '30 days' where email = 'big@example.kz';
 set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('no renewal invoice 30 days before the end', ensure_renewal_invoice(3) is null);
 select pg_temp.ok('4th store in trial → add-on 5 000 ₸ (30 days left)', (select i->>'kind' = 'addon' and (i->>'amount')::int = 5000 and (i->>'stores')::int = 4 and (i->>'months')::int = 0 from (select request_store_addon(4) i) x));
@@ -16,7 +19,7 @@ select pg_temp.ok('licence shows the add-on with remind_days and coverage_end', 
 
 -- admin confirms add-on → 45 stores now, end date unchanged
 set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
-select pg_temp.ok('admin confirms add-on', (select r->>'status' = 'paid' from (select admin_confirm_invoice((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), 'addon') r) x));
+select pg_temp.ok('admin confirms add-on', (select r->>'status' = 'paid' from (select pg_temp.cf((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), 'addon') r) x));
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('after add-on: trial, 45 stores, paid_until still empty', (select l->>'status' = 'trial' and (l->>'store_limit')::int = 45 and l->>'paid_until' is null from (select get_license(45) l) x));
 
@@ -32,7 +35,7 @@ select pg_temp.ok('phone set later goes onto the open invoice', (select phone = 
 do $$ begin perform set_my_phone('abc'); raise notice 'FAIL bad phone accepted'; exception when others then raise notice 'PASS bad phone rejected (%)', sqlerrm; end $$;
 
 set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
-select pg_temp.ok('renewal confirmed: paid period starts at the end of trial, +1 month', (select (r->>'period_from')::timestamptz > now() + interval '3 days' and (r->>'period_to')::timestamptz > (r->>'period_from')::timestamptz + interval '27 days' from (select admin_confirm_invoice((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), null) r) x));
+select pg_temp.ok('renewal confirmed: paid period starts at the end of trial, +1 month', (select (r->>'period_from')::timestamptz > now() + interval '3 days' and (r->>'period_to')::timestamptz > (r->>'period_from')::timestamptz + interval '27 days' from (select pg_temp.cf((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), null) r) x));
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('active, 47 stores', (select l->>'status' = 'active' and (l->>'store_limit')::int = 47 from (select get_license(47) l) x));
 
@@ -55,7 +58,7 @@ set role authenticated; set request.jwt.claim.sub = '33333333-3333-3333-3333-333
 select pg_temp.ok('expired: status expired', (select l->>'status' = 'expired' and (l->>'store_limit')::int = 0 from (select get_license(47) l) x));
 select pg_temp.ok('expired: add-on request becomes the renewal for all 47 stores', (select i->>'kind' = 'renewal' and (i->>'amount')::int = 240000 from (select request_store_addon(47) i) x));
 set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
-select pg_temp.ok('confirm after expiry starts now', (select (r->>'period_from')::timestamptz between now() - interval '1 minute' and now() + interval '1 minute' from (select admin_confirm_invoice((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), null) r) x));
+select pg_temp.ok('confirm after expiry starts now', (select (r->>'period_from')::timestamptz between now() - interval '1 minute' and now() + interval '1 minute' from (select pg_temp.cf((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'big@example.kz'), null) r) x));
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 select pg_temp.ok('active again right after confirmation', (select l->>'status' = 'active' from (select get_license(47) l) x));
 select accept_terms() is not null;

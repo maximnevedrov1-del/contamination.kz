@@ -100,7 +100,7 @@ export async function scheduleStaffCheck() {
 /* ---------- what the worker answers on a warehouse computer ---------- */
 
 /** Allowed without anybody signed in (the sign-in screen). */
-const PUBLIC = new Set(['ui:getState', 'ui:serviceStatus', 'ui:usage', 'ui:staffState', 'ui:staffRequestCode', 'ui:staffVerify', 'ui:staffPinLogin', 'ui:ownerUnlock', 'ui:logError']);
+const PUBLIC = new Set(['ui:getState', 'ui:serviceStatus', 'ui:usage', 'ui:staffState', 'ui:staffRequestCode', 'ui:staffVerify', 'ui:staffPinLogin', 'ui:ownerUnlock', 'ui:logError', 'ui:trackFunnel']);
 /** Allowed to a signed-in packer (packing only). */
 const STAFF_ALLOWED = new Set([...PUBLIC, 'ui:sync', 'ui:staffLogout', 'ui:staffCheck', 'ui:pack', 'ui:accept', 'ui:print', 'ui:fetchInvoices', 'ui:packLogAdd', 'ui:packProblem', 'ui:setBarcode']);
 
@@ -136,9 +136,9 @@ export function staffHandlers() {
     },
 
     /** Step 1 of the first sign-in: a code to the packer's e-mail. */
-    'ui:staffRequestCode': async ({ email }) => {
+    'ui:staffRequestCode': async ({ email, captchaToken }) => {
       if (!B.isConfigured()) return { ok: false, error: 'billingNotConfigured' };
-      await B.requestCode(email);
+      await B.requestCode(email, captchaToken, (await chrome.storage.local.get('ksh.settings'))['ksh.settings']?.lang);
       return { ok: true };
     },
 

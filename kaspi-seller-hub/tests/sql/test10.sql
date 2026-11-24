@@ -1,3 +1,5 @@
+-- 026: admin_confirm_invoice needs the expected amount/stores; cf() reads them from the invoice itself
+create or replace function pg_temp.cf(p_id bigint, p_note text default null) returns jsonb language plpgsql security definer as $$ declare a int; s int; begin select amount, stores into a, s from public.invoices where id = p_id; return public.admin_confirm_invoice(p_id, p_note, a, s); end $$;
 \set ON_ERROR_STOP off
 \pset format unaligned
 \pset tuples_only on
@@ -39,7 +41,7 @@ select pg_temp.ok('boost over → back to 1 store', (select (l->>'store_limit'):
 -- confirm the add-on → «Мульти» for the rest of the period
 reset role;
 select set_config('request.jwt.claim.sub', 'c1000000-0000-0000-0000-00000000000a', false);
-select admin_confirm_invoice((select id from invoices where status = 'pending' and kind = 'addon'), 'test') is not null;
+select pg_temp.cf((select id from invoices where status = 'pending' and kind = 'addon'), 'test') is not null;
 select pg_temp.ok('paid add-on → store_limit 3, same end date', (select store_limit = 3 and paid_until between now() + interval '14 days' and now() + interval '16 days' from accounts where email = 'start@example.kz'));
 -- 4. renewal: a «Мульти» payer with 1 store keeps «Мульти» unless «перейти на Старт»
 update public.accounts set paid_until = now() + interval '3 days' where email = 'start@example.kz';

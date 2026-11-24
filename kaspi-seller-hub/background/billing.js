@@ -7,6 +7,7 @@
  * The session (tokens) never leaves the worker; pages get a plain licence view.
  */
 import { BILLING } from '../shared/billing-config.js';
+import { createLicenseVerifier } from '../shared/license-signature.js';
 
 const SESSION_KEY = 'ksh.session';
 const LAST_USER_KEY = 'ksh.lastUser';
@@ -18,7 +19,7 @@ const DAY = 86400000;
 export const isConfigured = () => !!(BILLING.supabaseUrl && BILLING.supabaseAnonKey);
 
 /** Error with a code the UI can translate (errors.<code>). */
-class BillingError extends Error {
+export class BillingError extends Error {
   constructor(code, detail = '', status = 0) {
     super(code);
     this.code = code;
@@ -69,6 +70,8 @@ async function http(path, { method = 'POST', body, token } = {}) {
       'boost_used', 'boost_not_needed', 'offer_used', 'invalid_choice', 'bot_not_configured'];
     const hit = known.find((k) => msg.includes(k));
     if (hit) throw new BillingError(`billing_${hit}`, msg, res.status);
+    // Supabase Auth: "captcha protection: request disallowed (...)", error_code captcha_failed
+    if (/captcha/i.test(msg) || data?.error_code === 'captcha_failed') throw new BillingError('billingCaptcha', msg, res.status);
     if (path.startsWith('/auth/v1/verify')) throw new BillingError('billingBadCode', msg, res.status);
     if (res.status === 429) throw new BillingError('billingRateLimit', msg, res.status);
     if (res.status === 401 || res.status === 403) throw new BillingError('billingAuth', msg, res.status);
@@ -87,11 +90,19 @@ async function saveSession(s, fallbackUser = {}) {
   });
 }
 
+/** Body of /auth/v1/otp; the captcha token (shared/captcha.js) goes where Supabase Auth reads it.
+ *  data.lang is saved in a NEW user's metadata, so the first login e-mail is in the interface language. */
+export function otpBody(email, captchaToken, lang) {
+  const body = { email, create_user: true, data: { lang: uiLang(lang) } };
+  if (typeof captchaToken === 'string' && captchaToken && captchaToken.length < 4096) body.gotrue_meta_security = { captcha_token: captchaToken };
+  return body;
+}
+
 /** Step 1: e-mail a one-time code (creates the account on first login → trial starts). */
-export async function requestCode(email) {
+export async function requestCode(email, captchaToken, lang) {
   email = String(email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BillingError('billingBadEmail');
-  await http('/auth/v1/otp', { body: { email, create_user: true } });
+  await http('/auth/v1/otp', { body: otpBody(email, captchaToken, lang) });
   return { ok: true };
 }
 
@@ -109,6 +120,32 @@ export async function verifyCode(email, code) {
   if (s.user?.id) await set(LAST_USER_KEY, s.user.id);
   await chrome.storage.session.remove('ksh.feedbackDue').catch(() => {});
   return { ok: true };
+}
+
+/* ---------- the interface language on the server (029_client_language.sql) ----------
+ * The Telegram bot and the login e-mail speak the language the seller chose in the extension.
+ * Sent on sign-in and whenever it changes; remembered per user so it is not resent on every wake-up.
+ * Fire-and-forget: a failure is retried on the next sign-in, language change or browser start.
+ */
+const LANG_SYNC_KEY = 'ksh.langSynced';
+export const uiLang = (l) => (l === 'kk' ? 'kk' : 'ru');
+export async function syncLang(lang) {
+  try {
+    if (!isConfigured()) return false;
+    const l = uiLang(lang);
+    const s = await get(SESSION_KEY);
+    if (!s?.user_id) return false;
+    const mark = `${s.user_id}:${l}`;
+    if ((await get(LANG_SYNC_KEY)) === mark) return false;
+    await rpc('set_my_lang', { p_lang: l });
+    // the login e-mail template reads it from the user's metadata ({{ .Data.lang }})
+    const token = await accessToken();
+    if (token) await http('/auth/v1/user', { method: 'PUT', body: { data: { lang: l } }, token }).catch(() => {});
+    await set(LANG_SYNC_KEY, mark);
+    return true;
+  } catch {
+    return false; // older server without set_my_lang, offline, signed out: try again next time
+  }
 }
 
 /* ---------- staff (packers): a second, separate session on the owner's computer ----------
@@ -202,61 +239,14 @@ const refreshRefused = (e) => e?.status === 400 || e?.status === 401 || e?.statu
  * custom_access_token_hook in 001_billing.sql puts the licence into it). Editing
  * chrome.storage, replaying or faking server answers cannot produce a valid signature.
  */
-export const signingRequired = () => Array.isArray(BILLING.licenseKeys) && BILLING.licenseKeys.length > 0;
+const verifier = createLicenseVerifier({
+  keys: () => BILLING.licenseKeys,
+  issuer: () => BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1',
+});
+export const signingRequired = () => verifier.required();
 
-const b64url = (str) => {
-  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  return Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
-};
-const ALGS = {
-  ES256: { kty: 'EC', import: { name: 'ECDSA', namedCurve: 'P-256' }, verify: { name: 'ECDSA', hash: 'SHA-256' } },
-  RS256: { kty: 'RSA', import: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, verify: { name: 'RSASSA-PKCS1-v1_5' } },
-};
-let keysPromise = null;
-function verifyingKeys() {
-  keysPromise ??= Promise.all(
-    BILLING.licenseKeys.map(async (jwk) => {
-      const alg = Object.keys(ALGS).find((a) => ALGS[a].kty === jwk?.kty);
-      if (!alg || (jwk.alg && jwk.alg !== alg) || (alg === 'ES256' && jwk.crv !== 'P-256')) return null;
-      if (jwk.d || jwk.k) return null; // a private/symmetric key was pasted by mistake — never use it
-      const { kty, crv, x, y, n, e } = jwk; // public parts only
-      const key = await crypto.subtle.importKey('jwk', { kty, crv, x, y, n, e }, ALGS[alg].import, false, ['verify']).catch(() => null);
-      return key && { kid: jwk.kid || null, alg, key };
-    }),
-  ).then((list) => list.filter(Boolean));
-  return keysPromise;
-}
-
-/** Claims of a JWT whose signature checks out against licenseKeys; otherwise null. */
-export async function verifiedClaims(jwt, expectedSub = null) {
-  const parts = String(jwt || '').split('.');
-  if (parts.length !== 3) return null;
-  let header, payload;
-  try {
-    header = JSON.parse(new TextDecoder().decode(b64url(parts[0])));
-    payload = JSON.parse(new TextDecoder().decode(b64url(parts[1])));
-  } catch {
-    return null;
-  }
-  if (!ALGS[header?.alg]) return null; // never "none" or HS256 (symmetric: the secret would have to ship in the extension)
-  const iss = BILLING.supabaseUrl.replace(/\/$/, '') + '/auth/v1';
-  if (payload.iss !== iss || (expectedSub && payload.sub !== expectedSub)) return null;
-  // Supabase user tokens only (not anon/service keys or tokens of another audience), with a lifetime.
-  if (payload.aud !== 'authenticated' || !Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) return null;
-  const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-  let sig;
-  try {
-    sig = b64url(parts[2]);
-  } catch {
-    return null;
-  }
-  if (header.alg === 'ES256' && sig.length !== 64) return null; // JWS ES256 = raw r||s, 64 bytes
-  for (const k of await verifyingKeys()) {
-    if (k.alg !== header.alg || (header.kid && k.kid && k.kid !== header.kid)) continue;
-    if (await crypto.subtle.verify(ALGS[k.alg].verify, k.key, sig, data).catch(() => false)) return payload;
-  }
-  return null;
-}
+/** Claims of a JWT whose ES256/RS256 signature checks out against licenseKeys; otherwise null (see shared/license-signature.js). */
+export const verifiedClaims = (jwt, expectedSub = null) => verifier.verifiedClaims(jwt, expectedSub);
 
 const sec = (iso) => (iso ? Math.floor(new Date(iso).getTime() / 1000) : null);
 /** Server answer and token disagree (just paid, consent given…) → the token is older. */
@@ -329,6 +319,7 @@ export async function getLicense({ force = false, storeCount, storeKeys } = {}) 
       return null;
     }
     if (usable && age < BILLING.offlineGraceDays * DAY) return cache.data;
+    reportClientError(`license_${e.code || 'error'}`, 'getLicense');
     throw e;
   }
 }
@@ -445,8 +436,88 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   };
 }
 
+const FUNNEL_EVENTS = new Set(['onboarding_completed', 'first_sync_done', 'trial_expired_view', 'invoice_created', 'referral_shared']);
+const FUNNEL_KEY = 'ksh.funnelSent';
+const errThrottle = new Map();
+/**
+ * Anonymous error report (short code + context only; the server strips anything personal anyway).
+ * Fire-and-forget: never throws, skips when signed out, same code+context at most once per 10 min.
+ */
+export function reportClientError(code, context = '') {
+  try {
+    if (!isConfigured()) return;
+    const c = String(code ?? '').slice(0, 120);
+    const x = String(context ?? '').slice(0, 120);
+    if (!c) return;
+    const key = `${c}|${x}`;
+    const now = Date.now();
+    if (now - (errThrottle.get(key) || 0) < 10 * 60000) return;
+    if (errThrottle.size >= 50 && !errThrottle.has(key)) errThrottle.delete(errThrottle.keys().next().value);
+    errThrottle.set(key, now);
+    (async () => {
+      try {
+        if (!(await accessToken())) return;
+        const version = typeof chrome !== 'undefined' ? chrome.runtime?.getManifest?.().version || '' : '';
+        await rpc('report_client_error', { p_code: c, p_context: x, p_version: String(version).slice(0, 120) });
+      } catch { /* telemetry must never break anything */ }
+    })();
+  } catch { /* ignore */ }
+}
+
+const UX_TYPES = new Set(['screen_view', 'action_click', 'rage_click', 'form_abandoned', 'help_opened']);
+const UX_KEY = /^[a-z0-9_:-]{1,64}$/;
+const uxOk = (k) => typeof k === 'string' && UX_KEY.test(k) && !/^[0-9]+$/.test(k);
+/**
+ * Anonymous UX counters from the dashboard (shared/ux-telemetry.js): a batch of {t, k, s, n}.
+ * Only whitelisted codes pass (re-validated here and again on the server), at most 50 events,
+ * n capped at 5. The whole batch goes in ONE request (track_ux_events, 027_ux_events_batch.sql);
+ * before it was one request per event and repeat — up to 250 per batch.
+ * Fire-and-forget: never throws, skips when signed out / not configured. If the server has no
+ * track_ux_events yet (migration not applied), the batch is dropped: telemetry must not add load.
+ */
+export function trackUxEvents(events) {
+  (async () => {
+    try {
+      const batch = uxBatch(events);
+      if (!batch.length || !isConfigured() || !(await accessToken())) return;
+      await rpc('track_ux_events', { p_events: batch });
+    } catch { /* telemetry must never break anything */ }
+  })();
+}
+
+/** Valid events only, as sent to track_ux_events: [{t, k, s, n 1..5}], at most 50. */
+export function uxBatch(events) {
+  if (!Array.isArray(events)) return [];
+  return events
+    .filter((e) => e && UX_TYPES.has(e.t) && uxOk(e.k) && uxOk(e.s))
+    .slice(0, 50)
+    .map((e) => ({ t: e.t, k: e.k, s: e.s, n: Math.min(Math.max(Math.floor(Number(e.n)) || 1, 1), 5) }));
+}
+
+const funnelPending = new Set();
+/**
+ * Product funnel milestone, sent at most once per event (the server also dedups). Fire-and-forget:
+ * callers do not await it; never throws, skips silently when signed out or offline (retried next time).
+ */
+export function trackFunnel(event) {
+  (async () => {
+    try {
+      if (!FUNNEL_EVENTS.has(event) || funnelPending.has(event) || !isConfigured()) return;
+      funnelPending.add(event);
+      try {
+        const sent = (await get(FUNNEL_KEY)) || [];
+        if (sent.includes(event)) return;
+        if (!(await accessToken())) return;
+        await rpc('track_funnel_event', { p_event: event });
+        await set(FUNNEL_KEY, [...new Set([...sent, event])]);
+      } finally { funnelPending.delete(event); }
+    } catch { /* telemetry must never break anything */ }
+  })();
+}
+
 export async function createInvoice({ stores, months, phone }) {
   await rpc('create_invoice', { p_stores: Number(stores), p_months: Number(months), p_phone: String(phone || '') });
+  trackFunnel('invoice_created');
   return licenseView({ force: true });
 }
 
@@ -478,40 +549,6 @@ export async function setPhone({ phone }) {
 export async function cancelInvoice({ id }) {
   await rpc('cancel_my_invoice', { p_id: Number(id) });
   return licenseView({ force: true });
-}
-
-/* ---------------- price-list feeds (Supabase Storage) ---------------- */
-
-/** Secret feed of one store (created on first use). */
-export async function ensureFeed(shopKey) {
-  return rpc('ensure_price_feed', { p_shop_key: shopKey });
-}
-
-/** Public URL Kaspi fetches the price list from. */
-export const feedUrl = (feedId, shopKey) => `${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/pricelists/${feedId}/${shopKey}.xml`;
-
-/** Upload (overwrite) the store's XML price list. */
-export async function uploadFeed(feedId, shopKey, xml) {
-  const token = await accessToken();
-  if (!token) throw new BillingError('billingLoggedOut');
-  let res;
-  try {
-    res = await fetch(`${BILLING.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/pricelists/${feedId}/${shopKey}.xml`, {
-      method: 'POST',
-      headers: { apikey: BILLING.supabaseAnonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/xml', 'x-upsert': 'true', 'cache-control': 'max-age=60' },
-      body: new Blob([xml], { type: 'application/xml' }),
-    });
-  } catch (e) {
-    throw new BillingError('billingNetwork', e.message);
-  }
-  if (res.status === 413) throw new BillingError('feedTooLarge');
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    // Storage answers 400 {"statusCode":"403","message":"new row violates row-level security policy"}
-    if (res.status === 401 || res.status === 403 || /row-level security|"403"|Unauthorized/i.test(text)) throw new BillingError('feedForbidden', text.slice(0, 200));
-    throw new BillingError('billingHttp', `${res.status} ${text.slice(0, 200)}`);
-  }
-  return feedUrl(feedId, shopKey);
 }
 
 /* ---------------- support: service status, tickets, API health ---------------- */
@@ -547,6 +584,8 @@ export const upgradeQuote = (stores) => rpc('upgrade_quote', { p_stores: stores 
 export const trialBoost = () => rpc('start_trial_boost', {});
 export const cancelFlow = ({ reason, outcome, comment }) => rpc('cancel_flow', { p_reason: String(reason), p_outcome: String(outcome), p_comment: comment ? String(comment).slice(0, 1000) : null });
 export const resumeSubscription = () => rpc('resume_subscription', {});
+export const referralInfo = () => rpc('my_referral', {});
+export const applyReferral = (code) => rpc('apply_referral_code', { p_code: String(code || '').slice(0, 32) });
 export const tgStatus = () => rpc('tg_status', {});
 export const tgLinkCreate = () => rpc('tg_link_create', {});
 export const tgSettings = ({ digest, alerts }) => rpc('tg_settings', { p_digest: digest, p_alerts: alerts });

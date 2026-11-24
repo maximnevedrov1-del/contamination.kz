@@ -4,7 +4,7 @@
 const http = require('http');
 const crypto = require('crypto');
 const { Pool } = require('pg');
-const PORT = 8098, ANON = 'test-anon-key';
+const PORT = 8098, ANON = 'test-anon-key', SERVICE = 'test-service-role-key';
 const pool = new Pool({ host: '/tmp', port: 5499, user: 'postgres', database: 'billing' });
 const sessions = new Map(); // access_token → { uid, email }
 const refresh = new Map(); // refresh_token → { uid, email }
@@ -52,11 +52,11 @@ async function issue(uid, email) {
   return { access_token: at, refresh_token: rt, expires_in: 3600, token_type: 'bearer', user: { id: uid, email } };
 }
 
-async function rpc(uid, fn, args, headers = {}) {
+async function rpc(uid, fn, args, headers = {}, role = null) {
   const c = await pool.connect();
   try {
     await c.query('begin');
-    await c.query(uid ? 'set local role authenticated' : 'set local role anon');
+    await c.query(role === 'service_role' ? 'set local role service_role' : uid ? 'set local role authenticated' : 'set local role anon');
     await c.query("select set_config('request.jwt.claim.sub', $1, true)", [uid || '']);
     await c.query("select set_config('request.headers', $1, true)", [JSON.stringify({ "user-agent": headers["user-agent"], "x-forwarded-for": "5.76.0.9" })]); // like PostgREST
     const keys = Object.keys(args);
@@ -101,13 +101,13 @@ http.createServer((req, res) => {
       // Edge Function «telegram-bot»: the real billing/supabase/functions/telegram-bot/bot.js, Telegram = :8095
       if (u.pathname.startsWith('/functions/v1/telegram-bot/')) {
         const { handle } = await import(require('path').join(__dirname, '../../billing/supabase/functions/telegram-bot/bot.js'));
-        const env = { SUPABASE_URL: `http://localhost:${PORT}`, SUPABASE_ANON_KEY: ANON, BOT_TOKEN: '123:abc', BOT_KEY: 'bot-key-0123456789abcdef0123456789abcdef', WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
+        const env = { SUPABASE_URL: `http://localhost:${PORT}`, SUPABASE_ANON_KEY: ANON, SUPABASE_SERVICE_ROLE_KEY: SERVICE, BOT_TOKEN: '123:abc', BOT_KEY: 'bot-key-0123456789abcdef0123456789abcdef', WEBHOOK_SECRET: 'webhook-secret-0123456789', TELEGRAM_API: 'http://localhost:8095' };
         const r = await handle(new Request(`http://localhost:${PORT}${u.pathname}`, { method: req.method, headers: req.headers, body: req.method === 'POST' ? bodyBuf : undefined }), env);
         log.push({ fn: u.pathname.split('/').pop(), status: r.status });
         res.writeHead(r.status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         return res.end(await r.text());
       }
-      if (req.headers.apikey !== ANON) return send(res, 401, { message: 'No API key found in request' });
+      if (req.headers.apikey !== ANON && req.headers.apikey !== SERVICE) return send(res, 401, { message: 'No API key found in request' });
       if (u.pathname === '/auth/v1/otp') {
         const email = String(b.email || '').toLowerCase();
         const exists = (await pool.query('select 1 from auth.users where email=$1', [email])).rowCount;
@@ -158,6 +158,7 @@ http.createServer((req, res) => {
       if (m) {
         const tok = (req.headers.authorization || '').replace(/^Bearer /, '');
         if (tok === ANON) { log.push({ rpc: m[1], anon: true }); return send(res, 200, await rpc(null, m[1], b, req.headers)); } // like PostgREST: anon key = role anon
+        if (tok === SERVICE) { log.push({ rpc: m[1], service: true }); return send(res, 200, await rpc(null, m[1], b, req.headers, 'service_role')); }
         const s = sessions.get(tok);
         if (!s) return send(res, 401, { message: 'JWT expired' });
         log.push({ rpc: m[1], email: s.email, args: b });

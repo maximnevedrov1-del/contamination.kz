@@ -10,6 +10,7 @@
 import { h } from '../shared/utils.js';
 import { t } from '../shared/i18n.js';
 
+let trackedDone = false;
 export const ONBOARD_KEY = 'ksh.onboarding';
 
 /** Remember that a step was done (test print, waybill printed, backup saved). */
@@ -49,6 +50,10 @@ export function onboardingCard(ctx) {
   const done = steps.filter((x) => x.done).length;
   const all = done === steps.length;
   const next = steps.find((x) => !x.done);
+  if (all && !trackedDone) {
+    trackedDone = true;
+    try { chrome.runtime.sendMessage({ type: 'ui:trackFunnel', payload: { event: 'onboarding_completed' } }).catch(() => {}); } catch { /* ignore */ }
+  }
   return h('section', { class: ['card', 'onboard', all && 'onboard--done'], dataset: { card: 'onboarding' } },
     h('div', { class: 'card__header' },
       h('div', null,

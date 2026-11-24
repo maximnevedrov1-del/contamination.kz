@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const EXT = process.argv[2];
 (async () => {
   const ctx = await chromium.launchPersistentContext(require('path').join(__dirname, 'relprof' + Date.now()), { headless: true, channel: 'chromium', args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] });

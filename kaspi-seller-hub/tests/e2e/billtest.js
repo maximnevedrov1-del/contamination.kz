@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');
 let fails = 0; const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', n, i); };
@@ -12,7 +12,7 @@ const OUT = __dirname;
   const id = sw.url().split('/')[2]; const errs = [];
   const d = await ctx.newPage(); d.on('pageerror', (e) => errs.push(e.message)); d.on('console', (m) => m.type() === 'error' && errs.push('[console] ' + m.text()));
   const toastsClear = () => d.evaluate(() => document.querySelectorAll('.toast').forEach((t) => t.remove()));
-  const closePay = async () => { if (await d.evaluate(() => document.getElementById('payDialog').open)) { await d.evaluate(() => (window.__payShown = true)); await d.click('#payDialog button:has-text("Позже")'); await sleep(200); } };
+  const closePay = async (wait = false) => { if (wait) await d.waitForFunction(() => document.getElementById('payDialog')?.open, null, { timeout: 4000 }).catch(() => {}); if (await d.evaluate(() => document.getElementById('payDialog').open)) { await d.evaluate(() => (window.__payShown = true)); await d.click('#payDialog button:has-text("Позже")'); await sleep(200); } };
   const refresh = async () => { for (let k = 0; k < 5; k++) { await closePay(); try { await d.click('#refreshBtn', { timeout: 3000 }); break; } catch { await sleep(500); } } await d.waitForFunction(() => !document.querySelector('#refreshBtn').disabled, null, { timeout: 60000 }); await sleep(400); };
 
   // 1. logged out → paywall everywhere except "Подписка"
@@ -48,10 +48,10 @@ const OUT = __dirname;
   check('2 wrong code rejected', (await d.locator('#view .banner[role=alert]').innerText().catch(() => '')).includes('неверный'));
   await d.fill('input[autocomplete=one-time-code]', '123456'); await d.click('button:has-text("Войти")');
   await d.waitForSelector('.badge:has-text("Пробный период")', { timeout: 15000 });
-  const acc = await sql("select trial_ends_at > now() + interval '29 days' ok from accounts where email='seller@example.kz'");
+  const acc = await sql("select trial_ends_at > now() + interval '13 days' ok from accounts where email='seller@example.kz'");
   const cons = await sql("select c.version, c.ip, c.user_agent, a.terms_version, a.terms_accepted_at is not null acc from consents c join accounts a using (user_id) where a.email='seller@example.kz'");
   check('2 consent saved on the server: version, time, IP, browser', cons.length === 1 && cons[0].version === '2026-11-16' && cons[0].terms_version === '2026-11-16' && cons[0].acc && cons[0].ip === '5.76.0.9' && /Chrome/.test(cons[0].user_agent), JSON.stringify(cons));
-  check('2 account created with a 30-day trial', acc[0]?.ok === true);
+  check('2 account created with a 14-day trial', acc[0]?.ok === true);
   check('2 sidebar plan chip shows the trial', (await d.locator('#planChip').innerText()).startsWith('Пробный период до'));
   const tokenLeak = await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:getState' }).then((s) => JSON.stringify(s)));
   check('2 session tokens never sent to pages', !/eyJ[\w-]+\.eyJ[\w-]+|rt-[0-9a-f]{16}/.test(tokenLeak));
@@ -64,13 +64,13 @@ const OUT = __dirname;
   check('3 4th store flagged over the limit', over.length === 1 && over[0].includes('Автосалон'), JSON.stringify(over));
   const reported = await sql("select last_store_count from accounts where email='seller@example.kz'");
   check('3 store count reported to the server', reported[0]?.last_store_count === 4, JSON.stringify(reported));
-  await closePay();
-  check('3 add-on payment window opened by itself for the 4th store', await d.evaluate(() => !!window.__payShown));
+  await closePay(true); // the window opens a moment after the data arrives
+  check('3 add-on payment window opened by itself for the 4th store', await d.evaluate(() => !!window.__payShown || !!localStorage.getItem('ksh.payShown.addon'))); // the product remembers a window it opened by itself
   await d.screenshot({ path: `${OUT}/bill-overlimit.png` });
 
   // 4. invoice for 4 stores × 2 months
   await d.evaluate(() => (location.hash = 'account')); await sleep(500);
-  check('4 open add-on invoice shown above the plan form', (await d.locator('.pending-invoice').innerText()).replace(/\s/g, '').includes('5000₸'));
+  check('4 open add-on invoice shown above the plan form', (await d.locator('.pending-invoice').innerText()).replace(/\s/g, '').includes('2400₸')); // 1 extra store × 5 000 for the 14 trial days left: ceil(5000 × 14 / 30, 100) = 2 400
   check('4 default store count = connected stores (4)', (await d.inputValue('input[data-fkey=acct-stores]')) === '4');
   await d.selectOption('select[data-fkey=acct-months]', '2'); await sleep(300);
   const total = await d.locator('strong:has-text("Итого")').innerText();
@@ -143,6 +143,7 @@ const OUT = __dirname;
   check('6b orders back after accepting', !(await d.locator('#view').innerText()).includes('Примите условия'));
 
   // 7. expiry → paywall + actions refused (clock moved in the database)
+  await sql('update billing_config set grace_days = 0 where id = 1'); // no renewal grace: this step tests the hard expiry
   await sql("update accounts set paid_until = now() - interval '1 minute', trial_ends_at = now() - interval '2 days' where email='seller@example.kz'");
   await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:billingState', payload: { force: true } }));
   await d.evaluate(() => (location.hash = 'orders')); await refresh();

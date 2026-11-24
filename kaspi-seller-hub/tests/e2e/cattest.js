@@ -1,7 +1,7 @@
 // "Выгрузка товаров" end to end: real extension UI → mock Kaspi Content API + mock Supabase
 // Storage (real RLS policies). 3 stores connected by API token; a product is put on sale in
 // 2 of them; cards go only to those 2; price lists are uploaded and readable by URL.
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');
 const FIX = path.join(__dirname, '../fixtures');

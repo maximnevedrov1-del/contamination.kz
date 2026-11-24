@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright'); require('./offline');
 const fs = require('fs');
 const path = require('path');
 const EXT = path.join(__dirname, '../billcopy');
@@ -17,7 +17,7 @@ async function adminConfirmPending() {
   const tk = await adminToken();
   const call = (fn, args) => fetch(`${SUPA}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { ...H, Authorization: 'Bearer ' + tk }, body: JSON.stringify(args) }).then((r) => r.json());
   const list = (await call('admin_invoices', { p_status: 'pending', p_search: null, p_limit: 100, p_offset: 0 })).rows;
-  return list.length ? call('admin_confirm_invoice', { p_id: list[0].id, p_note: 'test' }) : null;
+  return list.length ? call('admin_confirm_invoice', { p_id: list[0].id, p_note: 'test', p_expected_amount: list[0].amount, p_expected_stores: list[0].stores }) : null;
 }
 
 (async () => {
@@ -40,6 +40,8 @@ async function adminConfirmPending() {
   await d.fill('input[type=email]', 'shop@example.kz'); await d.check('label.consent input'); await d.click('button:has-text("Получить код")');
   await d.waitForSelector('input[autocomplete=one-time-code]'); await d.fill('input[autocomplete=one-time-code]', '123456'); await d.click('button:has-text("Войти")');
   await d.waitForSelector('.badge:has-text("Пробный период")', { timeout: 15000 });
+  // the default trial is 14 days now (migration 018); this suite's prorating maths assumes 30 days left
+  await sql("update accounts set trial_ends_at = now() + interval '30 days' where email = 'shop@example.kz'");
   await d.evaluate(() => (location.hash = 'orders')); await refresh();
   check('A0 trial: 3 stores, no payment window yet', !(await payOpen()));
 
