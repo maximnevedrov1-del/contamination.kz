@@ -8,7 +8,8 @@ modules. Product identity is parameterized; nothing here belongs to one brand.
 
 | Path | What |
 |---|---|
-| `supabase/migrations/001…027_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, client error telemetry, Telegram retention nudges, security hardening, anonymous UX behaviour telemetry (`track_ux_events` batch, `admin_ux_summary`). Apply in order. |
+| `supabase/migrations/001…028_*.sql` | Billing schema: accounts, trial, invoices, team, support, referral, feature flags, retention, funnel events, client error telemetry, Telegram retention nudges, security hardening, anonymous UX behaviour telemetry (`track_ux_events` batch, `admin_ux_summary`), automatic payment confirmation (`payment_received`, `payment_events`, review queue). Apply in order. |
+| `supabase/functions/payment-webhook/` | Edge Function: signed payment notifications → `payment_received` (service_role). Provider `generic` (HMAC-SHA256 over `timestamp.body`, 5-minute window); `aipay` is a stub (501) until its API is documented. Secret `PAYMENT_WEBHOOK_SECRET`. |
 | `supabase/functions/telegram-bot/` | Edge Function (`bot.js` logic, `index.js` Deno entry): digest, alerts, win-back, retention nudges (`enqueue_retention_nudges`: no first sync, trial ending, trial expired), `/start` linking; reads/writes only via `bot_*` RPCs. |
 | `admin/` | Static owner panel (`index.html`, `admin.js`, `admin.css`): invoices, config, tickets, status/banner, bot settings. Payment is generic (`payment_url` + `payment_instructions`). |
 | `extension-core/billing.js` | Licence client (OTP login, cached licence, offline grace, invoices, support RPCs). |

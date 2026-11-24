@@ -100,7 +100,7 @@
     return el('div', { class: 'row', style: 'margin:0 0 12px' }, input, el('span', { class: 'muted' }, `показано ${shown} из ${total}`));
   }
   function moreButton(total, shown) {
-    if (shown >= total) return null;
+    if (shown >= total) return ''; // not null: replaceChildren(null) would print "null"
     return el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn', onclick: () => ((view.limit += PAGE), render()) }, `Показать ещё (${Math.min(PAGE, total - shown)})`));
   }
 
@@ -218,8 +218,63 @@
     if (tab === 'flags') return renderFlags(panel);
     if (tab === 'errors') return renderErrors(panel);
     if (tab === 'ux') return renderUx(panel);
-    const page = await rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 });
+    const [page, review] = await Promise.all([
+      rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 }),
+      // automatic payments that need a look (migration 028; before it the call fails → no block)
+      tab === 'pending' ? rpc('admin_payment_events', { p_only_review: true, p_limit: 100 }).catch(() => []) : [],
+    ]);
     renderInvoices(panel, page);
+    const box = paymentReview(review || []);
+    if (box) panel.prepend(box);
+  }
+
+  // Payments the webhook could not match safely (028_payment_autoconfirm.sql → payment_received).
+  const REVIEW_REASON = {
+    no_match: 'не найден счёт с таким телефоном и суммой',
+    ambiguous: 'подходят несколько счетов — выберите вручную',
+    amount_mismatch: 'сумма не совпадает со счётом',
+    invoice_not_pending: 'счёт уже оплачен или отменён (возможна двойная оплата — проверьте возврат)',
+    invoice_not_found: 'счёт с таким номером не найден',
+  };
+  function paymentReview(events) {
+    if (!events.length) return null;
+    const rows = events.map((e) =>
+      el(
+        'tr',
+        null,
+        el('td', null, date(e.received_at, true), el('div', { class: 'muted mono' }, `${e.provider} · ${e.payment_id}`)),
+        el('td', { class: 'mono' }, phone(e.phone)),
+        el('td', { class: 'num big' }, money(e.amount)),
+        el('td', null, e.invoice_id ? `№ ${e.invoice_id}` : '—', e.invoice_amount != null && el('div', { class: 'muted' }, `по счёту ${money(e.invoice_amount)}`)),
+        el('td', null, REVIEW_REASON[e.reason] || e.reason || '—'),
+        el(
+          'td',
+          null,
+          el('button', {
+            type: 'button',
+            class: 'btn',
+            onclick: async () => {
+              const note = prompt('Что сделано с этим платежом? (например: «подтвердил счёт № 123 вручную», «вернул деньги»)', '');
+              if (note === null) return;
+              try {
+                await rpc('admin_resolve_payment_event', { p_id: e.id, p_note: note || null });
+                toast('Платёж отмечен как разобранный');
+                render();
+              } catch (err) {
+                toast(err.message, true);
+              }
+            },
+          }, 'Разобрано'),
+        ),
+      ),
+    );
+    return el(
+      'section',
+      { class: 'card' },
+      el('h3', null, `Платежи на проверку: ${events.length}`),
+      el('p', { class: 'muted' }, 'Эти оплаты пришли автоматически, но не подтверждены: что-то не совпало. Найдите счёт ниже, подтвердите его кнопкой «Оплата получена» (или верните деньги клиенту) и нажмите «Разобрано».'),
+      el('table', null, el('thead', null, el('tr', null, ['Пришла', 'Телефон', 'Сумма', 'Счёт', 'Почему не подтверждено', ''].map((h, n) => el('th', { class: n === 2 ? 'num' : null }, h)))), el('tbody', null, rows)),
+    );
   }
 
   function renderInvoices(panel, page) {
