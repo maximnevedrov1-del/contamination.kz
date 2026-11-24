@@ -125,9 +125,8 @@ jobs:
         run: |
           rc=0
           for t in apitest feat photoprint; do
-            pkill -f "node mockapi.js" || true
-            node mockapi.js > mock.log 2>&1 &
-            sleep 1; rm -rf apiprof profile2
+            ./mock-up.sh || { rc=1; continue; }
+            rm -rf apiprof profile2
             timeout 600 node $t.js > $t.out 2>&1 || true
             grep -E '^(FAIL|CRASH)' $t.out || true
             grep -q '^ALL' $t.out && echo "$t: ALL PASS" || { echo "$t: FAILED"; tail -20 $t.out; rc=1; }
