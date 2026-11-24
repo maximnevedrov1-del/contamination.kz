@@ -2411,6 +2411,8 @@ function bindConnectDialog() {
     $('connectName').focus();
   };
   $('connectCancel').addEventListener('click', () => dlg.close());
+  // where the Kaspi API token is: screenshots of the seller cabinet, step by step (help/token.gif)
+  $('connectTokenHelp').addEventListener('click', () => openGif('token'));
   $('connectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = $('connectSubmit');
@@ -2950,7 +2952,7 @@ const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip,
  * ===================================================================== */
 const GUIDE_ROUTES = ['home', 'orders', 'returns', 'refusals', 'payments', 'analytics', 'products', 'catalog', 'chat', 'settings', 'account'].filter((r) => r !== 'chat' || FEATURES.cabinet);
 // Short screen recordings (help/*.gif, made on demo data by the project's recorder).
-const GUIDE_GIFS = { home: 'connect', orders: 'orders', products: 'products', catalog: 'catalog', settings: 'settings' };
+const GUIDE_GIFS = { home: 'connect', orders: 'orders', products: 'products', catalog: 'catalog', settings: 'settings', token: 'token' };
 const gifUrl = (route) => (GUIDE_GIFS[route] ? chrome.runtime.getURL(`help/${GUIDE_GIFS[route]}.gif`) : null);
 
 /** The recording in a window; the GIF is loaded only when asked for. */
