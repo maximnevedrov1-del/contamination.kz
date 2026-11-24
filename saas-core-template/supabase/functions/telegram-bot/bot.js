@@ -7,6 +7,8 @@
  *                           checked with the X-Telegram-Bot-Api-Secret-Token header.
  *   …/telegram-bot/alert    from the extension with the SELLER's token: «order at risk» right now
  *                           (the database decides whether to send: linked, alerts on, once per order).
+ *   …/telegram-bot/ticket-reply  from the admin page with the ADMIN's token: the answer to a support ticket goes
+ *                           to the client's Telegram too (admin_ticket_tg checks is_admin).
  *   …/telegram-bot/run      scheduled at 09:00 Almaty with X-Bot-Key: morning digest, «6 days away»,
  *                           grace reminders, win-back at 30 / 60 days.
  * The bot reaches the database only through the bot_* functions: EXECUTE on them is granted to
@@ -70,6 +72,28 @@ export const TEXTS = {
     phoneNotOwn: 'Можно подтвердить только свой номер — нажмите кнопку «📱 Поделиться номером», а не отправляйте чужой контакт.',
     phoneBad: 'Этот номер не похож на казахстанский мобильный. Платить можно и так — счёт подтвердят вручную.',
     phoneNotLinked: 'Сначала подключите бота: {{APP_NAME}} → Настройки → «Подключить Telegram».',
+    // support in the bot (032_support_bot.sql): menu of topics, answers from the base, «Написать в поддержку»
+    topics: { connect: '🔌 Подключение', orders: '📦 Заказы и сводка', print: '🖨 Печать', payment: '💳 Оплата', goods: '🏷 Товары и склад', bot: '🤖 Telegram-бот' },
+    btnWrite: '✍️ Написать в поддержку',
+    btnMenu: '📋 Меню',
+    btnBack: '⬅️ Назад',
+    btnYes: '👍 Помогло',
+    btnNo: '👎 Не помогло',
+    btnCancel: '❌ Отмена',
+    menuIntro: 'Чем помочь? Выберите тему или напишите вопрос своими словами.',
+    hi: 'Здравствуйте! 👋',
+    pickQuestion: 'Выберите вопрос:',
+    wasHelpful: 'Помог ответ?',
+    noAnswer: 'Не нашёл готового ответа 🤔 Выберите тему ниже или нажмите «✍️ Написать в поддержку» — ответим здесь.',
+    thanks: 'Отлично, рад помочь! 🙌 Если будут вопросы — пишите.',
+    welcome: 'Пожалуйста! Если будут вопросы — пишите 🙌',
+    sorry: 'Жаль, что не помогло. Нажмите «✍️ Написать в поддержку» — ответим лично.',
+    askTicket: 'Опишите вопрос одним сообщением — передам в поддержку. Ответ придёт сюда и в {{APP_NAME}} («Помощь»).',
+    ticketOk: (id) => `✅ Вопрос №${id} передан в поддержку. Ответим здесь, обычно в течение пары часов в рабочее время.`,
+    ticketLimit: 'Слишком много обращений за короткое время. Попробуйте позже.',
+    ticketNotLinked: (url) => `Чтобы написать в поддержку отсюда, подключите бота: {{APP_NAME}} → Настройки → «Подключить Telegram».${url ? `\n\nИли напишите нам: ${url}` : ''}`,
+    ticketCancelled: 'Хорошо, отменил.',
+    ticketReply: (id, reply) => `💬 Ответ поддержки на вопрос №${id}:\n\n${reply}`,
   },
   kk: {
     btnOrders: '📦 Тапсырыстарды көру',
@@ -104,6 +128,27 @@ export const TEXTS = {
     phoneNotOwn: 'Тек өз нөміріңізді растай аласыз — басқа біреудің контактісін жібермей, «📱 Нөмірмен бөлісу» батырмасын басыңыз.',
     phoneBad: 'Бұл нөмір қазақстандық ұялы нөмірге ұқсамайды. Бәрібір төлей беруге болады — шотты қолмен растайды.',
     phoneNotLinked: 'Алдымен ботты қосыңыз: {{APP_NAME}} → Баптаулар → «Telegram қосу».',
+    topics: { connect: '🔌 Қосу', orders: '📦 Тапсырыстар мен қорытынды', print: '🖨 Басып шығару', payment: '💳 Төлем', goods: '🏷 Тауарлар мен қойма', bot: '🤖 Telegram-бот' },
+    btnWrite: '✍️ Қолдауға жазу',
+    btnMenu: '📋 Мәзір',
+    btnBack: '⬅️ Артқа',
+    btnYes: '👍 Көмектесті',
+    btnNo: '👎 Көмектеспеді',
+    btnCancel: '❌ Болдырмау',
+    menuIntro: 'Немен көмектесейін? Тақырыпты таңдаңыз немесе сұрағыңызды өз сөзіңізбен жазыңыз.',
+    hi: 'Сәлеметсіз бе! 👋',
+    pickQuestion: 'Сұрақты таңдаңыз:',
+    wasHelpful: 'Жауап көмектесті ме?',
+    noAnswer: 'Дайын жауап таппадым 🤔 Төменнен тақырыпты таңдаңыз немесе «✍️ Қолдауға жазу» батырмасын басыңыз — осында жауап береміз.',
+    thanks: 'Тамаша, көмектескеніме қуаныштымын! 🙌 Сұрақ болса — жазыңыз.',
+    welcome: 'Оқасы жоқ! Сұрақ болса — жазыңыз 🙌',
+    sorry: 'Көмектеспегені өкінішті. «✍️ Қолдауға жазу» батырмасын басыңыз — жеке жауап береміз.',
+    askTicket: 'Сұрағыңызды бір хабарламамен сипаттаңыз — қолдауға жіберемін. Жауап осында және {{APP_NAME}}-ке («Көмек») келеді.',
+    ticketOk: (id) => `✅ №${id} сұрақ қолдауға жіберілді. Осында жауап береміз, әдетте жұмыс уақытында бірнеше сағат ішінде.`,
+    ticketLimit: 'Қысқа уақытта өтініш тым көп. Кейінірек қайталаңыз.',
+    ticketNotLinked: (url) => `Осы жерден қолдауға жазу үшін ботты қосыңыз: {{APP_NAME}} → Баптаулар → «Telegram қосу».${url ? `\n\nНемесе бізге жазыңыз: ${url}` : ''}`,
+    ticketCancelled: 'Жарайды, болдырмадым.',
+    ticketReply: (id, reply) => `💬 №${id} сұраққа қолдау жауабы:\n\n${reply}`,
   },
 };
 export const langOf = (l) => (l === 'kk' ? 'kk' : 'ru');
@@ -206,7 +251,104 @@ async function rpc(env, fn, args, token, f = fetch) {
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && a.length >= 16 && [...a].reduce((x, ch, i) => x | (ch.charCodeAt(0) ^ b.charCodeAt(i)), 0) === 0;
 
-/** Telegram update → link / unlink / help. */
+
+/* ---------- support in the bot: the answer base (032_support_bot.sql) ---------- */
+export const TOPICS = ['connect', 'orders', 'print', 'payment', 'goods', 'bot'];
+/** Lower case, ё → е, letters and digits only, single spaces. */
+export const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const GREETING = new Set(('салем сәлем салам салем алейкум ассалаумағалейкум ассалаумалейкум ассалаумуалейкум сәлеметсіз сәлеметсиз салеметсиз '
+  + 'бе привет приветствую здравствуйте здраствуйте здрасте здравствуй добрый доброе утро день вечер қайырлы таң кеш күн hello hi hey ау').split(' '));
+const THANKS = new Set('спасибо спс благодарю рахмет рақмет ракмет рахмет рахмеет thanks thank you понятно ясно хорошо ок ok жарайды түсінікті'.split(' '));
+/** Only a greeting («Салем», «Добрый день!») / only thanks — not a question. */
+export const isGreeting = (text) => { const w = norm(text).split(' ').filter(Boolean); return w.length > 0 && w.length <= 4 && w.every((x) => GREETING.has(x)); };
+export const isThanks = (text) => { const w = norm(text).split(' ').filter(Boolean); return w.length > 0 && w.length <= 4 && w.every((x) => THANKS.has(x)); };
+
+/**
+ * The best answer for a free-text question, or null. A keyword is the START of a word: «токен» matches «токена».
+ * A keyword of several words matches when every one of them starts some word of the message, in any order
+ * («неверн токен» ← «пишет, что токен неверный»), and weighs as many points as it has words. The answer with the
+ * most points wins; ties → the first in the base order (sort, id).
+ */
+export function matchFaq(text, items) {
+  const words = norm(text).split(' ').filter(Boolean);
+  if (!words.length) return null;
+  const has = (w) => words.some((x) => x.startsWith(w));
+  let best = null;
+  let score = 0;
+  for (const it of items || []) {
+    let sc = 0;
+    for (const k of String(it.kw || '').split(',')) {
+      const kw = norm(k).split(' ').filter(Boolean);
+      if (kw.length && kw.every(has)) sc += kw.length;
+    }
+    if (sc > score) { best = it; score = sc; }
+  }
+  return best;
+}
+
+const kb = (rows) => ({ keyboard: rows.filter((r) => r.length).map((r) => r.map((text) => ({ text }))), resize_keyboard: true, is_persistent: true });
+const menuKb = (lang) => { const t = T(lang).topics; return kb([[t.connect, t.orders], [t.print, t.payment], [t.goods, t.bot], [T(lang).btnWrite]]); };
+const answerKb = (lang) => kb([[T(lang).btnYes, T(lang).btnNo], [T(lang).btnWrite, T(lang).btnMenu]]);
+/** Which button was pressed (in either language: the keyboard may be older than a language change). */
+const pressed = (text, key) => text === TEXTS.ru[key] || text === TEXTS.kk[key];
+const topicOf = (text) => TOPICS.find((k) => text === TEXTS.ru.topics[k] || text === TEXTS.kk.topics[k]);
+const q = (it, lang) => (lang === 'kk' ? it.q_kk : it.q_ru);
+const a = (it, lang) => (lang === 'kk' ? it.a_kk : it.a_ru);
+
+/** A message that is not a command: menu buttons, «Написать в поддержку», a question for the base. */
+async function support(env, f, { chat, text, lang, linked }) {
+  const t = T(lang);
+  const say = (body, reply_markup) => tg(env, 'sendMessage', { chat_id: chat, text: body, reply_markup, disable_web_page_preview: true }, f);
+  const call = (fn, args) => rpc(env, fn, { p_key: env.BOT_KEY, p_chat_id: chat, ...args }, null, f);
+  if (pressed(text, 'btnCancel')) {
+    if (linked) await call('bot_ticket_wait', { p_on: false }).catch(() => {});
+    return say(t.ticketCancelled, menuKb(lang));
+  }
+  // waiting for the question to support: this message is it (buttons above are not)
+  const isButton = pressed(text, 'btnWrite') || pressed(text, 'btnMenu') || pressed(text, 'btnBack') || pressed(text, 'btnYes') || pressed(text, 'btnNo') || topicOf(text);
+  if (linked && text && !isButton && !text.startsWith('/')) {
+    const r = await call('bot_ticket', { p_text: text }).catch((e) => console.warn('[telegram-bot] bot_ticket failed', String(e?.message || e).slice(0, 100)));
+    if (r?.ok) return say(t.ticketOk(r.id), menuKb(lang));
+    if (r?.error === 'ticket_limit') return say(t.ticketLimit, menuKb(lang));
+  }
+  const base = await call('bot_faq', {}).catch((e) => {
+    console.warn('[telegram-bot] bot_faq failed', String(e?.message || e).slice(0, 100));
+    return null;
+  });
+  // the base is not there (migration 032 not applied, database down): the old short answer
+  if (!base) return say(linked ? t.linkedHelp : t.help);
+  const items = base.items || [];
+  if (pressed(text, 'btnWrite')) {
+    if (!linked) return say(t.ticketNotLinked(base.support_url), menuKb(lang));
+    await call('bot_ticket_wait', { p_on: true });
+    return say(t.askTicket, kb([[t.btnCancel]]));
+  }
+  if (pressed(text, 'btnYes') || pressed(text, 'btnNo')) {
+    const yes = pressed(text, 'btnYes');
+    await call('bot_feedback', { p_helped: yes }).catch(() => {});
+    return say(yes ? t.thanks : t.sorry, yes ? menuKb(lang) : kb([[t.btnWrite], [t.btnMenu]]));
+  }
+  const topic = topicOf(text);
+  if (topic) {
+    const list = items.filter((it) => it.topic === topic);
+    if (!list.length) return say(t.menuIntro, menuKb(lang));
+    return say(t.pickQuestion, kb([...list.map((it) => [q(it, lang)]), [t.btnBack]]));
+  }
+  if (!text || pressed(text, 'btnMenu') || pressed(text, 'btnBack') || /^\/(start|help|menu)(@\w+)?$/.test(text)) {
+    return say(text.startsWith('/') ? `${linked ? t.linkedHelp : t.help}\n\n${t.menuIntro}` : t.menuIntro, menuKb(lang));
+  }
+  if (isGreeting(text)) return say(`${t.hi} ${linked ? '' : `${t.help}\n\n`}${t.menuIntro}`, menuKb(lang));
+  if (isThanks(text)) return say(t.welcome, menuKb(lang));
+  // a question from the menu (exact text in either language) or in the seller's own words
+  const picked = items.find((it) => text === it.q_ru || text === it.q_kk);
+  const hit = picked || matchFaq(text, items);
+  await call('bot_ask', { p_lang: lang, p_text: text.slice(0, 500), p_faq: hit ? hit.id : null, p_source: picked ? 'menu' : 'text' })
+    .catch((e) => console.warn('[telegram-bot] bot_ask failed', String(e?.message || e).slice(0, 100)));
+  if (!hit) return say(t.noAnswer, menuKb(lang));
+  return say(`${a(hit, lang)}\n\n${t.wasHelpful}`, answerKb(lang));
+}
+
+/** Telegram update → link / unlink / phone / support. */
 async function webhook(update, env, f) {
   const msg = update.message;
   // the seller blocked the bot (or removed the chat)
@@ -247,8 +389,8 @@ async function webhook(update, env, f) {
     await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: chat, p_blocked: false }, null, f);
     return tg(env, 'sendMessage', { chat_id: chat, text: T(lang).unlinked }, f);
   }
-  // an already linked chat is told it works (not asked to connect again)
-  return tg(env, 'sendMessage', { chat_id: chat, text: linkedLang ? T(lang).linkedHelp : T(lang).help }, f);
+  // menu, answers from the base, «Написать в поддержку»
+  return support(env, f, { chat, text, lang, linked: !!linkedLang });
 }
 
 /**
@@ -352,6 +494,18 @@ export async function handle(req, env, f = fetch) {
       const r = await tg(env, 'sendMessage', { chat_id: a.chat_id, text: format({ kind: 'alert', data: a }, lang), reply_markup: buttons(a, 'orders', lang) }, f);
       if (r.blocked) await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: a.chat_id, p_blocked: true }, null, f).catch(() => {});
       return json({ sent: r.ok, error: r.ok ? undefined : r.error });
+    }
+    if (path.endsWith('/ticket-reply')) {
+      // the admin page, right after the owner answered a ticket: the answer also goes to the client's Telegram
+      const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!token || token === env.SUPABASE_ANON_KEY) return json({ error: 'auth' }, 401);
+      const b = await req.json();
+      const r = await rpc(env, 'admin_ticket_tg', { p_id: Number(b.id) || 0 }, token, f); // checks is_admin()
+      if (!r?.chat_id) return json({ sent: false, reason: 'no_telegram' });
+      const lang = langOf(r.lang);
+      const s = await tg(env, 'sendMessage', { chat_id: r.chat_id, text: T(lang).ticketReply(r.id, String(r.reply).slice(0, 3500)), reply_markup: menuKb(lang) }, f);
+      if (s.blocked) await rpc(env, 'bot_unlink', { p_key: env.BOT_KEY, p_chat_id: r.chat_id, p_blocked: true }, null, f).catch(() => {});
+      return json({ sent: s.ok, error: s.ok ? undefined : s.error });
     }
     if (path.endsWith('/run')) {
       if (!sameSecret(req.headers.get('x-bot-key'), env.BOT_KEY)) return json({ error: 'forbidden' }, 401);

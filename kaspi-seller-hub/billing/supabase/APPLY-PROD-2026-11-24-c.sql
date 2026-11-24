@@ -1,3 +1,4 @@
+-- ⚠️ SUPERSEDED by APPLY-PROD-2026-11-24-d.sql (it contains everything below plus 032). Run -d instead.
 -- SaudaPulse: production update 24.11.2026 (c): security-audit fixes (SECURITY-AUDIT-2026-11-24.md) + payer phone confirmed in Telegram.
 -- Run ONCE in Supabase → SQL Editor. Production already has 001–029. This applies 030_audit_fixes.sql, 031_phone_verified.sql, then grants.sql. Safe to run again.
 -- After it: redeploy the telegram-bot Edge Function (supabase functions deploy telegram-bot --no-verify-jwt).

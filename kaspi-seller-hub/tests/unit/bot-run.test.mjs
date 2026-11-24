@@ -150,6 +150,8 @@ await t('bot replies: /start, /stop, help and order alerts in the client\'s lang
     if (url.endsWith('/rpc/bot_link')) return new Response(JSON.stringify(linkOk ? { ok: true, shops: ['Дүкен'], app_url: 'https://a.kz' } : { ok: false }), { status: 200 });
     if (url.endsWith('/rpc/bot_unlink')) return new Response('null', { status: 200 });
     if (url.endsWith('/rpc/alert_create')) return new Response(JSON.stringify({ chat_id: 9, code: '77', shop: 'S', minutes: 20, app_url: 'https://a.kz' }), { status: 200 });
+    // no answer base (migration 032 not applied yet): the bot falls back to the short help
+    if (url.includes('/rpc/')) return new Response('{"message":"function not found"}', { status: 404 });
     sentTexts.push(body);
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };

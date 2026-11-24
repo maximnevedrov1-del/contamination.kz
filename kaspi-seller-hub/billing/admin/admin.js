@@ -218,6 +218,7 @@
     if (tab === 'flags') return renderFlags(panel);
     if (tab === 'errors') return renderErrors(panel);
     if (tab === 'ux') return renderUx(panel);
+    if (tab === 'faq') return renderFaq(panel);
     const [page, review] = await Promise.all([
       rpc('admin_invoices', { p_status: tab === 'pending' ? 'pending' : tab === 'paid' ? 'paid' : 'all', p_search: view.search || null, p_limit: view.limit, p_offset: 0 }),
       // automatic payments that need a look (migration 028; before it the call fails → no block)
@@ -658,6 +659,89 @@
     );
   }
 
+
+  /* ---------- «База ответов»: what the Telegram bot answers (032_support_bot.sql) ---------- */
+  const FAQ_TOPIC = { connect: 'Подключение', orders: 'Заказы и сводка', print: 'Печать', payment: 'Оплата', goods: 'Товары и склад', bot: 'Telegram-бот' };
+  const QFILTER = { unanswered: 'Без ответа', not_helped: '«Не помогло»', all: 'Все вопросы' };
+  let qFilter = 'unanswered';
+  let faqDraft = null; // the answer being edited ({} = a new one)
+
+  async function renderFaq(panel) {
+    const [base, qs] = await Promise.all([rpc('admin_faq'), rpc('admin_bot_questions', { p_filter: qFilter, p_limit: 100 })]);
+    const st = qs.stats || {};
+    const tiles = el('div', { class: 'tiles' },
+      tile('Вопросов в боте', st.asked || 0, 'за 7 дней'),
+      tile('Ответила база', st.asked ? pct(st.answered, st.asked) + ' %' : '—', `${st.answered || 0} из ${st.asked || 0}`),
+      tile('Без ответа', st.unanswered || 0, 'добавьте ответы ниже'),
+      tile('«Помогло»', st.helped + st.not_helped ? pct(st.helped, st.helped + st.not_helped) + ' %' : '—', `${st.helped || 0} 👍 · ${st.not_helped || 0} 👎`),
+      tile('Ушло в поддержку', st.tickets || 0, 'после ответа бота'));
+    const filter = el('select', { 'aria-label': 'Какие вопросы', onchange: (e) => ((qFilter = e.target.value), render()) },
+      Object.entries(QFILTER).map(([k, v]) => el('option', { value: k, selected: k === qFilter }, v)));
+    const questions = qs.items.length
+      ? el('table', null,
+        el('thead', null, el('tr', null, ['Когда', 'Кто', 'Вопрос', 'Ответ бота', ''].map((h) => el('th', null, h)))),
+        el('tbody', null, qs.items.map((x) => el('tr', null,
+          el('td', { class: 'muted' }, date(x.created_at, true)),
+          el('td', null, x.name || '—', ' ', el('span', { class: 'badge' }, x.lang === 'kk' ? 'KZ' : 'RU')),
+          el('td', null, x.text, x.ticket_id ? el('span', { class: 'badge badge--info', style: 'margin-left:6px' }, `→ вопрос №${x.ticket_id}`) : null),
+          el('td', { class: 'muted' }, x.faq ? `${x.faq}${x.helped === false ? ' 👎' : x.helped ? ' 👍' : ''}` : '—'),
+          el('td', null, el('button', { type: 'button', class: 'btn', onclick: () => {
+            faqDraft = x.faq_id && x.helped === false ? base.find((f) => f.id === x.faq_id) || {} : { [x.lang === 'kk' ? 'question_kk' : 'question_ru']: x.text.slice(0, 100), keywords: '' };
+            render();
+          } }, x.faq_id && x.helped === false ? 'Исправить ответ' : 'Добавить в базу'))))))
+      : el('p', { class: 'muted' }, qFilter === 'unanswered' ? 'Все вопросы нашли ответ.' : 'Пока пусто.');
+    const byTopic = Object.keys(FAQ_TOPIC).map((k) => [k, base.filter((f) => f.topic === k)]).filter(([, l]) => l.length);
+    const list = byTopic.map(([k, l]) => el('div', null, el('h3', null, FAQ_TOPIC[k]),
+      l.map((f) => el('section', { class: 'ticket', 'data-faq': f.id },
+        el('div', { class: 'row', style: 'margin:0' },
+          el('b', null, f.question_ru), f.enabled ? null : el('span', { class: 'badge badge--warn' }, 'выключен'),
+          el('span', { class: 'muted' }, `показан ${f.shown} · 👍 ${f.helped} · 👎 ${f.not_helped}`),
+          el('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((faqDraft = f), render()) }, 'Изменить')),
+        el('div', { class: 'muted small' }, 'Ключевые слова: ', f.keywords || '—')))));
+    panel.replaceChildren(
+      el('p', { class: 'muted', style: 'margin-top:0' }, 'Бот ищет ответ по ключевым словам: слово срабатывает по началу («токен» найдёт «токена»), фраза — если в вопросе есть все её слова. Правки работают сразу, бота перевыкладывать не нужно.'),
+      tiles,
+      faqDraft ? faqForm(faqDraft) : el('div', { class: 'row' }, el('button', { type: 'button', class: 'btn btn--primary', onclick: () => ((faqDraft = {}), render()) }, '+ Новый ответ')),
+      el('section', { class: 'block' }, el('h2', null, 'Что спрашивают в боте'), el('div', { class: 'row', style: 'margin:0 0 8px' }, filter), questions),
+      el('section', { class: 'block' }, el('h2', null, `Ответы (${base.length})`), ...list));
+  }
+
+  function faqForm(f) {
+    const field = (label, node) => el('label', { style: 'display:grid;gap:4px;margin-top:8px' }, el('span', { class: 'muted' }, label), node);
+    const input = (v, max) => el('input', { class: 'input', value: v || '', maxlength: max, style: 'width:100%' });
+    const topic = el('select', null, Object.entries(FAQ_TOPIC).map(([k, v]) => el('option', { value: k, selected: k === (f.topic || 'connect') }, v)));
+    const qRu = input(f.question_ru, 100), qKk = input(f.question_kk, 100);
+    const aRu = el('textarea', { maxlength: 1500, style: 'height:110px' }, f.answer_ru || ''), aKk = el('textarea', { maxlength: 1500, style: 'height:110px' }, f.answer_kk || '');
+    const kw = input(f.keywords, 1000);
+    const sort = el('input', { class: 'input', type: 'number', value: f.sort ?? 100, style: 'width:90px;min-width:0' });
+    const enabled = el('input', { type: 'checkbox', checked: f.enabled !== false });
+    const save = async () => {
+      try {
+        await rpc('admin_faq_save', { p: { id: f.id || null, topic: topic.value, question_ru: qRu.value, question_kk: qKk.value, answer_ru: aRu.value, answer_kk: aKk.value, keywords: kw.value, sort: Number(sort.value) || 100, enabled: enabled.checked } });
+        faqDraft = null;
+        toast('Сохранено — бот уже отвечает так');
+        render();
+      } catch (e) {
+        toast(/check/.test(e.message) ? 'Заполните вопрос и ответ на обоих языках' : e.message, true);
+      }
+    };
+    const del = async () => {
+      if (!confirm('Удалить этот ответ? Счётчики тоже пропадут. Можно вместо этого выключить.')) return;
+      try { await rpc('admin_faq_delete', { p_id: f.id }); faqDraft = null; toast('Удалено'); render(); } catch (e) { toast(e.message, true); }
+    };
+    return el('section', { class: 'block', style: 'border:1px solid var(--border);border-radius:10px;padding:12px 14px' },
+      el('h2', { style: 'margin-top:0' }, f.id ? 'Изменить ответ' : 'Новый ответ'),
+      el('div', { class: 'row', style: 'margin:0' }, field('Тема', topic), field('Порядок', sort), el('label', { class: 'row' }, enabled, 'Включён')),
+      el('div', { class: 'grid-2' },
+        el('div', null, field('Вопрос (RU) — так он виден в меню бота', qRu), field('Ответ (RU)', aRu)),
+        el('div', null, field('Сұрақ (KZ)', qKk), field('Жауап (KZ)', aKk))),
+      field('Ключевые слова через запятую, RU и KZ: начала слов или фразы («неверн токен, не обновл, жаңармай»)', kw),
+      el('div', { class: 'row' },
+        el('button', { type: 'button', class: 'btn btn--primary', onclick: save }, 'Сохранить'),
+        el('button', { type: 'button', class: 'btn', onclick: () => ((faqDraft = null), render()) }, 'Отмена'),
+        f.id ? el('button', { type: 'button', class: 'btn btn--danger', onclick: del }, 'Удалить') : null));
+  }
+
   /* ---------- «Вопросы»: support tickets from the extension ---------- */
   // Ready answers for repeated questions (kept in this browser): one click instead of typing.
   const TPL_KEY = 'kshAdmin.templates';
@@ -696,7 +780,9 @@
     const save = (close) => async () => {
       try {
         await rpc('admin_ticket_reply', { p_id: x.id, p_reply: reply.value, p_close: close });
-        toast(close ? 'Ответ отправлен, вопрос закрыт' : 'Ответ отправлен');
+        // the answer also goes to the client's Telegram, if the bot is linked (bot route /ticket-reply, migration 032)
+        const tgSent = await token().then((tk) => http('/functions/v1/telegram-bot/ticket-reply', { id: x.id }, tk)).then((r) => !!r?.sent).catch(() => false);
+        toast((close ? 'Ответ отправлен, вопрос закрыт' : 'Ответ отправлен') + (tgSent ? ' (и в Telegram)' : ''));
         render();
       } catch (e) {
         toast(e.message, true);
