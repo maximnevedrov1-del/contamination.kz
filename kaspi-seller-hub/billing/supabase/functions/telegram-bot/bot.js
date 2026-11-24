@@ -22,6 +22,11 @@ const money = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) 
 const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many; };
 const ddmm = (day) => { const [, m, d] = String(day).split('-'); return `${d}.${m}`; };
 const hhmmAlmaty = (iso) => new Date(new Date(iso).getTime() + 5 * 3600000).toISOString().slice(11, 16);
+/** Part of the day by Kazakhstan time (UTC+5) at send time: 04–11 morning, 12–17 day, otherwise evening. */
+export const dayPart = (now = new Date()) => {
+  const h = new Date(new Date(now).getTime() + 5 * 3600000).getUTCHours();
+  return h >= 4 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'day' : 'evening';
+};
 
 /**
  * Every text the bot sends, in the client's interface language (accounts.lang, 029_client_language.sql).
@@ -32,7 +37,7 @@ export const TEXTS = {
   ru: {
     btnOrders: '📦 Посмотреть заказы',
     btnSupport: '💬 Поддержка',
-    hello: (name) => `☀️ Доброе утро${name ? `, ${name}` : ''}!`,
+    hello: (name, part = 'morning') => `${{ morning: '☀️ Доброе утро', day: '🌤 Добрый день', evening: '🌙 Добрый вечер' }[part]}${name ? `, ${name}` : ''}!`,
     summary: (dm) => `📊 Сводка по вашим магазинам за вчера (${dm}):`,
     ordered: (n, sum) => `📦 Заказов оформлено: ${n} (на сумму ${sum})`,
     shipped: (n) => `🚚 Успешно отправлено: ${n}`,
@@ -66,7 +71,7 @@ export const TEXTS = {
   kk: {
     btnOrders: '📦 Тапсырыстарды көру',
     btnSupport: '💬 Қолдау',
-    hello: (name) => `☀️ Қайырлы таң${name ? `, ${name}` : ''}!`,
+    hello: (name, part = 'morning') => `${{ morning: '☀️ Қайырлы таң', day: '🌤 Қайырлы күн', evening: '🌙 Қайырлы кеш' }[part]}${name ? `, ${name}` : ''}!`,
     summary: (dm) => `📊 Дүкендеріңіз бойынша кешегі қорытынды (${dm}):`,
     ordered: (n, sum) => `📦 Рәсімделген тапсырыстар: ${n} (сомасы ${sum})`,
     shipped: (n) => `🚚 Сәтті жөнелтілді: ${n}`,
@@ -114,7 +119,7 @@ export const phoneKeyboard = (lang = 'ru') => ({ keyboard: [[{ text: T(lang).btn
 const fmtPhone = (p) => { const d = String(p || ''); return /^77\d{9}$/.test(d) ? `+7 ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}` : d; };
 
 /** Text of each message kind, in `lang` ('ru' | 'kk'). */
-export function format(item, lang = 'ru') {
+export function format(item, lang = 'ru', now = new Date()) {
   const t = T(lang);
   const d = item.data || {};
   if (item.kind === 'morning') {
@@ -122,7 +127,7 @@ export function format(item, lang = 'ru') {
     const risk = Array.isArray(s.at_risk) ? s.at_risk : [];
     const list = `${risk.slice(0, 5).map((r) => `№${r.code}${r.shop ? ` (${r.shop})` : ''}`).join(', ')}${risk.length > 5 ? '…' : ''}`;
     const lines = [
-      t.hello(d.name),
+      t.hello(d.name, dayPart(now)),
       t.summary(ddmm(d.day)),
       '',
       t.ordered(s.orders || 0, money(s.sum)),

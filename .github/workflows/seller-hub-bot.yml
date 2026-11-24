@@ -3,9 +3,15 @@
 # (kaspi-seller-hub/billing/README.md → «Telegram-бот для продавцов»).
 name: seller-hub-bot
 
+# GitHub starts scheduled runs late (hours late at :00 — the digest came at 17:16–19:32 Almaty),
+# so there are several tries off the round hour. Each digest is sent once per user and day
+# (tg_sent dedupes by kind + key), so the later tries only send what an earlier one missed.
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '7 4 * * *'   # 09:07 Almaty
+    - cron: '37 4 * * *'  # 09:37
+    - cron: '7 5 * * *'   # 10:07
+    - cron: '7 6 * * *'   # 11:07
   workflow_dispatch:
 
 permissions:
