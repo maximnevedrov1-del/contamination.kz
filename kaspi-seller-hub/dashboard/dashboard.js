@@ -2942,6 +2942,21 @@ function viewHome() {
       )
     : null;
 
+  // Orders came by token; assortment and stock come only from the store's price list (Kaspi's API has no product list)
+  const noPriceList = enabledStores().filter((s) => s.api?.connected && state.stockState && !state.stockState.imported?.[s.id]);
+  const priceListEl = noPriceList.length
+    ? h('section', { class: 'card home-pricelist', dataset: { card: 'pricelist' } },
+        h('div', { class: 'card__header' }, h('div', null,
+          h('h2', { class: 'card__title' }, t('home.priceList.title')),
+          h('div', { class: 'card__sub' }, t('home.priceList.text', { stores: noPriceList.map((s) => s.alias || s.name).join(', ') })))),
+        h('div', { class: 'card__body' },
+          h('ol', { class: 'small', style: { margin: '0 0 12px', paddingLeft: '20px', display: 'grid', gap: '4px' } },
+            h('li', null, t('home.priceList.step1')),
+            h('li', null, t('home.priceList.step2')),
+            h('li', null, t('home.priceList.step3'))),
+          h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'pricelist-import' }, onclick: () => (location.hash = 'catalog') }, t('home.priceList.action'))))
+    : null;
+
   // NPS (when the server says it is time) — a card, never a blocking window
   const npsEl = state.feedbackDue === 'nps' || feedbackUi.nps.done ? npsCard(npsCtx()) : null;
 
@@ -2949,7 +2964,7 @@ function viewHome() {
   const stepsEl = onboardingCard(onboardCtx());
 
   // new seller: first steps on top; working seller: today's tasks and numbers first
-  return enabledStores().length ? h('div', { class: 'home' }, todoCard, npsEl, stepsEl, tilesEl, storesEl) : h('div', { class: 'home' }, stepsEl);
+  return enabledStores().length ? h('div', { class: 'home' }, priceListEl, todoCard, npsEl, stepsEl, tilesEl, storesEl) : h('div', { class: 'home' }, stepsEl);
 }
 
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
@@ -3293,6 +3308,7 @@ async function loadState() {
     getOnboarding(),
     getCsat(),
   ]);
+  state.stockState = await send('ui:stockState').catch(() => null); // which stores have their price list (assortment + stock)
   Object.assign(state, { data, staffInfo, chat, costs, photos, catalog, onboard, csat });
   state.tickets = local['ksh.tickets'] || null;
   state.packProblems = (local['ksh.packLog'] || []).filter((r) => r.action === 'problem' && r.at > Date.now() - 86400000);

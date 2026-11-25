@@ -18,6 +18,7 @@ import { isAllowedPhoto, photosDataSize, MAX_PHOTOS_DATA } from '../shared/photo
 import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
+import { applyOrderStock, seedLedger } from '../shared/stock-moves.js';
 
 const LOG = '[KSH catalog]';
 const A = () => globalThis.KSH_SELECTORS.api;
@@ -113,6 +114,34 @@ export async function syncFeeds(shopIds, { force = false, allowDrop = false } = 
     });
   }
   return out;
+}
+
+/* ---------------- stock write-off from shipped orders ---------------- */
+
+const STOCK_LEDGER_KEY = 'ksh.stockLedger'; // { [shopId::orderId]: { at, lines, back? } }
+const STOCK_MOVES_KEY = 'ksh.stockMoves'; // last movements, for «Выгрузка товаров»
+
+/**
+ * After every sync: orders packed / handed to the courier / delivered since the price list was
+ * imported take their quantities off the store's stock (once per order); a cancellation after
+ * packing puts them back (shared/stock-moves.js). Changed stores get a fresh price list, so
+ * Kaspi shows the same stock within its hourly re-read.
+ */
+export async function applyStockFromOrders() {
+  if ((await getSettings()).readOnly) return { count: 0 };
+  let res = { count: 0, changedShops: [] };
+  await lock(async () => {
+    const [catalog, feeds, snaps, got] = await Promise.all([getCatalog(), getFeeds(), getSnapshots(), chrome.storage.local.get([STOCK_LEDGER_KEY, STOCK_MOVES_KEY])]);
+    const importedAt = Object.fromEntries(Object.entries(feeds).filter(([, f]) => f?.importedAt).map(([id, f]) => [id, f.importedAt]));
+    if (!Object.keys(importedAt).length) return;
+    const ordersByShop = Object.fromEntries(Object.entries(snaps).filter(([id]) => importedAt[id]).map(([id, sn]) => [id, sn?.sections?.orders?.items || []]));
+    res = applyOrderStock({ catalog, ledger: got[STOCK_LEDGER_KEY] || {}, ordersByShop, importedAt, moves: got[STOCK_MOVES_KEY] || [] });
+    if (!res.count) return;
+    if (res.changedShops.length) await setCatalog(res.catalog);
+    await chrome.storage.local.set({ [STOCK_LEDGER_KEY]: res.ledger, [STOCK_MOVES_KEY]: res.moves });
+  });
+  if (res.changedShops?.length) scheduleFeedSync(res.changedShops);
+  return res;
 }
 
 /* ---------------- card uploads (Content API) ---------------- */
@@ -314,6 +343,9 @@ export function catalogHandlers({ allowedShopIds }) {
         const wh = [...new Set((warehouses || []).filter((w) => WAREHOUSE_RE.test(w)))];
         feeds[shopId] = { ...f, merchantId: f.merchantId || merchantId || '', company: f.company || company || '', warehouses: f.warehouses?.length ? f.warehouses : wh.length ? wh : ['PP1'], importedAt: Date.now(), importedCount: (offers || []).length };
         await setFeeds(feeds);
+        // the imported stock already accounts for orders shipped so far: never write those off
+        const [snaps, got] = await Promise.all([getSnapshots(), chrome.storage.local.get(STOCK_LEDGER_KEY)]);
+        await chrome.storage.local.set({ [STOCK_LEDGER_KEY]: seedLedger(got[STOCK_LEDGER_KEY], shopId, snaps[shopId]?.sections?.orders?.items || []) });
       });
       scheduleFeedSync([shopId]);
       return { ok: true, added: res.added, updated: res.updated };
@@ -329,6 +361,12 @@ export function catalogHandlers({ allowedShopIds }) {
       });
       if (confirmed) return { ok: true, sync: (await syncFeeds([shopId], { force: true }))[shopId] };
       return { ok: true };
+    },
+
+    /** Has each store's price list been imported (assortment + stock)? and the latest stock movements. */
+    'ui:stockState': async () => {
+      const [feeds, got] = await Promise.all([getFeeds(), chrome.storage.local.get(STOCK_MOVES_KEY)]);
+      return { ok: true, imported: Object.fromEntries(Object.entries(feeds).map(([id, f]) => [id, f?.importedAt || null])), moves: (got[STOCK_MOVES_KEY] || []).slice(-50).reverse() };
     },
 
     'ui:feedSync': async ({ shopIds, allowDrop }) => ({ ok: true, results: await syncFeeds(shopIds || [], { force: true, allowDrop: !!allowDrop }) }),

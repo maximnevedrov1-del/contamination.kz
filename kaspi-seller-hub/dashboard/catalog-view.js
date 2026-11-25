@@ -39,7 +39,8 @@ export function createCatalogView(ui) {
     if (cat.loading) return;
     cat.loading = true;
     try {
-      const res = await send('ui:catalogState');
+      const [res, stock] = await Promise.all([send('ui:catalogState'), send('ui:stockState').catch(() => null)]);
+      cat.moves = stock?.moves || [];
       if (res?.ok) (cat.data = res), (cat.error = null);
       else cat.error = res?.error || 'noResponse';
     } finally {
@@ -387,7 +388,27 @@ export function createCatalogView(ui) {
     return h('div', { class: 'catalog' },
       h('section', { class: 'card', style: { marginBottom: '16px' } }, h('div', { class: 'card__body' }, toolbar, table)),
       list.length ? feedCard() : null,
+      list.length ? movesCard() : null,
     );
+  }
+
+  /* ---------- «Движение остатков»: write-offs after shipment, returns of cancelled orders ---------- */
+  function movesCard() {
+    const moves = cat.moves || [];
+    return h('section', { class: 'card', dataset: { card: 'stock-moves' } },
+      h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('catalog.moves.title')), h('div', { class: 'card__sub' }, t('catalog.moves.sub')))),
+      h('div', { class: 'card__body' },
+        moves.length
+          ? h('table', { class: 'table small' },
+              h('thead', null, h('tr', null, ['when', 'store', 'order', 'sku', 'qty', 'left'].map((k) => h('th', null, t(`catalog.moves.${k}`))))),
+              h('tbody', null, moves.slice(0, 30).map((m) => h('tr', null,
+                h('td', null, formatRelative(m.at)),
+                h('td', null, ui.storeName(m.shopId)),
+                h('td', null, `№ ${m.orderId}`),
+                h('td', null, m.sku),
+                h('td', null, m.note === 'empty' ? t('catalog.moves.empty') : h('b', { style: { color: m.qty < 0 ? 'var(--danger, #b91c1c)' : 'var(--ok, #047857)' } }, m.qty > 0 ? `+${m.qty}` : String(m.qty))),
+                h('td', null, String(m.left))))))
+          : h('p', { class: 'muted' }, t('catalog.moves.none'))));
   }
 
   return { view, reload: load, isSkuValid: (s) => SKU_RE.test(s) };
