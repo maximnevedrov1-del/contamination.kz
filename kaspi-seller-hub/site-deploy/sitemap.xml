@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://saudapulse.kz/</loc><lastmod>2026-11-23</lastmod></url>
-  <url><loc>https://saudapulse.kz/kk/</loc><lastmod>2026-11-23</lastmod></url>
-  <url><loc>https://saudapulse.kz/offer</loc><lastmod>2026-11-23</lastmod></url>
-  <url><loc>https://saudapulse.kz/privacy</loc><lastmod>2026-11-23</lastmod></url>
-  <url><loc>https://saudapulse.kz/legal/terms.html</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://saudapulse.kz/</loc></url>
+  <url><loc>https://saudapulse.kz/?lang=kk</loc></url>
+  <url><loc>https://saudapulse.kz/offer</loc></url>
+  <url><loc>https://saudapulse.kz/privacy</loc></url>
 </urlset>

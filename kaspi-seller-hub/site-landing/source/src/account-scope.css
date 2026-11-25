@@ -1,0 +1,80 @@
+.account-access-scope { margin: 0 0 30px; padding: 32px; background: #d1fae5; border: 1px solid #cbd5e1; border-radius: 20px; box-shadow: 0 16px 44px #344b2510; color: #0f172a; }
+.account-scope-heading { display: flex; align-items: center; gap: 18px; }
+.account-scope-symbol { width: 64px; height: 64px; display: grid; place-items: center; flex: 0 0 auto; background: #10b981; color: #0f172a; border: 1px solid #10b981; border-radius: 18px; }
+.account-access-scope svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.account-scope-symbol svg { width: 32px; height: 32px; }
+.account-scope-eyebrow { display: block; color: #047857; font-size: 14px; line-height: 1.5; margin-bottom: 8px; }
+.account-scope-heading h3 { margin: 0; font-size: clamp(28px,3vw,42px); line-height: 1.12; letter-spacing: -.04em; }
+.account-scope-heading h3 span { color: #047857; }
+.account-scope-tag { margin-left: auto; align-self: flex-start; background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 100px; color: #047857; font-size: 14px; font-weight: 700; }
+.account-scope-intro { max-width: 770px; margin: 22px 0 24px; color: #3c4654; }
+.account-scope-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; }
+.account-shop-card, .account-bank-card { border-radius: 14px; padding: 24px; min-width: 0; }
+.account-shop-card { background: #161e28; color: #d1fae5; border: 1px solid #374353; }
+.account-bank-card { background: #f5f8fb; border: 1px dashed #8997aa; color: #0f172a; }
+.account-card-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.account-card-heading > div { flex: 1; min-width: 140px; }
+.account-card-heading h4 { margin: 0 0 4px; font-size: 19px; line-height: 1.3; letter-spacing: -.025em; }
+.account-card-heading small { display: block; color: #a7f3d0; font-size: 14px; }
+.account-bank-card .account-card-heading small { color: #047857; }
+.account-card-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 11px; background: #065f46; color: #6ee7b7; }
+.account-bank-card .account-card-icon { background: #ecfdf5; color: #4f5b6c; }
+.account-access-pill { font-size: 14px; font-weight: 700; padding: 7px 10px; background: #065f46; border: 1px solid #10b981; color: #6ee7b7; border-radius: 100px; white-space: nowrap; }
+.account-bank-card .account-access-pill { background: #ecfdf5; color: #047857; border-color: #cbd5e1; }
+.account-token-route { display: flex; align-items: center; gap: 10px; min-height: 84px; padding: 16px 0; font-size: 14px; font-weight: 700; }
+.account-token-route > span { white-space: nowrap; }
+.account-token-route b { color: #10b981; padding: 7px 10px; border: 1px solid #10b981; border-radius: 8px; white-space: nowrap; }
+.account-token-route i { flex: 1; min-width: 15px; height: 2px; background: #34d399; position: relative; }
+.account-token-route i::after { content: ''; position: absolute; right: 0; top: -3px; width: 7px; height: 7px; border-right: 2px solid #10b981; border-top: 2px solid #10b981; transform: rotate(45deg); }
+.account-scope-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-top: 1px solid #3b4451; padding: 14px 0; font-size: 14px; line-height: 1.55; }
+.account-scope-row:last-child { padding-bottom: 0; }
+.account-scope-row > span { display: flex; align-items: flex-start; gap: 8px; }
+.account-scope-row svg { width: 17px; height: 17px; flex: 0 0 auto; margin-top: 3px; color: #10b981; }
+.account-scope-row b { text-align: right; font-weight: 600; color: #a7f3d0; }
+.account-bank-card .account-scope-row { border-color: #cbd5e1; }
+.account-bank-card .account-scope-row b { color: #047857; }
+.account-bank-boundary { display: flex; align-items: flex-start; gap: 10px; padding: 18px 0; min-height: 84px; }
+.account-bank-boundary > span { flex: 0 0 auto; color: #047857; }
+.account-bank-boundary b { display: block; font-size: 15px; line-height: 1.5; }
+.account-bank-boundary small { display: block; font-size: 14px; color: #047857; margin-top: 5px; }
+.account-credential-note { display: flex; align-items: flex-start; gap: 12px; margin-top: 22px; padding: 16px 19px; border: 1px solid #cbd5e1; background: #ebf0f6; border-radius: 12px; }
+.account-credential-note > span { flex: 0 0 auto; margin-top: 2px; color: #047857; }
+.account-credential-note p { margin: 0; color: #064e3b; }
+.account-data-explainer { margin-top: 15px; padding: 16px 19px; border: 1px solid #cbd5e1; background: #ecfdf5; border-radius: 12px; }
+.account-data-explainer summary { cursor: pointer; font-size: 16px; font-weight: 700; line-height: 1.6; color: #064e3b; }
+.account-data-explainer summary:focus-visible { outline: 3px solid #047857; outline-offset: 4px; border-radius: 4px; }
+.account-data-explainer p { margin: 17px 0 0; color: #064e3b; max-width: 850px; }
+.account-data-explainer a { display: inline-block; margin-top: 18px; font-size: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; color: #064e3b; }
+.connection-section[data-running='true']:not([data-phase='0']) .account-token-route i { animation: account-api-activity 2.8s ease-in-out infinite; }
+@keyframes account-api-activity { 50% { background: #10b981; box-shadow: 0 0 0 3px #a8cf5522; } }
+@media(max-width:1050px) {
+  .account-scope-grid { grid-template-columns: minmax(0,1fr); }
+  .account-token-route { max-width: 500px; }
+  .account-shop-card, .account-bank-card { padding: 22px; }
+}
+@media(max-width:600px) {
+  .account-access-scope { padding: 22px 16px; border-radius: 16px; }
+  .account-scope-heading { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .account-scope-symbol { width: 48px; height: 48px; border-radius: 13px; }
+  .account-scope-symbol svg { width: 26px; height: 26px; }
+  .account-scope-heading > div { flex: 1; min-width: 175px; }
+  .account-scope-heading h3 { font-size: 28px; }
+  .account-scope-tag { margin-left: 0; }
+  .account-scope-eyebrow { font-size: 14px; }
+  .account-shop-card, .account-bank-card { padding: 18px 14px; }
+  .account-card-heading > div { min-width: 135px; }
+  .account-token-route { flex-wrap: wrap; gap: 8px; padding: 20px 0; }
+  .account-token-route > span, .account-token-route b { font-size: 14px; }
+  .account-token-route i { min-width: 8px; }
+  .account-scope-row { gap: 8px; }
+  .account-scope-row > span { flex: 1; min-width: 0; }
+  .account-scope-row b { max-width: 115px; }
+  .account-credential-note, .account-data-explainer { padding: 15px 13px; }
+}
+@media(prefers-reduced-motion:reduce) { .connection-section .account-token-route i { animation: none !important; } }
+
+.connection-bank-note { padding: 14px 17px; background: #d1fae5; border: 1px solid #cbd5e1; border-left: 4px solid #10b981; border-radius: 10px; margin: 16px 0 19px !important; color: #064e3b !important; }
+.connection-bank-note strong, .connection-bank-note small { display: block; }
+.connection-bank-note strong { font-size: 16px; line-height: 1.5; }
+.connection-bank-note small { font-size: 14px; line-height: 1.6; margin-top: 6px; color: #064e3b; }
+.account-access-scope { margin-top: 26px; }

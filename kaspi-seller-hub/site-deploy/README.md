@@ -1,8 +1,10 @@
-# saudapulse.kz — the site as uploaded
+# saudapulse.kz — the site as published (Cloudflare Pages project «saudapulse» deploys this folder)
 
-Built by `node tools/build-app.mjs && node tools/build-site-package.mjs` (output `dist/site-package/`, copied here
-so the version that goes live is kept in git). Upload the contents of this folder as they are
-(Cloudflare Pages → Upload assets). `README.md` itself is harmless on the site.
+Built by `node tools/build-app.mjs && node tools/build-site-package.mjs` (output `dist/site-package/`, copied here).
 
-2026-11-25: landing fixed for phones and tablets (headline, lead text and buttons no longer run off the
-screen at 320–430 px; header at 768 px), «Установить» on every landing page, phone app at /app.
+- `/` — the landing made in Manus (`site-landing/index.html`, editable sources in `site-landing/source/`),
+  Russian and Kazakh in one page (`/?lang=kk`; the old `/kk/` address redirects there).
+- `/offer`, `/privacy`, `/legal` — legal pages; `/captcha` — Turnstile page for the extension.
+- `/app` — the phone app (PWA). `/install-button.js` — «Установить» on every page:
+  computer → the landing's own install button logic (extension / store / #install section),
+  phone and tablet → `/app/?install=1` (also the landing's own «Установить бесплатно» buttons).

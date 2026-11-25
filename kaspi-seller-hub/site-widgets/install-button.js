@@ -6,7 +6,7 @@
  *           data-store-url="https://chromewebstore.google.com/detail/<id>"></script>
  *
  *  - Computer / laptop: floating button bottom-right → the extension in the Chrome Web Store
- *    (until the store link is known: to the «Как подключить» section, /#how).
+ *    (until the store link is known: to the landing's install section, /#install).
  *  - Tablet (iPad, Android tablet): floating button bottom-right → the phone app, because
  *    tablets cannot run Chrome extensions.
  *  - Phone: a bar at the bottom → /app/?install=1, the app opens with its install step
@@ -86,15 +86,45 @@
     ]);
     box.insertBefore(closeBtn(box), box.firstChild);
   } else {
-    var href = tablet ? appUrl : storeUrl || (location.pathname.indexOf('/kk') === 0 ? '/kk/#how' : '/#how');
+    // no store link yet: the landing's own install section (#install)
+    var href = tablet ? appUrl : storeUrl || (document.getElementById('install') ? '#install' : '/#install');
     var link = el('a', { href: href, 'data-spi': tablet ? 'tablet' : 'desktop' }, [
       el('span', { 'aria-hidden': 'true', style: 'font-size:18px' }, ['⬇']),
       tablet ? T.app : T.ext
     ]);
     if (!tablet && storeUrl) { link.target = '_blank'; link.rel = 'noopener'; }
+    // the landing has its own install logic (Manus: [data-sp-install] — opens the extension if it is
+    // installed, else the store, else its #install section): the floating button reuses it
+    if (!tablet && !storeUrl) {
+      link.addEventListener('click', function (e) {
+        var own = document.querySelector('[data-sp-install]');
+        if (own) {
+          e.preventDefault();
+          own.click();
+          return;
+        }
+        var target = href.charAt(0) === '#' && document.querySelector(href);
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
     box = el('div', { class: 'spi spi-fab' }, [link]);
     box.insertBefore(closeBtn(box), link);
   }
+  // Phones and tablets cannot run the Chrome extension: the landing's own «Установить» buttons
+  // ([data-sp-install], Manus landing) open the phone app instead of the desktop instructions.
+  if (phone || tablet) {
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest && e.target.closest('[data-sp-install]');
+      if (!a) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      location.href = appUrl;
+    }, true);
+  }
+
   function mount() {
     document.body.appendChild(box);
     if (phone) document.documentElement.classList.add('spi-phone');

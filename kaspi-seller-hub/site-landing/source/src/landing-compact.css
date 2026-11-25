@@ -1,0 +1,107 @@
+/* A shorter journey, with the original lime palette and full-size interfaces. */
+.hero { padding-block: 54px 64px; }
+.hero-title-line { display: inline-block; }
+.hero-proof { margin-top: 28px; }
+.hero-actions .text-link { display: inline-flex; align-items: center; min-height: 44px; padding-block: 10px; }
+.process-section, .assembly-section, .time-section, .connection-section, .pricing-section { padding-block: 64px; }
+.process-section, .assembly-section { border-top: 1px solid var(--line); }
+.process-section > .live-demo-section, .process-section > .product-preview,
+.assembly-section > .express-section { width: 100%; margin: 0; padding: 0; border-top: 0; }
+.process-section > .product-preview { margin-top: 48px; }
+.gallery-heading { margin-bottom: 20px; }
+.gallery-heading h3 { font-size: 24px; letter-spacing: -.035em; margin-bottom: 8px; }
+.gallery-heading p { color: #424c5b; margin-bottom: 0; }
+.process-section > .role-demo { width: 100%; margin: 28px 0 0; }
+.role-demo-head h3 { font-size: 28px; line-height: 1.2; }
+.role-demo-head .section-kicker { display: none; }
+.live-demo-heading, .express-heading, .connection-heading, .picker-section-heading { margin-bottom: 28px; }
+#compare .picker-comparison { margin-top: 48px; padding-top: 40px; border-top: 1px solid var(--line); }
+.picker-method, .express-rules, .connect-policy { margin-top: 20px; }
+.time-copy { max-width: 780px; }
+.time-copy p { margin-bottom: 0; }
+.calculator-note { color: #444f5e; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.pricing-section .section-intro::before, .pricing-section .section-intro::after { display: none; content: none !important; }
+.pricing-section .section-intro { margin-bottom: 30px; }
+.pricing-section .section-intro p { max-width: 640px; }
+.price-unit { display: block; font-size: 14px; font-weight: 600; letter-spacing: 0; color: #424c5b; margin-top: 4px; }
+.price-card { padding: 26px 24px; }
+.price-card p { min-height: 0; }
+.pilot-section { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+.pilot-panel { gap: 40px; padding: 44px; }
+.pilot-copy h2 { font-size: clamp(40px, 4.5vw, 64px); line-height: 1.02; }
+.pilot-copy p { max-width: none; }
+.pilot-note { margin-top: 22px; }
+.pilot-form { scroll-margin-top: 24px; }
+.store-count-field { border: 0; padding: 0; margin: 0 0 15px; min-width: 0; }
+.store-count-field legend { padding: 0; font-size: 14px; font-weight: 700; color: #3a4451; max-width: 100%; }
+.market-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pilot-form .check-option { position: relative; min-width: 0; height: 100%; }
+.check-option span { display: flex; align-items: center; min-height: 50px; height: 100%; padding: 10px 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pilot-form .check-option input { display: block; position: absolute; width: 1px; height: 1px; min-height: 0; margin: 0; padding: 0; border: 0; clip-path: inset(50%); overflow: hidden; }
+.check-option input:focus-visible + span { outline: 2px solid #047857; outline-offset: 3px; }
+.form-footnote { line-height: 1.6; }
+.site-footer { padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)); }
+
+@media (max-width: 1100px) {
+  .hero { padding-block: 44px 56px; }
+  .hero-visual { margin-top: 0; }
+  .pilot-panel { grid-template-columns: minmax(0,1fr); gap: 28px; padding: 32px; }
+}
+@media (max-width: 600px) {
+  .process-section, .assembly-section, .time-section, .connection-section, .pricing-section { padding-block: 44px; }
+  .hero { gap: 28px; }
+  .hero-actions { gap: 12px; }
+  .hero-proof { margin-top: 22px; }
+  .process-section > .product-preview { margin-top: 32px; }
+  .process-section > .role-demo { padding: 20px 12px; margin-top: 24px; }
+  .role-demo-head { flex-wrap: wrap; gap: 16px; }
+  .gallery-heading h3 { font-size: 21px; }
+  .live-demo-heading, .express-heading, .connection-heading, .picker-section-heading { gap: 18px; margin-bottom: 22px; }
+  #compare .picker-comparison { margin-top: 36px; padding-top: 32px; }
+  .pilot-panel { padding: 28px 16px; }
+  .pilot-copy h2 { font-size: 40px; }
+  .pilot-form { padding: 20px 15px; }
+  .pilot-section { padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px)); }
+  .market-selects { gap: 8px; }
+  .check-option span { padding-inline: 10px; }
+  .inline-cta .button { white-space: normal; }
+}
+
+.site-footer .footer-legal{width:auto}.site-footer .footer-links{width:100%;display:flex;flex-wrap:wrap;gap:8px 22px}.site-footer .footer-links a{color:#475569;text-decoration:underline;text-underline-offset:3px}.site-footer .footer-links a:hover{color:#047857}
+
+/* SaudaPulse conversion update: benefits, comparison and trial pricing. */
+.hero-barrier{display:inline-flex;flex-wrap:wrap;gap:8px;margin-top:20px;color:#0d7f61;font-size:13px;font-weight:700;letter-spacing:.01em}.hero-barrier i{color:#9aa5b1;font-style:normal}
+.benefits-section{display:grid;gap:24px;margin-top:20px;padding-block:28px 76px}.benefits-heading h2{margin:8px 0 0}.benefits-heading h2 span,.comparison-block h2 span{color:#0e8b69}.benefits-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.benefit-card{min-height:190px;padding:24px;border:1px solid rgba(20,35,52,.1);border-radius:22px;background:rgba(255,255,255,.78);box-shadow:0 14px 35px rgba(24,42,57,.07)}.benefit-icon{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#dff8e9;color:#087c5e}.benefit-card h3{margin:17px 0 8px;font-size:18px}.benefit-card p{margin:0;color:#53606e;font-size:14px;line-height:1.55}
+.comparison-block{display:grid;gap:28px;padding-block:50px 20px}.comparison-table{overflow:hidden;border:1px solid rgba(20,35,52,.1);border-radius:20px;background:#fff;box-shadow:0 14px 35px rgba(24,42,57,.07)}.comparison-row{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:0;border-top:1px solid #e8edf0}.comparison-row>*{min-width:0;padding:18px 20px;color:#53606e;font-size:14px;line-height:1.45}.comparison-row>*+*{border-left:1px solid #e8edf0}.comparison-row b{color:#172332;font-size:14px}.comparison-row strong{color:#087c5e;font-weight:750}.comparison-head{border-top:0;background:#f2faf5}.comparison-head>*{color:#172332;font-weight:800}.comparison-head small{display:block;margin-top:4px;color:#73808c;font-size:11px;font-weight:500}
+.pricing-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.pricing-grid .price-card{display:flex;flex-direction:column}.pricing-grid .price-card ul{flex:1}.price-note{display:block;margin-top:10px;color:#697582;font-size:11px;line-height:1.35;text-align:center}
+@media (max-width:1100px){.pricing-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){.benefits-section{padding-block:20px 48px}.benefits-grid{grid-template-columns:1fr}.benefit-card{min-height:auto;padding:20px}.comparison-block{padding-block:34px 8px}.comparison-table{overflow:visible;border:0;background:transparent;box-shadow:none}.comparison-row{grid-template-columns:1fr;margin-bottom:12px;border:1px solid #e8edf0;border-radius:16px;background:#fff;overflow:hidden}.comparison-row>*{padding:14px 16px}.comparison-row>*+*{border-top:1px solid #e8edf0;border-left:0}.comparison-head{display:none}.pricing-grid{grid-template-columns:1fr;gap:14px}.pricing-grid .price-card{padding:22px}}
+@media (max-width:430px){.hero-barrier{display:block;max-width:310px;line-height:1.7}.hero-barrier i{margin:0 3px}}
+
+
+/* Installation flow and contact fallbacks. */
+.install-section { padding-block: 64px; border-top: 1px solid var(--line); }
+.install-section .section-intro { max-width: 760px; margin-bottom: 30px; }
+.install-mobile-note { display: none; margin: 18px 0 12px; padding: 14px 16px; border: 1px solid rgba(14,139,105,.22); border-radius: 14px; background: #effbf4; color: #17634e; font-size: 14px; line-height: 1.5; }
+.install-copy-link { display: none; }
+.install-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.install-step { min-height: 190px; padding: 24px; border: 1px solid rgba(20,35,52,.1); border-radius: 20px; background: rgba(255,255,255,.8); box-shadow: 0 14px 35px rgba(24,42,57,.06); }
+.install-step > b { display: inline-grid; place-items: center; width: 38px; height: 30px; border-radius: 9px; background: #dff8e9; color: #087c5e; font-size: 12px; letter-spacing: .08em; }
+.install-step h3 { margin: 18px 0 8px; font-size: 18px; line-height: 1.25; }
+.install-step p { margin: 0; color: #53606e; font-size: 14px; line-height: 1.55; }
+.install-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.install-store-note { margin: 12px 0 0; color: #697582; font-size: 12px; line-height: 1.5; }
+.mail-application { display: inline-block; margin-top: 10px; color: #087c5e; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.slot-note { margin-top: 16px; color: #53606e; font-size: 12px; line-height: 1.45; }
+@media (max-width: 900px) { .install-steps { grid-template-columns: 1fr; } .install-step { min-height: 0; } }
+@media (max-width: 600px) {
+  .install-section { padding-block: 44px; }
+  .install-mobile-note, .install-copy-link { display: block; }
+  .install-copy-link { width: 100%; }
+  .install-actions { flex-direction: column; }
+  .install-actions .button { width: 100%; }
+}
+
+.telegram-fallback, .new-application { display: block; width: 100%; margin-top: 10px; text-align: center; }
+.telegram-fallback { color: #047857; font-size: 14px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.new-application { min-height: 44px; }

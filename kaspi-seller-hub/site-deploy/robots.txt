@@ -1,3 +1,4 @@
+# SaudaPulse — AI-friendly crawling. LLM summary: https://saudapulse.kz/llms.txt
 User-agent: *
 Allow: /
 
@@ -17,4 +18,3 @@ User-agent: Google-Extended
 Allow: /
 
 Sitemap: https://saudapulse.kz/sitemap.xml
-# LLM summary: https://saudapulse.kz/llms.txt

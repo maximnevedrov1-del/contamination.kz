@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="SaudaPulse">
+  <defs>
+    <linearGradient id="sp-line" x1="40" y1="190" x2="216" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#111827"/>
+  <rect x="48" y="150" width="160" height="58" rx="14" fill="#334155" opacity=".55"/>
+  <rect x="40" y="128" width="176" height="58" rx="14" fill="#1E293B" stroke="#334155" stroke-width="3"/>
+  <rect x="32" y="106" width="192" height="58" rx="14" fill="#1E293B" stroke="#475569" stroke-width="3" opacity=".95"/>
+  <path d="M44 170 L88 170 L106 132 L128 188 L152 98 L172 150 L188 150 L204 84" fill="none" stroke="url(#sp-line)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="208" cy="80" r="14" fill="#F43F5E"/>
+  <circle cx="208" cy="80" r="14" fill="none" stroke="#F43F5E" stroke-opacity=".35" stroke-width="6"/>
+</svg>
