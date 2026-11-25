@@ -11,6 +11,9 @@ import { h, clear, deadlineOf, urgencyOf, orderProfit } from '../../shared/utils
 import { encryptBackup, decryptBackup, readHeader, passphraseOk, backupFileName, MIN_PASSPHRASE } from '../../shared/spbackup.js';
 import * as D from './data.js';
 import { getTurnstileToken } from './turnstile.js';
+import { scanQr } from './scan.js';
+import { decodeTransfer, QR_PREFIX } from '../../shared/qr-transfer.js';
+import { showInstallBar } from './install.js';
 import { STAFF_CHECK_MS, STAFF_OFFLINE_GRACE_MS, AUTO_SYNC_MS } from './config.js';
 
 const root = () => document.getElementById('app');
@@ -36,6 +39,9 @@ const ERR = {
   backupIsOwner: 'Это файл владельца. Упаковщику нужен файл «для упаковщика».',
   backupNoOwner: 'Войдите как владелец, чтобы сделать файл для упаковщика.',
   backupTooBig: 'Файл слишком большой.',
+  qrNotOurs: 'Это не QR-код SaudaPulse. Откройте на компьютере: расширение → Настройки → «Показать QR-код для телефона».',
+  qrExpired: 'Код устарел. Нажмите на компьютере «Показать QR-код» ещё раз.',
+  backupNoStores: 'В расширении нет магазинов, подключённых по токену API.',
   not_invited: 'Владелец не приглашал этот адрес почты. Попросите добавить вас в команду.',
   access_disabled: 'Владелец отключил ваш доступ.',
   owner_subscription_required: 'У владельца закончилась подписка.',
@@ -110,6 +116,7 @@ function shell(tabs, active, content, title) {
       ),
     ),
   );
+  showInstallBar();
 }
 
 /* ---------------- start / login ---------------- */
@@ -151,6 +158,7 @@ function renderLogin(step = 'email', email = '') {
         field('Почта', input), captchaBox, send,
       ),
     );
+    showInstallBar();
     return;
   }
   const code = h('input', { type: 'text', name: 'code', inputmode: 'numeric', autocomplete: 'one-time-code', pattern: '[0-9]*', maxlength: 10, required: true, placeholder: '123456' });
@@ -243,7 +251,13 @@ async function ownerHome() {
   const ids = await allowedOwnerIds();
   const stores = await D.ownerStores();
   if (!stores.length) {
-    return h('div', null, licenseBanner(), card('Подключите магазин', h('p', null, 'Перенесите магазины с компьютера файлом .spbackup или вставьте токен API Kaspi.'), btn('Перейти в «Магазины»', () => go('stores'), 'btn--primary btn--block')));
+    return h('div', null, licenseBanner(), card('Перенесите магазины с компьютера',
+      h('ol', { class: 'steps' },
+        h('li', null, 'На компьютере в расширении SaudaPulse: ', h('strong', null, 'Настройки → «Показать QR-код для телефона»'), '.'),
+        h('li', null, 'Нажмите кнопку ниже и наведите камеру на код.')),
+      btn('Сканировать QR с компьютера', (e) => importQrFlow(e.currentTarget), 'btn--primary btn--block btn--big', { dataset: { action: 'scan-qr' } }),
+      h('p', { class: 'muted small' }, 'Код идёт с экрана прямо в камеру телефона — через интернет и наш сервер он не передаётся.'),
+      btn('Другие способы', () => go('stores'), 'btn--ghost btn--block')));
   }
   const { tot, perStore, lastSync } = await D.ownerSummary(ids);
   return h('div', null,
@@ -336,10 +350,15 @@ async function ownerStoresView() {
         : h('p', { class: 'muted' }, 'Пока нет магазинов.'),
     ),
     card('Перенести с компьютера',
-      h('p', null, 'В расширении SaudaPulse: Настройки → «Перенести на телефон». Сохраните файл .spbackup, передайте его на телефон и откройте здесь.'),
-      btn('Открыть файл .spbackup', (e) => importBackupFlow(e.currentTarget, 'owner'), 'btn--primary btn--block', { dataset: { action: 'import-owner' } }),
+      h('p', null, 'На компьютере: расширение SaudaPulse → Настройки → «Показать QR-код для телефона». Затем нажмите:'),
+      btn('Сканировать QR с компьютера', (e) => importQrFlow(e.currentTarget), 'btn--primary btn--block btn--big', { dataset: { action: 'scan-qr' } }),
     ),
-    card('Подключить по токену',
+    h('details', { class: 'card more' },
+      h('summary', { class: 'more__sum' }, 'Другие способы'),
+      h('h3', null, 'Файл .spbackup'),
+      h('p', { class: 'muted small' }, 'Если на компьютере сохранили файл с паролем.'),
+      btn('Открыть файл .spbackup', (e) => importBackupFlow(e.currentTarget, 'owner'), 'btn--block', { dataset: { action: 'import-owner' } }),
+      h('h3', null, 'Токен API Kaspi'),
       field('Название', name), field('Токен API', token),
       btn('Подключить', async (e) => busy(e.currentTarget, async () => {
         if (!state.license?.canUse) throw { code: 'subscriptionRequired' };
@@ -349,15 +368,29 @@ async function ownerStoresView() {
         await refreshLicense(true);
         render();
         ownerSync(null, { quiet: true });
-      }), 'btn--primary btn--block', { dataset: { action: 'connect' } }),
+      }), 'btn--block', { dataset: { action: 'connect' } }),
       h('p', { class: 'muted small' }, 'Токен хранится только на этом телефоне, зашифрованным. На наш сервер он не отправляется и не сохраняется.'),
-    ),
-    card('Файл для упаковщика',
-      h('p', null, 'Упаковщик увидит только очередь сборки — без сумм, цен и прибыли. Сначала пригласите его в команду в расширении (Настройки → Команда).'),
+      h('h3', null, 'Упаковщику'),
+      h('p', { class: 'muted small' }, 'Упаковщик увидит только очередь сборки — без сумм, цен и прибыли. Сначала пригласите его в команду в расширении (Настройки → Команда).'),
       btn('Сделать файл для упаковщика', (e) => exportBackupFlow(e.currentTarget, 'staff'), 'btn--block', { dataset: { action: 'export-staff' } }),
       btn('Сделать файл для своего компьютера', (e) => exportBackupFlow(e.currentTarget, 'owner'), 'btn--ghost btn--block'),
     ),
   );
+}
+
+/** One tap: scan the computer's QR → stores, tokens (and cost prices when they fit) on this phone. */
+async function importQrFlow(el) {
+  const text = await scanQr({ title: 'Сканировать QR с компьютера', hint: 'Наведите камеру на код в расширении SaudaPulse на компьютере.', accept: (t) => t.startsWith(QR_PREFIX) });
+  if (!text) return;
+  await busy(el, async () => {
+    const payload = await decodeTransfer(text);
+    const res = await D.importOwnerBackup(payload);
+    toast(`Готово: магазинов ${res.stores}${res.costs ? `, себестоимостей ${res.costs}` : ''}`, 'ok');
+    await refreshLicense(true);
+    state.tab = 'home';
+    await render();
+    ownerSync(null, { quiet: true });
+  });
 }
 
 async function askPassphrase(title, { confirm = false } = {}) {

@@ -114,3 +114,29 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .toast--error { background: var(--danger); color: #fff; }
 .toast--ok { background: var(--accent); color: var(--accent-text); }
 @media (prefers-reduced-motion: no-preference) { .toast { animation: up .2s ease-out; } @keyframes up { from { transform: translateY(12px); opacity: 0; } } }
+
+/* one-tap transfer + scanner */
+.btn--big { min-height: 56px; font-size: 17px; }
+.steps, .install-steps { margin: 0 0 4px; padding-left: 22px; display: grid; gap: 8px; }
+.more { padding: 0; }
+.more__sum { list-style: none; min-height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-weight: 600; cursor: pointer; }
+.more__sum::-webkit-details-marker { display: none; }
+.more__sum::after { content: "▾"; color: var(--muted); }
+.more[open] .more__sum::after { content: "▴"; }
+.more[open] { padding-bottom: 16px; }
+.more > :not(summary) { margin-left: 16px; margin-right: 16px; }
+.more h3 { font-size: 15px; margin: 18px 16px 4px; }
+.scanner__frame { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1; max-width: 100%; }
+.scanner__video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanner__aim { position: absolute; inset: 15%; border: 3px solid rgb(255 255 255 / .85); border-radius: 14px; box-shadow: 0 0 0 999px rgb(0 0 0 / .35); }
+.scanner__alt summary { min-height: 44px; display: flex; align-items: center; color: var(--muted); cursor: pointer; }
+.scanner__paste { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font: 14px/1.4 ui-monospace, monospace; }
+
+/* «Установить» bar */
+.install-bar { position: fixed; left: 8px; right: 8px; bottom: calc(8px + var(--safe-b)); z-index: 7; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 8px 28px rgb(2 6 23 / .22); }
+body:has(.bottomnav) .install-bar { bottom: calc(var(--nav-h) + 8px + var(--safe-b)); }
+body:has(.install-bar) .content { padding-bottom: calc(var(--nav-h) + 110px + var(--safe-b)); }
+.install-bar img { border-radius: 10px; flex: none; }
+.install-bar__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.install-bar__text small { color: var(--muted); }
+.install-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line); font-size: 15px; }

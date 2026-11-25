@@ -85,6 +85,7 @@ for (const [repoPath, out] of files) {
 }
 for (const f of ['index.html', 'app.css', 'manifest.webmanifest']) put(f, read(`app/${f}`));
 for (const f of fs.readdirSync(path.join(ROOT, 'app/icons'))) put(`icons/${f}`, fs.readFileSync(path.join(ROOT, 'app/icons', f)));
+for (const f of fs.readdirSync(path.join(ROOT, 'app/vendor'))) put(`vendor/${f}`, fs.readFileSync(path.join(ROOT, 'app/vendor', f))); // jsQR (Apache-2.0) for the camera scanner
 
 // service worker: shell list = exactly the files built above
 const shell = ['./', ...written.sort().map((f) => `./${f}`)];
@@ -94,6 +95,9 @@ const build = hash.digest('hex').slice(0, 12);
 let sw = read('app/sw.js').replace('__APP_BUILD__', build);
 sw = `self.__SHELL__ = ${JSON.stringify(shell)};\n${sw}`;
 put('sw.js', sw);
+
+// the site's «Установить» button (all pages of saudapulse.kz): published at /install-button.js
+fs.copyFileSync(path.join(ROOT, 'site-widgets/install-button.js'), path.join(OUT, 'install-button.js'));
 
 // headers for hosts that read a _headers file (Cloudflare Pages, Netlify); GitHub Pages ignores it
 fs.writeFileSync(

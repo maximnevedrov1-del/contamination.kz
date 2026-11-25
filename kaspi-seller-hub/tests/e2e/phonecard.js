@@ -26,6 +26,23 @@ const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : '
   await d.reload();
   await d.waitForSelector('[data-card=phone]');
   check('card «Перенести на телефон» in Settings', /Перенести на телефон/.test(await d.textContent('[data-card=phone]')));
+  // one tap: «Показать QR-код для телефона» → the code is readable by the phone's reader
+  await d.click('[data-action=sp-qr]');
+  await d.waitForSelector('dialog[data-dialog=qr] canvas[aria-label]');
+  const img = await d.evaluate(() => {
+    const c = [...document.querySelectorAll('dialog[data-dialog=qr] canvas')].sort((a, b) => b.width - a.width)[0];
+    return { w: c.width, h: c.height, px: Array.from(c.getContext('2d').getImageData(0, 0, c.width, c.height).data) };
+  });
+  const jsQR = require('../../app/vendor/jsQR.js');
+  const { decodeTransfer } = await import(path.join(__dirname, '../../shared/qr-transfer.js'));
+  const read = jsQR(Uint8ClampedArray.from(img.px), img.w, img.h)?.data || '';
+  const qrPayload = await decodeTransfer(read).catch((e) => ({ error: e.code }));
+  check('QR on screen → phone reader gets the store token + cost price', Object.values(qrPayload.tokens || {})[0] === 'GOOD-TOKEN-1234' && qrPayload.costs?.['SKU-X'] === 777, JSON.stringify(qrPayload).slice(0, 120));
+  check('QR dialog: steps + countdown', /saudapulse\.kz\/app[\s\S]*Сканировать QR[\s\S]*Код действует ещё \d+ с/.test(await d.textContent('dialog[data-dialog=qr]')));
+  check('plain token not in the page while the QR is shown', !(await d.content()).includes('GOOD-TOKEN'));
+  await d.screenshot({ path: __dirname + '/phone-qr.png' });
+  await d.click('dialog[data-dialog=qr] .btn--primary');
+  await d.click('[data-card=phone] summary');
   await d.click('[data-action=sp-export-owner]');
   await d.fill('[data-field=sp-pass]', 'short');
   await d.fill('[data-field=sp-pass2]', 'short');

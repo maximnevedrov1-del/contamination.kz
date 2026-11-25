@@ -87,4 +87,17 @@ await t('import refuses a packer file and a wrong passphrase', async () => {
   assert.equal((await H['ui:spbackupImport']({ text: 'garbage', passphrase: PASS })).error, 'backupInvalid');
 });
 
+await t('one-tap QR from the worker: matrix only (no token text), readable by the phone reader', async () => {
+  const { createRequire } = await import('node:module');
+  const jsQR = createRequire(import.meta.url)('../../app/vendor/jsQR.js');
+  const { decodeTransfer } = await import('../../shared/qr-transfer.js');
+  const res = await H['ui:qrTransfer']();
+  assert.ok(res.ok && Array.isArray(res.matrix) && res.withCosts);
+  assert.ok(!JSON.stringify(res).includes('Kaspi') && !JSON.stringify(res).includes(TOK));
+  const m = res.matrix, sc = 4, size = (m.length + 8) * sc, px = new Uint8ClampedArray(size * size * 4).fill(255);
+  m.forEach((row, r) => row.forEach((d, c) => { if (d) for (let y = 0; y < sc; y++) for (let x = 0; x < sc; x++) { const i = (((r + 4) * sc + y) * size + (c + 4) * sc + x) * 4; px[i] = px[i + 1] = px[i + 2] = 0; } }));
+  const payload = await decodeTransfer(jsQR(px, size, size).data);
+  assert.equal(Object.values(payload.tokens)[0], TOK);
+});
+
 console.log(`\n${n} checks passed`);

@@ -11,6 +11,8 @@
 import { encryptBackup, decryptBackup, backupFileName, SpBackupError } from '../shared/spbackup.js';
 import { getSettings, saveSettings, getApiTokens, getCosts, setCosts } from '../shared/storage.js';
 import * as B from './billing.js';
+import { encodeTransfer, qrMatrix, QrTransferError } from '../shared/qr-transfer.js';
+import qrcode from '../vendor/qrcode/qrcode.mjs';
 
 /**
  * @param {{ connectApi: (p:{name:string, token:string, shopId?:string}) => Promise<{ok:boolean, error?:string}>, lock: (fn:Function) => Promise<any> }} deps
@@ -39,6 +41,26 @@ export function spbackupHandlers({ connectApi, lock }) {
         return { ok: true, file: JSON.stringify(file), name: backupFileName(scope) };
       } catch (e) {
         return { ok: false, error: e instanceof SpBackupError ? e.code : 'backupInvalid' };
+      }
+    },
+
+    /** One-tap transfer: the QR picture as a matrix (the page draws it; it never gets the token as text). */
+    'ui:qrTransfer': async () => {
+      try {
+        const settings = await getSettings();
+        const tokens = await getApiTokens();
+        const stores = Object.values(settings.stores || {}).filter((s) => s.api?.connected && tokens[s.id]);
+        if (!stores.length) return { ok: false, error: 'backupNoStores' };
+        const { text, withCosts, exp } = await encodeTransfer({
+          stores: Object.fromEntries(stores.map((s) => [s.id, { name: s.name, alias: s.alias || '', color: s.color }])),
+          tokens: Object.fromEntries(stores.map((s) => [s.id, tokens[s.id]])),
+          costs: await getCosts(),
+          profit: settings.profit,
+          deadlines: settings.deadlines,
+        });
+        return { ok: true, matrix: qrMatrix(qrcode, text), withCosts, exp, stores: stores.length };
+      } catch (e) {
+        return { ok: false, error: e instanceof QrTransferError ? e.code : 'backupInvalid' };
       }
     },
 

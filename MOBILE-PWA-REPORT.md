@@ -245,3 +245,41 @@ Open (by design or for later):
 - **Wording.** Platform logs (Supabase gateway / Cloudflare) still record request **metadata**: IP, time, status, size, user id in the gateway. The right claim is "no tokens, orders or prices are logged or stored", not "no logs at all".
 - **Packer token.** A packer still holds a full-power Kaspi token for their stores. Switching them off wipes the phone if it is online, but cannot revoke the token. **Rotate the Kaspi token when dismissing a packer.**
 - **Captcha.** Turnstile fails open on the client, as in the extension. It is real only once captcha is turned on in Supabase Auth.
+
+## 7. Update: one-tap transfer and «Установить» (founder feedback)
+
+**Transfer in one tap (QR).**
+- **Computer:** extension → Настройки → «Показать QR-код для телефона». The worker builds the code; the page gets only the picture (a matrix), never the token as text.
+- **Phone:** in the app, «Сканировать QR с компьютера» → point the camera → stores, tokens, cost prices and commission appear. No password, no file. This is the first screen of an owner with no stores, and the main button on «Магазины».
+- **What the code contains:** `SP1.` + deflate + base64url (`shared/qr-transfer.js`).
+  - It is short-lived: refused 2 minutes after it was shown. The dialog hides it and shows a countdown.
+  - It is not a link, so a camera app opens nothing; only the SaudaPulse app reads it. Android uses its own `BarcodeDetector`; iPhone uses vendored jsQR (Apache-2.0, `app/vendor/`).
+  - It goes from screen to camera and never through the internet or a server.
+  - Cost prices ride along only while the code stays easy to scan. Otherwise they are left out, and the phone keeps its own.
+- **The trade-off:** the code is not encrypted, because the key would have to be in the same picture. It must not be photographed or shown to others, and the dialog says so.
+- **Other ways are now folded under «Другие способы»:** the password file, the token, and the packer file.
+
+**«Установить».**
+- **Phone app** (`app/js/install.js`):
+  - A bar at the bottom.
+  - Android, Chrome, Edge and Samsung: one tap opens the browser's own install prompt.
+  - iPhone and iPad: Apple has no install button, so the bar opens a 3-step hint: «Поделиться → На экран Домой → Добавить».
+  - Not shown when the app is already installed. «✕» hides it for 7 days.
+  - `/app/?install=1` opens the install step at once.
+- **Website** (`site-widgets/install-button.js`; the build copies it to `dist/app-site/install-button.js`):
+  - Computer or laptop: floating «Установить расширение» bottom-right, to the Chrome Web Store. Until the store link is known it scrolls to `#how`.
+  - Tablet: the same floating button, to the phone app, because tablets cannot run Chrome extensions.
+  - Phone: a bar at the bottom, to `/app/?install=1`.
+  - Add it to every page before `</body>`:
+    `<script src="/install-button.js" defer data-store-url="https://chromewebstore.google.com/detail/<id>"></script>`
+
+**Tests.**
+
+| Suite | Result | What it checks |
+|---|---|---|
+| `tests/unit/qr-transfer.test.mjs` | 5/5 | encode → QR picture → **jsQR reads it** → decode; expiry; a far-future code refused; foreign texts refused; many cost prices left out while staying ≤ 1600 chars |
+| `spbackup-ext` | 6/6 | the worker's QR matrix is read by the phone reader; no token text reaches the page |
+| `e2e/pwa-mobile.js` | 19/19 | QR import → margin 28 %; Android install prompt in one tap; iPhone steps, «Не сейчас», `?install=1`; website button on 1440, 1280, iPad and iPhone |
+| `e2e/phonecard.js` | all pass | the QR drawn in the real extension decodes to the store token and cost price |
+
+The unit suites, robust (38) and locales (1184 keys) all pass. The release build ships `vendor/qrcode/` and `shared/qr-transfer.js`, and the 0.1.2 zip is unchanged.

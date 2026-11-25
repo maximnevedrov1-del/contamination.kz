@@ -27,7 +27,7 @@ jobs:
           node-version: 20
       - name: Syntax of every script
         run: |
-          find background dashboard popup shared content tools app billing/supabase/functions -name '*.js' -o -name '*.mjs' | grep -v vendor | while read -r f; do
+          find background dashboard popup shared content tools app/js site-widgets billing/supabase/functions -name '*.js' -o -name '*.mjs' | grep -v vendor | while read -r f; do
             node --check "$f" || exit 1
           done
       - name: manifest.json and translations are valid JSON
@@ -38,7 +38,7 @@ jobs:
         run: node tests/unit/locales.test.mjs
       - name: Unit tests (storage split, token encryption, licence signature, bot run and lock)
         run: |
-          for t in storage-split token-crypto license-signature license-flow bot-run feature-flags notices backup ux-telemetry store-key sync-breaker captcha payment-webhook secure-storage kaspi-relay spbackup-ext; do
+          for t in storage-split token-crypto license-signature license-flow bot-run feature-flags notices backup ux-telemetry store-key sync-breaker captcha payment-webhook secure-storage kaspi-relay spbackup-ext qr-transfer; do
             node tests/unit/$t.test.mjs || exit 1
           done
       - name: Phone app (PWA) build

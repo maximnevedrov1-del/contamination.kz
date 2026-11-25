@@ -216,8 +216,14 @@ const ok = (name) => { n++; console.log('ok', name); };
   await page.waitForSelector('.bottomnav');
   assert.match(await page.textContent('.role-chip'), /Владелец/);
   ok('owner: e-mail code login (captcha off → no token, like the extension)');
+  await page.waitForSelector('[data-action=scan-qr]');
+  assert.match(await page.textContent('#content'), /Показать QR-код для телефона/);
+  await checkLayout(page, 'owner start');
+  await page.screenshot({ path: path.join(SHOTS, 'owner-start-390x844.png') });
+  ok('owner: first screen is one big «Сканировать QR с компьютера» button with 2 short steps');
 
   await page.click('[data-tab=stores]');
+  await page.click('summary.more__sum'); // token / file / packer are under «Другие способы»
   await page.fill('input[placeholder^="Например"]', 'Мой магазин');
   await page.fill('input[placeholder^="Токен API"]', KTOKEN);
   await page.click('[data-action=connect]');
@@ -238,11 +244,32 @@ const ok = (name) => { n++; console.log('ok', name); };
   await page.screenshot({ path: path.join(SHOTS, 'owner-home-390x844.png') });
   ok('owner: home at 390×844 — today revenue 88 490 ₸ (cancelled order excluded), margin, bottom nav, tap targets ≥ 44 px, no sideways scroll');
 
-  // desktop → phone: an owner .spbackup made like the extension does (cost prices + commission inside)
+  // desktop → phone in one tap: the QR text the extension shows (cost prices + commission inside)
+  const { encodeTransfer } = await import(path.join(ROOT, 'shared/qr-transfer.js'));
+  const qr = await encodeTransfer({ stores: { 'api-x': { name: 'Мой магазин' } }, tokens: { 'api-x': KTOKEN }, costs: { 'SKU-1': 30000, 'SKU-2': 1000, 'SKU-3': 10000 }, profit: { defaultCommission: 10, byCategory: {} } });
+  await page.click('[data-tab=stores]');
+  await page.click('[data-action=scan-qr]');
+  await page.waitForSelector('dialog.scanner[open]');
+  await page.screenshot({ path: path.join(SHOTS, 'owner-scanner-390x844.png') });
+  await page.click('dialog.scanner summary'); // headless browser has no camera: the «вставить код» fallback
+  await page.fill('[data-field=qr-paste]', qr.text);
+  await page.click('[data-action=qr-paste-ok]');
+  await page.waitForSelector('text=Готово: магазинов 1, себестоимостей 3');
+  await page.click('[data-tab=stores]');
+  assert.equal(await page.locator('.list__row').count(), 1); // same token → same store (double SHA-256 store id), no duplicate
+  await page.click('[data-tab=home]');
+  // 88 490 − (30 000 + 5×1 000 + 2×10 000) − 10 % commission 8 849 = 24 641 → 28 %
+  await page.waitForFunction(() => /28%/.test(document.querySelector('[data-kpi=margin]')?.textContent || ''));
+  assert.match(await page.textContent('[data-kpi=margin]'), /28%\s*24\s641\s₸/);
+  await page.screenshot({ path: path.join(SHOTS, 'owner-home-390x844.png') });
+  ok('owner: one-tap QR from the computer → same store (no duplicate), cost prices → margin 28 % (24 641 ₸)');
+
+  // the same through a password file (other way)
   const { encryptBackup } = await import(path.join(ROOT, 'shared/spbackup.js'));
   const ownerFile = path.join(os.tmpdir(), 'saudapulse-owner-test.spbackup');
   fs.writeFileSync(ownerFile, JSON.stringify(await encryptBackup({ stores: { 'api-x': { name: 'Мой магазин' } }, tokens: { 'api-x': KTOKEN }, costs: { 'SKU-1': 30000, 'SKU-2': 1000, 'SKU-3': 10000 }, profit: { defaultCommission: 10, byCategory: {} } }, 'owner-pass-123', { scope: 'owner' })));
   await page.click('[data-tab=stores]');
+  await page.click('summary.more__sum');
   const fcO = page.waitForEvent('filechooser');
   await page.click('[data-action=import-owner]');
   await (await fcO).setFiles(ownerFile);
@@ -250,13 +277,9 @@ const ok = (name) => { n++; console.log('ok', name); };
   await page.click('[data-action=passphrase-ok]');
   await page.waitForSelector('text=Перенесено магазинов: 1, себестоимостей: 3');
   assert.equal(await page.locator('.list__row').count(), 1); // same token → same store (double SHA-256 store id), no duplicate
-  await page.click('[data-tab=home]');
-  // 88 490 − (30 000 + 5×1 000 + 2×10 000) − 10 % commission 8 849 = 24 641 → 28 %
-  await page.waitForFunction(() => /28%/.test(document.querySelector('[data-kpi=margin]')?.textContent || ''));
-  assert.match(await page.textContent('[data-kpi=margin]'), /28%\s*24\s641\s₸/);
-  await page.screenshot({ path: path.join(SHOTS, 'owner-home-390x844.png') });
+  assert.equal(await page.locator('.list__row').count(), 1);
   fs.rmSync(ownerFile);
-  ok('owner: .spbackup from the computer → same store (no duplicate), cost prices → margin 28 % (24 641 ₸)');
+  ok('owner: .spbackup file with password (under «Другие способы») still works, no duplicate store');
 
   await page.click('[data-tab=orders]');
   await page.waitForSelector('.order');
@@ -308,6 +331,7 @@ const ok = (name) => { n++; console.log('ok', name); };
 
   // owner makes the packer's file
   await page.click('[data-tab=stores]');
+  await page.click('summary.more__sum');
   const dlP = page.waitForEvent('download');
   await page.click('[data-action=export-staff]');
   const pw = page.locator('dialog.sheet input[type=password]');
@@ -386,6 +410,81 @@ const ok = (name) => { n++; console.log('ok', name); };
   assert.deepEqual(P.errors, []);
   assert.equal(forbidden.length, 0, `direct/production requests: ${forbidden}`);
   ok('no request went to kaspi.kz directly or to a production Supabase project');
+
+  /* ======================= INSTALL ======================= */
+  const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+  const IPAD_UA = 'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+  {
+    const { ctx, page: p2 } = await phone();
+    await p2.goto(`${ORIGIN}/app/`);
+    await p2.waitForSelector('[data-action=send-code]');
+    assert.equal(await p2.locator('.install-bar').count(), 0); // nothing to offer until the browser says it can install
+    await p2.evaluate(() => {
+      const e = new Event('beforeinstallprompt');
+      e.prompt = async () => { window.__prompted = true; };
+      e.userChoice = Promise.resolve({ outcome: 'accepted' });
+      dispatchEvent(e);
+    });
+    await p2.waitForSelector('.install-bar [data-action=install]');
+    await checkLayout(p2, 'login + install bar');
+    await p2.screenshot({ path: path.join(SHOTS, 'android-install-390x844.png') });
+    await p2.click('.install-bar [data-action=install]');
+    await p2.waitForFunction(() => window.__prompted === true);
+    await p2.waitForFunction(() => !document.querySelector('.install-bar'));
+    await ctx.close();
+    ok('Android: «Установить» bar → the browser\'s own install prompt in one tap, bar gone after install');
+  }
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: IPHONE_UA, locale: 'ru-RU' });
+    await ctx.route(`${SB}/**`, onSupabase);
+    const p3 = await ctx.newPage();
+    await p3.goto(`${ORIGIN}/app/`);
+    await p3.waitForSelector('.install-bar [data-action=install]');
+    await p3.click('.install-bar [data-action=install]');
+    await p3.waitForSelector('dialog.sheet[open]');
+    assert.match(await p3.textContent('dialog.sheet'), /Поделиться[\s\S]*На экран Домой[\s\S]*Добавить/);
+    await p3.screenshot({ path: path.join(SHOTS, 'iphone-install-390x844.png') });
+    await p3.click('dialog.sheet >> text=Понятно');
+    await p3.click('.install-bar [aria-label="Не сейчас"]');
+    await p3.waitForFunction(() => !document.querySelector('.install-bar')); // removed once saved
+    await p3.reload();
+    await p3.waitForSelector('[data-action=send-code]');
+    assert.equal(await p3.locator('.install-bar').count(), 0); // «Не сейчас» = hidden for 7 days
+    await p3.goto(`${ORIGIN}/app/?install=1`);
+    await p3.waitForSelector('dialog.sheet[open]'); // from the site's button: the steps open at once
+    assert.equal(new URL(p3.url()).search, '');
+    await ctx.close();
+    ok('iPhone: «Установить» → «Поделиться → На экран Домой → Добавить»; «Не сейчас» hides it; ?install=1 opens the steps at once');
+  }
+  {
+    fs.writeFileSync(path.join(site, 'site-test.html'), '<!doctype html><html lang="ru"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title></head><body style="margin:0;font:16px system-ui"><h1 style="padding:16px">saudapulse.kz</h1><p style="padding:16px">Лендинг</p><script src="/install-button.js" defer data-store-url="https://chromewebstore.google.com/detail/saudapulse/test"></script></body></html>');
+    const look = async (opts, file) => {
+      const ctx = await browser.newContext(opts);
+      const p = await ctx.newPage();
+      await p.goto(`${ORIGIN}/site-test.html`);
+      await p.waitForSelector('.spi a');
+      const r = await p.evaluate(() => { const a = document.querySelector('.spi a'); const b = a.getBoundingClientRect(); return { href: a.getAttribute('href'), text: a.textContent, kind: a.dataset.spi, right: innerWidth - b.right, bottom: innerHeight - b.bottom, h: b.height, overflow: document.scrollingElement.scrollWidth - innerWidth }; });
+      if (file) await p.waitForTimeout(500), await p.screenshot({ path: path.join(SHOTS, file) });
+      await ctx.close();
+      return r;
+    };
+    const desk = await look({ viewport: { width: 1440, height: 900 } }, 'site-desktop.png');
+    assert.equal(desk.kind, 'desktop');
+    assert.equal(desk.href, 'https://chromewebstore.google.com/detail/saudapulse/test');
+    assert.match(desk.text, /Установить расширение/);
+    assert.ok(desk.right < 40 && desk.bottom < 40 && desk.h >= 44, JSON.stringify(desk));
+    const lap = await look({ viewport: { width: 1280, height: 720 } });
+    assert.equal(lap.kind, 'desktop');
+    const tab = await look({ viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, userAgent: IPAD_UA });
+    assert.equal(tab.kind, 'tablet');
+    assert.equal(tab.href, '/app/?install=1');
+    assert.ok(tab.right < 40 && tab.bottom < 40, JSON.stringify(tab));
+    const ph = await look({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: IPHONE_UA }, 'site-phone-390x844.png');
+    assert.equal(ph.kind, 'phone');
+    assert.equal(ph.href, '/app/?install=1');
+    assert.ok(ph.bottom < 30 && ph.h >= 44 && ph.overflow <= 0, JSON.stringify(ph));
+    ok('website: computer/laptop → «Установить расширение» bottom-right; tablet → bottom-right to the app; phone → bar at the bottom → /app/?install=1');
+  }
 
   await browser.close();
   server.close();
