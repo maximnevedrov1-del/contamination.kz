@@ -237,7 +237,7 @@ export async function readXlsx(buffer, parser = new DOMParser()) {
 
 /**
  * Rows of the Excel price list → offers. Columns are found by their header
- * (SKU / Артикул, model / Название, brand / Бренд, price / Цена, PP1…PP5, preorder).
+ * (SKU / Артикул, model / Название, brand / Бренд, price / Цена, PP1…PP5 = quantity or yes/no, preorder).
  */
 export function rowsToOffers(rows) {
   const hIdx = rows.findIndex((r) => r.some((c) => /^(sku|артикул)/i.test(c)));
@@ -258,13 +258,17 @@ export function rowsToOffers(rows) {
   for (const r of rows.slice(hIdx + 1)) {
     const sku = String(r[ci.sku] ?? '').trim();
     if (!sku) continue;
-    const yes = wh.filter(([, i]) => /^(yes|да|1|true)$/i.test(String(r[i] ?? '').trim()));
+    // Kaspi's own file (guide.kaspi.kz …/price_list/q2962): PP1–PP5 hold the QUANTITY on each warehouse,
+    // or «yes» / «no». Quantities are added up; «yes» without a number counts as 1 in stock.
+    const cells = wh.map(([, i]) => String(r[i] ?? '').trim());
+    const qty = cells.map((c) => (/^\d+$/.test(c) ? Number(c) : null)).filter((n) => n != null);
+    const yes = cells.filter((c) => /^(yes|да|true)$/i.test(c));
     offers.push({
       sku,
       title: ci.title >= 0 ? String(r[ci.title] ?? '').trim() : '',
       brand: ci.brand >= 0 ? String(r[ci.brand] ?? '').trim() : '',
       price: int(r[ci.price]),
-      stock: ci.stock >= 0 ? int(r[ci.stock]) || 0 : yes.length ? 1 : 0,
+      stock: ci.stock >= 0 ? int(r[ci.stock]) || 0 : qty.length ? qty.reduce((a, b) => a + b, 0) : yes.length ? 1 : 0,
       preOrder: ci.pre >= 0 ? int(r[ci.pre]) || null : null,
       warehouses: wh.map(([c]) => c.toUpperCase()),
     });
