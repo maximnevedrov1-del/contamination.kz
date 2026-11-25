@@ -29,6 +29,7 @@ import { getCaptchaToken } from '../shared/captcha.js';
 import { createCatalogView, copyText } from './catalog-view.js';
 import { FEATURES } from '../shared/features.js';
 import { svgIcon } from '../shared/icons.js';
+import { phoneTransferCard } from './phone-transfer.js';
 import { renderLockScreen, renderPacker, teamCard, warehouseCard, journalCard } from './staff-view.js';
 import { getChat, countInvoices, clearInvoices, onKeyChange, KEYS, getCosts, setPickList, getPhotos, getCatalog, withSnapshots } from '../shared/storage.js';
 import { photoFor, isAllowedPhoto, fileToPhoto } from '../shared/photos.js';
@@ -1743,6 +1744,7 @@ function viewSettings() {
       ),
       h('p', { class: 'muted small' }, t('backup.note')),
     ),
+    phoneTransferCard({ t, send, toast, errorText, reload: loadState }),
     card(
       t('settings.data'),
       t('settings.invoicesStored', { count: state.invoiceCount }),

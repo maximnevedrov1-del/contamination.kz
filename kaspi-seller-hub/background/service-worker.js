@@ -38,9 +38,11 @@ import {
   KEYS,
 } from '../shared/storage.js';
 import * as K from './kaspi-api.js';
+import { apiSnapshot } from '../shared/api-sync.js';
 import * as B from './billing.js';
 import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop } from './catalog-service.js';
 import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF } from './staff.js';
+import { spbackupHandlers } from './spbackup-service.js';
 import { startHealth, flushHealth, scheduleHealth, ALARM_HEALTH } from './health.js';
 import { supportHandlers, pollTickets } from './support.js';
 import { usageHandlers, flushUsage, noteAction, ACTION_OF } from './usage.js';
@@ -485,7 +487,7 @@ async function syncNow() {
         return;
       }
       try {
-        const snap = await apiSnapshot(shopId, token, prevNow[shopId], store);
+        const snap = await apiSnapshot(K, shopId, token, prevNow[shopId], store);
         B.trackFunnel('first_sync_done');
         (byShop[shopId] ??= []).push(snap); // last → API wins over DOM for the same order
         await lock(async () => {
@@ -690,87 +692,6 @@ async function recordApiHealth(shopIds, errors) {
     }
     if (changed) await saveSettings({ stores: settings.stores });
   });
-}
-
-/**
- * Build a store snapshot from the API: orders of the last 28 days (90 on first
- * sync) + older API orders kept from the cache, split into orders / returns /
- * refusals, plus top products from order contents.
- */
-async function apiSnapshot(shopId, token, prevSnap, store) {
-  const prevItems = prevSnap?.sections?.orders?.items || [];
-  const hadApi = prevItems.some((i) => i.api);
-  const days = hadApi ? S.api.syncDays : S.api.firstSyncDays;
-  const raw = await K.listOrders(token, days);
-  const fresh = raw.map(K.toOrderItem);
-  const freshIds = new Set(fresh.map((i) => i.id));
-  const windowStart = Date.now() - days * DAY;
-  const keepFrom = Date.now() - S.api.firstSyncDays * DAY;
-  const kept = prevItems.filter((i) => i.api && !freshIds.has(i.id) && i.date && new Date(i.date).getTime() < windowStart && new Date(i.date).getTime() >= keepFrom);
-  const { topProducts, entriesOf } = await apiTopProducts(shopId, token, [...fresh, ...kept], prevItems);
-  // Order contents travel with the order: needed for profit and the pick list.
-  const all = [...fresh, ...kept].map((i) => ({ ...i, entries: entriesOf(i.id) || i.entries }));
-  const section = (items) => ({ status: 'ok', source: 'api', items });
-  return {
-    ok: true,
-    authenticated: true,
-    shopId,
-    shopName: store.name,
-    sections: {
-      orders: section(all),
-      returns: section(all.filter((i) => i.kind === 'return')),
-      refusals: section(all.filter((i) => i.kind === 'refusal')),
-      analytics: { status: 'ok', source: 'api', data: { kpi: {}, series: [], topProducts } },
-    },
-    missingSelectors: [],
-  };
-}
-
-/**
- * Order contents are one request per order, so they are kept for as long as the order is
- * in the snapshot (they do not change) and fetched at most `entriesPerSync` per sync
- * (3 in parallel), active and newest orders first. 5 000 orders of history fill in within
- * ~17 syncs (≈ 1.5 h). The contents live only inside the store's snapshot (order.entries):
- * the separate cache ksh.apiEntries held a second copy of all of them and is removed.
- */
-async function apiTopProducts(shopId, token, items, prevItems = []) {
-  const cache = {};
-  for (const i of prevItems) if (i.api && Array.isArray(i.entries)) cache[i.id] = i.entries;
-  const todo = items
-    .filter((i) => i.api?.entriesUrl && i.kind !== 'refusal' && !cache[i.id]) // refusals: no profit, no pick list
-    .sort((a, b) => (a.api.state === 'ARCHIVE') - (b.api.state === 'ARCHIVE') || (b.date || '').localeCompare(a.date || ''))
-    .slice(0, S.api.entriesPerSync || 60);
-  let stop = null;
-  const worker = async () => {
-    while (todo.length && !stop) {
-      const it = todo.shift();
-      try {
-        cache[it.id] = await K.getEntries(token, { relationships: { entries: { links: { related: it.api.entriesUrl } } } });
-      } catch (e) {
-        stop = e; // the rest waits for the next sync
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(S.api.concurrency || 3, todo.length) }, worker));
-  if (stop?.code === 'apiUnauthorized') throw stop;
-  const agg = new Map();
-  for (const it of items) {
-    for (const e of cache[it.id] || []) {
-      const k = e.sku || e.name;
-      if (!k) continue;
-      const p = agg.get(k) || { sku: e.sku, name: e.name || e.category, revenue: 0, units: 0, returns: 0 };
-      if (it.kind === 'return') p.returns += e.quantity || 0;
-      if (it.kind !== 'refusal') {
-        p.units += e.quantity || 0;
-        if (it.kind === 'order') p.revenue += e.total ?? (e.price || 0) * (e.quantity || 1);
-      }
-      agg.set(k, p);
-    }
-  }
-  return {
-    topProducts: [...agg.values()].map((p) => ({ ...p, returnRate: p.units ? p.returns / p.units : null })),
-    entriesOf: (code) => cache[code],
-  };
 }
 
 /** Current API state of one order (fresh from Kaspi), written back into the cache. */
@@ -1403,7 +1324,7 @@ const NEEDS_LICENSE = new Set([
   'ui:pack', 'ui:accept', 'ui:fetchInvoices', 'ui:print', 'ui:process', 'ui:refreshPayments',
   'ui:chatList', 'ui:chatThread', 'ui:chatSend', 'ui:openChatTabs', 'ui:connectApi',
   'ui:catalogPublish', 'ui:catalogImport', 'ui:feedSettings', 'ui:feedSync',
-  'ui:contentCategories', 'ui:contentAttributes', 'ui:contentValues',
+  'ui:contentCategories', 'ui:contentAttributes', 'ui:contentValues', 'ui:spbackupImport',
 ]);
 
 // Product upload ("Выгрузка товаров"): catalog, Kaspi cards, price lists per store.
@@ -1416,6 +1337,8 @@ Object.assign(
   usageHandlers(),
   growthHandlers({ license: (force) => billingMaintenance(!!force, false) }),
 );
+// «Перенести на телефон»: encrypted .spbackup (stores + tokens) for the phone app; tokens are encrypted here, in the worker
+Object.assign(uiHandlers, spbackupHandlers({ connectApi: (p) => uiHandlers['ui:connectApi'](p), lock }));
 startHealth();
 
 /**

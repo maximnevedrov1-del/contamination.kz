@@ -23,7 +23,7 @@ for t in cattest billtest hack billtest2 team support insights orchestra growth 
 done
 # API / demo suites use their own copies
 rm -rf $S/apicopy && copyext $S/apicopy && sed -i "s#base: 'https://kaspi.kz/shop/api/v2'#base: 'http://localhost:8099/shop/api/v2'#" $S/apicopy/shared/selectors.js
-for t in apitest run2 demofile feat uxtest learn photoprint interactive readonly onboard; do
+for t in apitest run2 demofile feat uxtest learn photoprint interactive readonly onboard phonecard; do
   ./mock-up.sh; rm -rf apiprof profile2
   report $t "$(timeout 600 node $t.js 2>&1 | grep -E '^(FAIL|CRASH|ALL|[0-9]+ FAILED)' | cut -c1-220 | tr '\n' ' ')"
 done
