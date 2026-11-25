@@ -50,8 +50,11 @@
     '.spi-bar .spi-t small{color:var(--spi-muted)}',
     '.spi-bar a{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:12px;background:var(--spi-accent);color:var(--spi-on);font-weight:700;text-decoration:none;white-space:nowrap}',
     '.spi-bar .spi-x{width:44px;height:44px;border:0;background:transparent;font-size:18px}',
+    '@media (max-width:360px){.spi-bar .spi-t small{display:none}.spi-bar a{padding:0 14px}}',
     '@media (prefers-reduced-motion:no-preference){.spi-fab,.spi-bar{animation:spi-in .35s ease-out}@keyframes spi-in{from{transform:translateY(16px);opacity:0}}}',
-    '@media print{.spi{display:none!important}}'
+    '@media print{.spi{display:none!important}}',
+    // the landing's own sticky phone bar (.mcta) would sit under ours: hidden while ours is shown
+    'html.spi-phone .mcta{display:none!important}'
   ].join('');
   var style = document.createElement('style');
   style.textContent = css;
@@ -67,6 +70,7 @@
     var x = el('button', { type: 'button', class: 'spi-x', 'aria-label': T.close }, ['✕']);
     x.addEventListener('click', function () {
       box.remove();
+      document.documentElement.classList.remove('spi-phone');
       try { sessionStorage.setItem('sp-install-hidden', '1'); } catch (e) { /* ignore */ }
     });
     return x;
@@ -93,6 +97,7 @@
   }
   function mount() {
     document.body.appendChild(box);
+    if (phone) document.documentElement.classList.add('spi-phone');
     // phone: keep the page's last lines visible above the bar
     if (phone) document.body.style.paddingBottom = 'calc(' + (getComputedStyle(document.body).paddingBottom || '0px') + ' + 72px)';
   }
