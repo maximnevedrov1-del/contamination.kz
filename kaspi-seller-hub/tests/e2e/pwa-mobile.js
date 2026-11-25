@@ -31,9 +31,11 @@ const ok = (name) => { n++; console.log('ok', name); };
   const b64u = (b) => Buffer.from(b).toString('base64url');
   const now = () => Math.floor(Date.now() / 1000);
   const paidUntil = now() + 30 * 86400;
+  const accepted = new Set(); // users who ticked the offer/privacy box (accept_terms)
+  let acceptCalls = 0;
   async function jwt(sub, email) {
     const head = b64u(JSON.stringify({ alg: 'ES256', typ: 'JWT', kid: 'test' }));
-    const body = b64u(JSON.stringify({ iss: `${SB}/auth/v1`, aud: 'authenticated', role: 'authenticated', sub, email, iat: now(), exp: now() + 3600, ksh: { pu: paidUntil, te: null, sl: 3, tsl: 3, bs: 3 } }));
+    const body = b64u(JSON.stringify({ iss: `${SB}/auth/v1`, aud: 'authenticated', role: 'authenticated', sub, email, iat: now(), exp: now() + 3600, ksh: { pu: paidUntil, te: null, sl: 3, tsl: 3, bs: 3, tr: 'v1', tv: accepted.has(sub) ? 'v1' : null } }));
     const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, Buffer.from(`${head}.${body}`));
     return `${head}.${body}.${b64u(sig)}`;
   }
@@ -131,13 +133,14 @@ const ok = (name) => { n++; console.log('ok', name); };
     if (u.pathname === '/rest/v1/rpc/get_license') {
       const auth = req.headers().authorization || '';
       if (auth.includes('test-anon-key')) return reply(401, { message: 'jwt' });
-      return reply(200, { paid_until: new Date(paidUntil * 1000).toISOString(), trial_ends_at: null, paid_store_limit: 3, store_limit: 3, terms_version: null, terms_required: null, pricing: { base_stores: 3 }, email: 'owner@shop.kz', server_time: new Date().toISOString(), features: {} });
+      return reply(200, { paid_until: new Date(paidUntil * 1000).toISOString(), trial_ends_at: null, paid_store_limit: 3, store_limit: 3, terms_version: accepted.has(OWNER_ID) ? 'v1' : null, terms_required: 'v1', terms_accepted_at: accepted.has(OWNER_ID) ? new Date().toISOString() : null, pricing: { base_stores: 3 }, email: 'owner@shop.kz', server_time: new Date().toISOString(), features: {} });
     }
     if (u.pathname === '/rest/v1/rpc/team_join' || u.pathname === '/rest/v1/rpc/team_check') {
       if (body.p_owner !== OWNER_ID) return reply(403, { message: 'not_invited', code: '42501' });
       if (teamMode === 'disabled') return reply(403, { message: 'access_disabled', code: '42501' });
       return reply(200, { id: 'm1', email: 'packer@shop.kz', name: 'Ерлан', role: 'packer', shop_ids: [], can_accept: false, status: 'active', joined: true, owner_id: OWNER_ID });
     }
+    if (u.pathname === '/rest/v1/rpc/accept_terms') return acceptCalls++, accepted.add(OWNER_ID), reply(200, null);
     if (u.pathname.startsWith('/rest/v1/rpc/')) return reply(200, null); // set_my_lang, report_client_error, tracking…
     return reply(404, { message: 'mock: unknown ' + u.pathname });
   }
@@ -165,6 +168,7 @@ const ok = (name) => { n++; console.log('ok', name); };
         const b = el.getBoundingClientRect();
         const st = getComputedStyle(el);
         if (!b.width || st.visibility === 'hidden' || st.display === 'none' || el.closest('[hidden]')) continue;
+        if (el.tagName === 'A' && st.display === 'inline' && el.closest('p, label, span')) continue; // links inside a sentence (WCAG 2.5.8 inline exception)
         if (b.width < 44 || b.height < 44) small.push(`${el.tagName}.${el.className} "${(el.textContent || el.placeholder || '').trim().slice(0, 20)}" ${Math.round(b.width)}×${Math.round(b.height)}`);
       }
       const nav = document.querySelector('.bottomnav');
@@ -213,7 +217,20 @@ const ok = (name) => { n++; console.log('ok', name); };
   const A = await phone();
   let page = A.page;
   await login(page, 'owner@shop.kz', 'owner');
+  // first sign-in: the offer and privacy policy come before anything else (same as the extension)
+  await page.waitForSelector('[data-action=accept-terms]');
+  assert.match(await page.textContent('body'), /Примите условия сервиса[\s\S]*Публичной оферты[\s\S]*Политикой конфиденциальности/);
+  assert.equal(await page.isDisabled('[data-action=accept-terms]'), true);
+  assert.equal(await page.getAttribute('.consent a >> nth=0', 'href'), '/offer');
+  assert.equal(await page.getAttribute('.consent a >> nth=1', 'href'), '/privacy');
+  assert.equal(await page.locator('.bottomnav').count(), 0);
+  await checkLayout(page, 'consent');
+  await page.screenshot({ path: path.join(SHOTS, 'owner-consent-390x844.png') });
+  await page.check('[data-field=terms]');
+  await page.click('[data-action=accept-terms]');
   await page.waitForSelector('.bottomnav');
+  assert.equal(acceptCalls, 1);
+  ok('owner: first sign-in shows «Примите условия сервиса» (offer + privacy links, button off until the box is ticked); accepted → saved on the server');
   assert.match(await page.textContent('.role-chip'), /Владелец/);
   ok('owner: e-mail code login (captcha off → no token, like the extension)');
   await page.waitForSelector('[data-action=scan-qr]');

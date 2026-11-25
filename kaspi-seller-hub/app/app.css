@@ -140,3 +140,12 @@ body:has(.install-bar) .content { padding-bottom: calc(var(--nav-h) + 110px + va
 .install-bar__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .install-bar__text small { color: var(--muted); }
 .install-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line); font-size: 15px; }
+
+/* consent (offer + privacy) */
+.consent { text-align: left; }
+.consent .login__logo { display: block; margin: 0 auto; }
+.consent .login__title { text-align: center; }
+.consent__check { align-items: flex-start; border-bottom: 0; padding: 12px 0; line-height: 1.45; }
+.consent__check input { flex: none; margin-top: 2px; }
+.consent a { color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }

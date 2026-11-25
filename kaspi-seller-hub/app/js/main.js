@@ -236,9 +236,38 @@ async function go(tab) {
 }
 async function render() {
   if (state.role === 'staff') return renderStaff();
+  if (state.license?.needsConsent) return renderConsent(); // the offer comes before anything else, like in the extension
   const view = { home: ownerHome, orders: ownerOrders, stores: ownerStoresView, more: ownerMore }[state.tab] || ownerHome;
   const title = { home: 'Сводка', orders: 'Заказы', stores: 'Магазины', more: 'Ещё' }[state.tab];
   shell(OWNER_TABS, state.tab, await view(), title);
+}
+
+/** «Примите условия сервиса»: same text and server record (accept_terms) as the extension. */
+function renderConsent() {
+  const updated = !!state.license?.termsAcceptedAt;
+  const box = h('input', { type: 'checkbox', id: 'terms-ok', dataset: { field: 'terms' } });
+  const accept = btn('Принимаю', async (e) => busy(e.currentTarget, async () => {
+    if (!box.checked) return;
+    state.license = await B.acceptTerms();
+    toast('Согласие сохранено', 'ok');
+    await render();
+  }), 'btn--primary btn--block', { disabled: true, dataset: { action: 'accept-terms' } });
+  box.addEventListener('change', () => (accept.disabled = !box.checked));
+  const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
+  const r = clear(root());
+  r.append(
+    h('div', { class: 'login consent' },
+      h('img', { src: './icons/icon-192.png', alt: '', class: 'login__logo', width: 64, height: 64 }),
+      h('h1', { class: 'login__title' }, updated ? 'Условия сервиса обновились' : 'Примите условия сервиса'),
+      h('p', { class: 'muted' }, updated
+        ? 'Мы опубликовали новую редакцию оферты и политики конфиденциальности. Чтобы продолжить работу, подтвердите согласие.'
+        : 'Чтобы пользоваться SaudaPulse, ознакомьтесь с офертой и политикой конфиденциальности и подтвердите согласие.'),
+      h('label', { class: 'check consent__check', for: 'terms-ok' }, box,
+        h('span', null, 'Я принимаю условия ', link('/offer', 'Публичной оферты'), ' и даю согласие на обработку моих персональных данных в соответствии с ', link('/privacy', 'Политикой конфиденциальности'), ', в том числе на их трансграничную передачу.')),
+      accept,
+      btn('Выйти', () => signOut(), 'btn--ghost btn--block'),
+    ),
+  );
 }
 
 function licenseBanner() {
