@@ -6,7 +6,7 @@
  *           data-store-url="https://chromewebstore.google.com/detail/<id>"></script>
  *
  *  - Computer / laptop: floating button bottom-right → the extension in the Chrome Web Store
- *    (until the store link is known: scrolls to the «Как подключить» section, #how).
+ *    (until the store link is known: to the «Как подключить» section, /#how).
  *  - Tablet (iPad, Android tablet): floating button bottom-right → the phone app, because
  *    tablets cannot run Chrome extensions.
  *  - Phone: a bar at the bottom → /app/?install=1, the app opens with its install step
@@ -82,7 +82,7 @@
     ]);
     box.insertBefore(closeBtn(box), box.firstChild);
   } else {
-    var href = tablet ? appUrl : storeUrl || '#how';
+    var href = tablet ? appUrl : storeUrl || (location.pathname.indexOf('/kk') === 0 ? '/kk/#how' : '/#how');
     var link = el('a', { href: href, 'data-spi': tablet ? 'tablet' : 'desktop' }, [
       el('span', { 'aria-hidden': 'true', style: 'font-size:18px' }, ['⬇']),
       tablet ? T.app : T.ext
