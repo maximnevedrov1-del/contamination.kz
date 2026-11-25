@@ -28,14 +28,24 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR
   const res = await d.evaluate(() => chrome.runtime.sendMessage({ type: 'ui:connectApi', payload: { shopId: null, name: 'Автозапчасти', token: 'GOOD-TOKEN-1234' } }));
   check('store connected by API token', res?.ok, JSON.stringify(res));
   await sleep(5000);
+  // photos of the ordered products are found on Kaspi by themselves: let that finish before clicking around
+  for (let i = 0; i < 40; i++) {
+    const st = await sw.evaluate(async () => Object.keys((await chrome.storage.local.get('ksh.photoFinder'))['ksh.photoFinder'] || {}).length);
+    if (st >= 3) break;
+    await sleep(1000);
+  }
+  await sleep(1500);
 
   // 1. order card: placeholder → add a photo from a file → shown in the card
   await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#orders`); await sleep(2000);
   await d.locator('#view tbody tr', { hasText: '800002001' }).locator('button.link').click();
   await d.waitForSelector('#orderDialog[open]');
   const line = d.locator('#orderDialog .order__line').first();
-  check('1 order line shows a photo placeholder with «+»', (await line.locator('.thumb--empty').count()) === 1 && (await line.locator('.thumb-btn__plus').count()) === 1);
+  // the product photo may already have been found on Kaspi by itself (photo finder); otherwise a 📦 with «+»
+  const auto = await line.locator('img.thumb[src*="cdn-kaspi"]').count();
+  check('1 order line shows a photo placeholder with «+» (or the photo found on Kaspi)', auto === 1 || ((await line.locator('.thumb--empty').count()) === 1 && (await line.locator('.thumb-btn__plus').count()) === 1));
   check('1 quantity shown large («× N»)', (await line.locator('.order__qty').innerText()).startsWith('×'));
+
   const sku = await line.locator('.thumb-btn').getAttribute('data-photo');
   await line.locator('.thumb-btn').click();
   await d.waitForSelector('#photoDialog[open]');
@@ -57,7 +67,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR
   // 2. «Себестоимость» shows the same photo; a Kaspi CDN link is accepted
   await d.goto(`chrome-extension://${id}/dashboard/dashboard.html#products`); await sleep(1500);
   check('2 cost-price table shows the photo', (await d.locator(`#view button[data-photo="${sku}"] img.thumb`).count()) === 1);
-  const other = d.locator('#view button.thumb-btn:has(.thumb--empty)').first();
+  // another product (its photo may already have come from Kaspi by itself — a pasted link replaces it)
+  const other = d.locator(`#view button.thumb-btn:not([data-photo="${sku}"])`).first();
   const otherSku = await other.getAttribute('data-photo');
   await other.click(); await d.waitForSelector('#photoDialog[open]');
   await d.fill('#photoDialog input[type=url]', 'https://resources.cdn-kaspi.kz/img/m/p/h44/h88/63854412398622.jpg');

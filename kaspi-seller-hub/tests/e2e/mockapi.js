@@ -41,6 +41,9 @@ http.createServer((req, res) => {
   if (demo && u.searchParams.get('filter[orders][code]')) u.searchParams.set('filter[orders][code]', String(Number(u.searchParams.get('filter[orders][code]')) - OFF));
   const send = (code, obj, type = 'application/vnd.api+json') => { if (demo && obj && typeof obj === 'object' && !Buffer.isBuffer(obj)) obj = demoOut(structuredClone(obj)); res.writeHead(code, { 'Content-Type': type }); res.end(typeof obj === 'string' || Buffer.isBuffer(obj) ? obj : JSON.stringify(obj)); };
   if (u.pathname === '/__log') return send(200, log);
+  // public product page on kaspi.kz (no token): its og:image is the product photo
+  const pp = u.pathname.match(/^\/shop\/p\/-(\d+)\/$/);
+  if (pp) { log.push({ productPage: pp[1] }); res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(`<html><head><meta property="og:image" content="https://resources.cdn-kaspi.kz/img/m/p/mock/${pp[1]}.jpg?format=gallery-large"></head><body>товар</body></html>`); }
   // outage simulation for the API health tests: /__down?on=1 → every API call answers 502
   if (u.pathname === '/__down') { globalThis.DOWN = u.searchParams.get('on') === '1'; return send(200, { down: globalThis.DOWN }); }
   if (globalThis.DOWN && u.pathname.startsWith('/shop/api/')) return send(502, '<html>Bad Gateway</html>', 'text/html');
@@ -73,9 +76,12 @@ http.createServer((req, res) => {
       if (P === '/import/result') return send(200, { errors: 0, warnings: 0, skipped: 0, total: imp.items.length, result: Object.fromEntries(imp.items.map((i) => [i.sku, { state: 'FINISHED' }])) }, 'application/json');
       return send(404, {}, 'application/json');
     }
+    // product card of an order line (q3207) and the public product page with its og:image
+    const pc = u.pathname.match(/^\/shop\/api\/v2\/orderentries\/e-(\d)\/product$/);
+    if (pc) { log.push({ productCard: pc[1] }); return send(200, { data: { type: 'masterproducts', id: 'mp' + pc[1], attributes: { code: `10340329${pc[1]}`, name: 'x', category: 'Автозапчасти' } } }); }
     const m = u.pathname.match(/^\/shop\/api\/v2\/orders(?:\/([^/]+)\/entries)?$/);
     if (!m) return send(404, {});
-    if (m[1]) { const o = byId.get(m[1]); const n = Number(o.attributes.code) % 3; return send(200, { data: [{ type: 'orderentries', id: 'e', attributes: { quantity: 1 + (n === 2), basePrice: o.attributes.totalPrice, totalPrice: o.attributes.totalPrice, offer: { code: `SKU-${n}`, name: ['Тормозные колодки', 'Фильтр масляный', 'Свечи зажигания'][n] }, category: { title: 'Автозапчасти' } } }] }); }
+    if (m[1]) { const o = byId.get(m[1]); const n = Number(o.attributes.code) % 3; return send(200, { data: [{ type: 'orderentries', id: 'e', relationships: { product: { links: { related: `http://localhost:${PORT}/shop/api/v2/orderentries/e-${n}/product` } } }, attributes: { quantity: 1 + (n === 2), basePrice: o.attributes.totalPrice, totalPrice: o.attributes.totalPrice, offer: { code: `SKU-${n}`, name: ['Тормозные колодки', 'Фильтр масляный', 'Свечи зажигания'][n] }, category: { title: 'Автозапчасти' } } }] }); }
     if (req.method === 'POST') {
       const d = JSON.parse(body).data; const o = byId.get(d.id); log.push({ post: d.attributes, id: d.id });
       if (!o) return send(400, { message: 'not found' });

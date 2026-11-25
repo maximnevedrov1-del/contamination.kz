@@ -266,6 +266,7 @@
       concurrency: 3, // parallel requests per store
       entriesPerSync: 300, // order contents (one request each) fetched per sync and store
       cabinetOrderUrl: 'https://kaspi.kz/mc/#/orders/{code}', // TODO: link to the order in the cabinet
+      productPage: 'https://kaspi.kz/shop/p/-{code}/', // public product page: its og:image is the product photo
     },
 
     /** Human-like pacing for user-triggered bulk actions. */

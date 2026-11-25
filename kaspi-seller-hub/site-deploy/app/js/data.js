@@ -94,6 +94,7 @@ export async function importOwnerBackup(payload) {
   }
   const costs = { ...(await S.getCosts()), ...(payload.costs || {}) };
   await S.setCosts(costs);
+  if (payload.photos) await S.setPhotos({ ...payload.photos, ...(await S.getPhotos()) }); // Kaspi photo links
   const patch = {};
   const cur = (await S.getSettings()).profit;
   // the file wins per category; an empty commission in the file never erases one set on the phone
@@ -111,6 +112,7 @@ export async function backupPayload(scope, { shopIds = null, ownerId = null } = 
   const payload = {
     stores: Object.fromEntries(pick.map((s) => [s.id, { name: s.name, alias: s.alias || '', color: s.color }])),
     tokens: Object.fromEntries(pick.map((s) => [s.id, tokens[s.id]])),
+    photos: await S.getPhotos(),
   };
   if (scope === 'staff') return { ...payload, ownerId };
   return { ...payload, costs: await S.getCosts(), profit: settings.profit, deadlines: settings.deadlines };
@@ -231,6 +233,7 @@ export async function importStaffBackup(payload) {
     stores[id] = { name: st.alias || st.name, color: st.color };
   }
   await S.setApiTokens(Object.fromEntries(Object.keys(stores).map((id) => [id, payload.tokens[id]])));
+  await S.setPhotos(payload.photos || {}); // links to product photos on Kaspi's CDN: what the packer looks for
   await setStaff({ ownerId: payload.ownerId, stores, member: null, lastOkAt: 0 });
   return { stores: Object.keys(stores).length };
 }

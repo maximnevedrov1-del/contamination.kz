@@ -33,6 +33,8 @@ async function guard(route) {
     if (f) return route.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
     return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>stub</title><p>stub</p>' });
   }
+  // Kaspi's image CDN (product photos found on Kaspi): a small stand-in picture, like the real CDN answers
+  if (u.hostname === 'resources.cdn-kaspi.kz') return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#94a3b8"/></svg>' });
   return route.abort('connectionrefused');
 }
 

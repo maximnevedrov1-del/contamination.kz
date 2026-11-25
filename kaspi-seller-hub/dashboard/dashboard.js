@@ -704,8 +704,21 @@ function openPhoto(sku, name, onSaved) {
     clear(preview).append(isAllowedPhoto(value) ? h('img', { src: value, alt: name || sku }) : h('span', { class: 'muted' }, photoOf(sku) && !value ? t('photo.fromCatalog') : t('photo.none')));
     if (!value && photoOf(sku)) preview.prepend(h('img', { src: photoOf(sku), alt: name || sku }));
   };
-  const url = h('input', { class: 'input', type: 'url', placeholder: 'https://resources.cdn-kaspi.kz/…', value: value.startsWith('data:') ? '' : value, oninput: (e) => {
+  // a link to the product page on kaspi.kz (…/shop/p/…-123456/) → the worker finds its main photo
+  const isProductPage = (v) => /^https:\/\/(www\.)?kaspi\.kz\/shop\/p\//i.test(v);
+  let lookup = 0;
+  const url = h('input', { class: 'input', type: 'url', placeholder: 'https://kaspi.kz/shop/p/…', dataset: { field: 'photo-url' }, value: value.startsWith('data:') ? '' : value, oninput: async (e) => {
     const v = e.target.value.trim();
+    if (isProductPage(v)) {
+      const n = ++lookup;
+      err.hidden = false;
+      err.textContent = t('photo.looking');
+      const res = await send('ui:photoFromLink', { link: v });
+      if (n !== lookup) return; // typed again meanwhile
+      if (res?.ok) (value = res.url), (err.hidden = true), showPreview();
+      else err.textContent = errorText(res?.error);
+      return;
+    }
     err.hidden = !v || isAllowedPhoto(v);
     err.textContent = t('errors.photoNotAllowed');
     if (!v || isAllowedPhoto(v)) (value = v), showPreview();
@@ -2954,6 +2967,7 @@ function viewHome() {
             h('li', null, t('home.priceList.step1')),
             h('li', null, t('home.priceList.step2')),
             h('li', null, t('home.priceList.step3'))),
+          h('p', { class: 'muted small', style: { margin: '0 0 12px' } }, t('home.priceList.photos')),
           h('button', { type: 'button', class: 'btn btn--primary', dataset: { action: 'pricelist-import' }, onclick: () => (location.hash = 'catalog') }, t('home.priceList.action'))))
     : null;
 
@@ -2968,7 +2982,7 @@ function viewHome() {
 }
 
 // "Выгрузка товаров": catalog, put products on sale in all / chosen stores, price lists.
-const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog });
+const catalogView = createCatalogView({ toast, errorText, emptyState, storeChip, storeName, dataStores, renderView: () => renderView(), confirmDialog, thumb, photoOf, salesOf: () => productRows() });
 
 /* =====================================================================
  * Learning inside the interface
@@ -3455,6 +3469,7 @@ function bindShell() {
   // answer other pages' messages to the worker (the popup got an empty state).
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'bg:staffChanged') refreshStaff(); // signed out / switched off by the owner
+    if (msg?.type === 'bg:photosChanged') getPhotos().then((p) => ((state.photos = p), renderView())); // photos found on Kaspi
     if (msg?.type === 'bg:stateChanged' && msg.payload && !state.syncing) {
       withSnapshots(msg.payload).then((data) => {
         state.data = data;

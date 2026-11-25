@@ -40,7 +40,7 @@ import {
 import * as K from './kaspi-api.js';
 import { apiSnapshot } from '../shared/api-sync.js';
 import * as B from './billing.js';
-import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop, applyStockFromOrders } from './catalog-service.js';
+import { catalogHandlers, pollImports, ALARM_IMPORTS, onFeedDrop, applyStockFromOrders, findProductPhotos } from './catalog-service.js';
 import { staffHandlers, staffGate, checkStaff, scheduleStaffCheck, ALARM_STAFF } from './staff.js';
 import { spbackupHandlers } from './spbackup-service.js';
 import { startHealth, flushHealth, scheduleHealth, ALARM_HEALTH } from './health.js';
@@ -532,6 +532,8 @@ async function syncNow() {
   await notifyDeadlines().catch((e) => console.warn(LOG, 'deadline notify', e));
   // shipped orders → stock − quantity in the catalog → fresh price list for Kaspi
   await applyStockFromOrders().catch((e) => console.warn(LOG, 'stock write-off', e));
+  // photos of ordered products from their Kaspi page, a few per sync (not awaited: it paces itself)
+  findProductPhotos().then((r) => r.found && broadcast('bg:photosChanged')).catch((e) => console.warn(LOG, 'photos', e));
   // A store found during this sync (e.g. a new cabinet tab) may exceed the plan:
   // bill it now so the payment window can show right away.
   if (B.isConfigured() && lic.storeLimit != null && !lic.pendingInvoice && enabledStoreList(await getSettings()).length > lic.storeLimit) {

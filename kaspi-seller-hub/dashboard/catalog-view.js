@@ -389,7 +389,29 @@ export function createCatalogView(ui) {
       h('section', { class: 'card', style: { marginBottom: '16px' } }, h('div', { class: 'card__body' }, toolbar, table)),
       list.length ? feedCard() : null,
       list.length ? movesCard() : null,
+      noPhotoCard(),
     );
+  }
+
+  /* ---------- «Товары без фото»: what the packer would see as 📦, best sellers first ---------- */
+  function noPhotoCard() {
+    if (!ui.thumb || !ui.photoOf) return null;
+    const sold = new Map((ui.salesOf?.() || []).map((r) => [r.key, r.units || 0]));
+    const rows = new Map();
+    for (const p of cat.data?.products || []) rows.set(p.sku, { sku: p.sku, name: p.title, units: sold.get(p.sku) || 0 });
+    for (const r of ui.salesOf?.() || []) if (r.sku && !rows.has(r.sku)) rows.set(r.sku, { sku: r.sku, name: r.name, units: r.units || 0 });
+    const missing = [...rows.values()].filter((r) => !ui.photoOf(r.sku)).sort((a, b) => b.units - a.units);
+    return h('section', { class: 'card', dataset: { card: 'no-photo' } },
+      h('div', { class: 'card__header' }, h('div', null,
+        h('h2', { class: 'card__title' }, t('catalog.photos.title', { count: missing.length })),
+        h('div', { class: 'card__sub' }, t('catalog.photos.sub')))),
+      h('div', { class: 'card__body' },
+        missing.length
+          ? h('ul', { class: 'list', style: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '6px' } }, missing.slice(0, 40).map((r) => h('li', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+              ui.thumb(r.sku, { size: 40, edit: true, name: r.name, onSaved: () => ui.renderView() }),
+              h('span', { style: { flex: 1, minWidth: 0 } }, r.name || r.sku, ' ', h('span', { class: 'muted small mono' }, r.sku)),
+              r.units ? h('span', { class: 'muted small' }, t('catalog.photos.sold', { count: r.units })) : null)))
+          : h('p', { class: 'muted' }, t('catalog.photos.none'))));
   }
 
   /* ---------- «Движение остатков»: write-offs after shipment, returns of cancelled orders ---------- */

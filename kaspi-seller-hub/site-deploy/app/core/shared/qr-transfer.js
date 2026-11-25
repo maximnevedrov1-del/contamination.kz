@@ -51,11 +51,14 @@ export async function encodeTransfer(payload, { now = Date.now(), maxChars = QR_
   if (!Object.keys(clean.tokens).length) throw new QrTransferError('backupNoStores');
   const exp = now + QR_TTL_MS;
   const base = { v: 1, exp, stores: clean.stores, tokens: clean.tokens };
-  const full = `${QR_PREFIX}${b64u(await deflate(JSON.stringify({ ...base, costs: clean.costs, profit: clean.profit, deadlines: clean.deadlines })))}`;
-  if (full.length <= maxChars) return { text: full, withCosts: true, exp };
+  const money = { costs: clean.costs, profit: clean.profit, deadlines: clean.deadlines };
+  const full = `${QR_PREFIX}${b64u(await deflate(JSON.stringify({ ...base, ...money, photos: clean.photos })))}`;
+  if (full.length <= maxChars) return { text: full, withCosts: true, withPhotos: !!clean.photos, exp };
+  const mid = `${QR_PREFIX}${b64u(await deflate(JSON.stringify({ ...base, ...money })))}`;
+  if (mid.length <= maxChars) return { text: mid, withCosts: true, withPhotos: false, exp };
   const slim = `${QR_PREFIX}${b64u(await deflate(JSON.stringify(base)))}`;
   if (slim.length > maxChars * 1.6) throw new QrTransferError('qrTooBig'); // dozens of stores: use the file
-  return { text: slim, withCosts: false, exp };
+  return { text: slim, withCosts: false, withPhotos: false, exp };
 }
 
 /** Text read from a QR → sanitized owner payload (stores, tokens, costs…). */

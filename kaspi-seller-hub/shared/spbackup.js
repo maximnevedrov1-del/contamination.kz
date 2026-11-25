@@ -59,6 +59,7 @@ const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const TOKEN_RE = /^[A-Za-z0-9+/=_.\-]{8,512}$/;
 const ID_RE = /^[A-Za-z0-9_.:\-]{1,64}$/;
 const BAD_IDS = new Set(['__proto__', 'constructor', 'prototype']);
+const PHOTO_RE = /^https:\/\/resources\.cdn-kaspi\.kz\/img\/m\/p\/[\w/.-]+\.(jpe?g|png|webp)(\?format=gallery-(small|medium|large))?$/i;
 
 /**
  * Keep only what a transfer file may carry, per scope. Applied when the file is made AND when it
@@ -75,6 +76,12 @@ export function sanitizePayload(p, scope) {
     if (typeof tok === 'string' && TOKEN_RE.test(tok.trim())) tokens[id] = tok.trim();
   }
   const out = { app: 'saudapulse', scope, stores, tokens };
+  // product photos: links to Kaspi's image CDN only (never files, never other hosts) — packers see them too
+  const photos = {};
+  for (const [sku, url] of Object.entries(p.photos || {}).slice(0, 20000)) {
+    if (typeof sku === 'string' && sku.length <= 200 && !BAD_IDS.has(sku) && PHOTO_RE.test(String(url || ''))) photos[sku] = url;
+  }
+  if (Object.keys(photos).length) out.photos = photos;
   if (scope === 'staff') {
     out.ownerId = /^[0-9a-f-]{36}$/i.test(p.ownerId || '') ? p.ownerId.toLowerCase() : null;
     if (!out.ownerId) throw new SpBackupError('backupNoOwner');

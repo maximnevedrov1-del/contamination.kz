@@ -19,6 +19,7 @@ import { normalizePrint } from '../dashboard/print-layout.js';
 import { validateProduct, buildPriceListXml, offerCount, mergeImport, toImportItem, shopSlug, WAREHOUSE_RE } from '../shared/catalog.js';
 import { createMutex } from '../shared/utils.js';
 import { applyOrderStock, seedLedger } from '../shared/stock-moves.js';
+import { productPageUrl, codeFromProductLink, photoFromProductPage } from '../shared/kaspi-photo.js';
 
 const LOG = '[KSH catalog]';
 const A = () => globalThis.KSH_SELECTORS.api;
@@ -142,6 +143,88 @@ export async function applyStockFromOrders() {
   });
   if (res.changedShops?.length) scheduleFeedSync(res.changedShops);
   return res;
+}
+
+/* ---------------- product photos from Kaspi (order line → product card → public page) ---------------- */
+
+const PHOTO_FINDER_KEY = 'ksh.photoFinder'; // { [sku]: { at, status: 'found'|'none'|'error', code } }
+const PHOTO_RETRY_NONE_MS = 7 * DAY; // page without a usable photo: try again in a week
+const PHOTO_RETRY_ERROR_MS = DAY;
+let findingPhotos = false;
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Kaspi's public product page (selectors: api.productPage, test copies point it at a mock). */
+const pageUrl = (code) => (A().productPage ? A().productPage.replace('{code}', code) : productPageUrl(code));
+
+async function photoOfCode(code) {
+  const res = await fetch(pageUrl(code), { credentials: 'omit', redirect: 'follow', signal: AbortSignal.timeout(20000) });
+  if (!res.ok) return null;
+  return photoFromProductPage(await res.text());
+}
+
+/**
+ * For SKUs that were ordered and still have no photo: ask Kaspi's API for the product card of the
+ * order line (q3207), open the public product page once and keep the link to its main photo.
+ * Slow on purpose (a few products per run, seconds apart), once per product; runs in the seller's
+ * own browser, nothing goes through our server. Photos the seller set by hand are never replaced.
+ */
+export async function findProductPhotos({ limit = 8, gapMs = 3000 } = {}) {
+  if (findingPhotos) return { found: 0, tried: 0 };
+  findingPhotos = true;
+  try {
+    const [snaps, photos, catalog, tokens, got] = await Promise.all([getSnapshots(), getPhotos(), getCatalog(), getApiTokens(), chrome.storage.local.get(PHOTO_FINDER_KEY)]);
+    const state = got[PHOTO_FINDER_KEY] || {};
+    const now = Date.now();
+    const todo = new Map(); // sku → { shopId, link }, newest orders first
+    for (const [shopId, sn] of Object.entries(snaps)) {
+      if (!tokens[shopId]) continue;
+      const items = [...(sn?.sections?.orders?.items || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      for (const it of items) {
+        for (const e of it.entries || []) {
+          const sku = String(e?.sku || '').trim();
+          if (!sku || !e.productLink || todo.has(sku) || photos[sku] || (catalog[sku]?.images || []).length) continue;
+          const st = state[sku];
+          if (st && now - st.at < (st.status === 'error' ? PHOTO_RETRY_ERROR_MS : PHOTO_RETRY_NONE_MS)) continue;
+          todo.set(sku, { shopId, link: e.productLink });
+        }
+      }
+    }
+    let found = 0;
+    let tried = 0;
+    for (const [sku, c] of todo) {
+      if (tried >= limit) break;
+      tried++;
+      let status = 'none';
+      let code = null;
+      try {
+        code = await K.getProductCode(tokens[c.shopId], c.link);
+        const url = code ? await photoOfCode(code) : null;
+        if (url) {
+          status = 'found';
+          const saved = await lock(async () => {
+            const ph = await getPhotos();
+            if (ph[sku]) return false; // the seller set one meanwhile
+            ph[sku] = url;
+            await setPhotos(ph);
+            return true;
+          });
+          if (saved) found++;
+        }
+      } catch (e) {
+        status = 'error';
+        if (e.code === 'apiUnauthorized' || e.code === 'apiRateLimit') {
+          state[sku] = { at: Date.now(), status, code };
+          break;
+        }
+      }
+      state[sku] = { at: Date.now(), status, code };
+      if (gapMs && tried < limit) await pause(gapMs);
+    }
+    await chrome.storage.local.set({ [PHOTO_FINDER_KEY]: state });
+    return { found, tried, waiting: Math.max(0, todo.size - tried) };
+  } finally {
+    findingPhotos = false;
+  }
 }
 
 /* ---------------- card uploads (Content API) ---------------- */
@@ -367,6 +450,25 @@ export function catalogHandlers({ allowedShopIds }) {
     'ui:stockState': async () => {
       const [feeds, got] = await Promise.all([getFeeds(), chrome.storage.local.get(STOCK_MOVES_KEY)]);
       return { ok: true, imported: Object.fromEntries(Object.entries(feeds).map(([id, f]) => [id, f?.importedAt || null])), moves: (got[STOCK_MOVES_KEY] || []).slice(-50).reverse() };
+    },
+
+    /** The seller pasted a link to the product page on kaspi.kz: find its main photo. */
+    'ui:photoFromLink': async ({ link }) => {
+      const code = codeFromProductLink(link);
+      if (!code) return { ok: false, error: 'photoBadLink' };
+      try {
+        const url = await photoOfCode(code);
+        return url ? { ok: true, url, code } : { ok: false, error: 'photoNotFound' };
+      } catch {
+        return { ok: false, error: 'photoNotFound' };
+      }
+    },
+
+    /** How many ordered products got their photo automatically, how many are still waiting. */
+    'ui:photoFinderState': async () => {
+      const st = (await chrome.storage.local.get(PHOTO_FINDER_KEY))[PHOTO_FINDER_KEY] || {};
+      const v = Object.values(st);
+      return { ok: true, found: v.filter((x) => x.status === 'found').length, none: v.filter((x) => x.status === 'none').length };
     },
 
     'ui:feedSync': async ({ shopIds, allowDrop }) => ({ ok: true, results: await syncFeeds(shopIds || [], { force: true, allowDrop: !!allowDrop }) }),

@@ -9,7 +9,7 @@
  * Packers on a «Компьютер склада» cannot call either (not in staff.js STAFF_ALLOWED).
  */
 import { encryptBackup, decryptBackup, backupFileName, SpBackupError } from '../shared/spbackup.js';
-import { getSettings, saveSettings, getApiTokens, getCosts, setCosts } from '../shared/storage.js';
+import { getSettings, saveSettings, getApiTokens, getCosts, setCosts, getPhotos, setPhotos } from '../shared/storage.js';
 import * as B from './billing.js';
 import { encodeTransfer, qrMatrix, QrTransferError } from '../shared/qr-transfer.js';
 import qrcode from '../vendor/qrcode/qrcode.mjs';
@@ -28,6 +28,7 @@ export function spbackupHandlers({ connectApi, lock }) {
         const payload = {
           stores: Object.fromEntries(stores.map((s) => [s.id, { name: s.name, alias: s.alias || '', color: s.color }])),
           tokens: Object.fromEntries(stores.map((s) => [s.id, tokens[s.id]])),
+          photos: await getPhotos(), // links only survive sanitizePayload (Kaspi CDN); files stay here
         };
         if (scope === 'staff') {
           payload.ownerId = await B.ownerUserId();
@@ -57,6 +58,7 @@ export function spbackupHandlers({ connectApi, lock }) {
           costs: await getCosts(),
           profit: settings.profit,
           deadlines: settings.deadlines,
+          photos: await getPhotos(),
         });
         return { ok: true, matrix: qrMatrix(qrcode, text), withCosts, exp, stores: stores.length };
       } catch (e) {
@@ -83,6 +85,7 @@ export function spbackupHandlers({ connectApi, lock }) {
       }
       await lock(async () => {
         await setCosts({ ...(await getCosts()), ...payload.costs });
+        if (payload.photos) await setPhotos({ ...payload.photos, ...(await getPhotos()) }); // photos set here win
         const s = await getSettings();
         const dc = payload.profit.defaultCommission ?? s.profit.defaultCommission; // an empty value in the file never erases one set here
         await saveSettings({ profit: { ...s.profit, defaultCommission: dc, byCategory: { ...s.profit.byCategory, ...payload.profit.byCategory } }, deadlines: { ...s.deadlines, ...payload.deadlines } });

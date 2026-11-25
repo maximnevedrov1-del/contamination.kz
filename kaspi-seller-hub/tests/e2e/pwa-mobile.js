@@ -152,6 +152,7 @@ const ok = (name) => { n++; console.log('ok', name); };
     await ctx.route(PROD, (r) => (forbidden.push(r.request().url()), r.abort()));
     await ctx.route(/^https:\/\/([a-z0-9-]+\.)*kaspi\.kz\//, (r) => (forbidden.push(r.request().url()), r.abort())); // must never be called directly
     await ctx.route('https://challenges.cloudflare.com/**', (r) => r.abort());
+    await ctx.route('https://resources.cdn-kaspi.kz/**', (r) => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#2a78d6"/></svg>' }));
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -263,7 +264,7 @@ const ok = (name) => { n++; console.log('ok', name); };
 
   // desktop → phone in one tap: the QR text the extension shows (cost prices + commission inside)
   const { encodeTransfer } = await import(path.join(ROOT, 'shared/qr-transfer.js'));
-  const qr = await encodeTransfer({ stores: { 'api-x': { name: 'Мой магазин' } }, tokens: { 'api-x': KTOKEN }, costs: { 'SKU-1': 30000, 'SKU-2': 1000, 'SKU-3': 10000 }, profit: { defaultCommission: 10, byCategory: {} } });
+  const qr = await encodeTransfer({ stores: { 'api-x': { name: 'Мой магазин' } }, tokens: { 'api-x': KTOKEN }, costs: { 'SKU-1': 30000, 'SKU-2': 1000, 'SKU-3': 10000 }, profit: { defaultCommission: 10, byCategory: {} }, photos: { 'SKU-3': 'https://resources.cdn-kaspi.kz/img/m/p/aa/bb/33.jpg?format=gallery-medium', 'SKU-X': 'https://evil.com/x.jpg' } });
   await page.click('[data-tab=stores]');
   await page.click('[data-action=scan-qr]');
   await page.waitForSelector('dialog.scanner[open]');
@@ -394,6 +395,8 @@ const ok = (name) => { n++; console.log('ok', name); };
 
   await page.click('.order >> nth=0');
   await page.waitForSelector('dialog.sheet[open]');
+  assert.equal(await page.getAttribute('dialog.sheet img.pphoto', 'src'), 'https://resources.cdn-kaspi.kz/img/m/p/aa/bb/33.jpg?format=gallery-medium');
+  ok('packer: product photo in the packing card (Kaspi photo link: computer → QR → owner phone → packer file); foreign links dropped');
   await checkLayout(page, 'packer order card');
   await page.screenshot({ path: path.join(SHOTS, 'staff-order-390x844.png') });
   await page.fill('dialog.sheet input[type=text]', 'SKU-3');

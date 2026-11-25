@@ -235,8 +235,17 @@ export async function getEntries(token, order) {
       price: a.basePrice ?? null,
       total: a.totalPrice ?? null,
       category: a.category?.title || '',
+      // the Kaspi product card of this line (q3207): its code leads to the product photo (background/photo-finder.js)
+      productLink: e.relationships?.product?.links?.related || null,
     };
   });
+}
+
+/** Kaspi product code (the number in kaspi.kz/shop/p/…-<code>/) of an order line, by its `product` link (q3207). */
+export async function getProductCode(token, productLink) {
+  const d = await json(await apiRequest(token, productLink));
+  const code = String(d?.data?.attributes?.code || '').trim();
+  return /^\d{3,20}$/.test(code) ? code : null;
 }
 
 /** Change an order's status (POST /orders) — accept (q3211). */

@@ -31,7 +31,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await d.reload();
   await d.waitForSelector('[data-card=pricelist]', { timeout: 20000 });
   const card = await d.textContent('[data-card=pricelist]');
-  check('Home: «Заказы загружены… загрузите прайс-лист из кабинета Kaspi — 1 минута» with the 3 steps', /Заказы загружены/.test(card) && /1 минута/.test(card) && /Скачать в Excel/.test(card) && /Склад 1/.test(card), card.slice(0, 160));
+  check('Home: «Заказы загружены… загрузите прайс-лист из кабинета Kaspi — 1 минута» with the 3 steps', /Заказы загружены/.test(card) && /1 минута/.test(card) && /Управление товарами → Прайс-лист → Скачать/.test(card) && /после первой продажи/.test(card) && /Склад 1/.test(card), card.slice(0, 160));
   await d.screenshot({ path: __dirname + '/stock-home-card.png', clip: await d.locator('[data-card=pricelist]').boundingBox() });
   await d.click('[data-action=pricelist-import]');
   await d.waitForFunction(() => location.hash === '#catalog');

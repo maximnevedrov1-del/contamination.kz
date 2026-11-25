@@ -55,6 +55,15 @@ const time = (iso) => (iso ? new Date(iso).toLocaleString('ru-RU', { day: '2-dig
 const ago = (ts) => (!ts ? 'ещё не обновлялось' : `обновлено ${new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Almaty' })}`);
 
 /* ---------------- small UI kit ---------------- */
+/** Product photo by SKU (links to Kaspi's image CDN, loaded once per screen), or a 📦 placeholder. */
+let photoMap = {};
+const loadPhotos = async () => (photoMap = await S.getPhotos().catch(() => ({})));
+function productPhoto(sku, size = 48) {
+  const src = photoMap[sku];
+  const box = { width: `${size}px`, height: `${size}px` };
+  if (!src || !/^https:\/\/resources\.cdn-kaspi\.kz\//.test(src)) return h('span', { class: 'pphoto pphoto--none', style: box, 'aria-hidden': 'true' }, '📦');
+  return h('img', { class: 'pphoto', src, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', style: box, onerror: (e) => e.target.replaceWith(h('span', { class: 'pphoto pphoto--none', style: box }, '📦')) });
+}
 function toast(text, kind = 'info') {
   document.querySelectorAll('.toast').forEach((t) => t.remove()); // one message at a time
   const el = h('div', { class: `toast toast--${kind}`, role: kind === 'error' ? 'alert' : 'status' }, text);
@@ -236,6 +245,7 @@ async function go(tab) {
 }
 async function render() {
   if (state.role === 'staff') return renderStaff();
+  await loadPhotos();
   if (state.license?.needsConsent) return renderConsent(); // the offer comes before anything else, like in the extension
   const view = { home: ownerHome, orders: ownerOrders, stores: ownerStoresView, more: ownerMore }[state.tab] || ownerHome;
   const title = { home: 'Сводка', orders: 'Заказы', stores: 'Магазины', more: 'Ещё' }[state.tab];
@@ -341,7 +351,7 @@ function ownerOrderSheet(o, settings, costs) {
   dlg.append(
     h('h2', { class: 'sheet__title' }, `Заказ № ${o.id}`),
     h('p', { class: 'muted' }, `${o.shopName} · ${time(o.date)} · ${STATUS[o.status] || o.status}`),
-    h('ul', { class: 'list' }, (o.entries || []).map((e) => h('li', { class: 'list__row' }, h('span', { class: 'list__main' }, e.name || e.sku, h('small', { class: 'muted' }, `${e.sku} × ${e.quantity}`)), h('strong', null, money(e.total ?? e.price * e.quantity))))),
+    h('ul', { class: 'list' }, (o.entries || []).map((e) => h('li', { class: 'list__row' }, productPhoto(e.sku, 44), h('span', { class: 'list__main' }, e.name || e.sku, h('small', { class: 'muted' }, `${e.sku} × ${e.quantity}`)), h('strong', null, money(e.total ?? e.price * e.quantity))))),
     o.entries ? null : h('p', { class: 'muted small' }, 'Состав заказа загрузится при следующем обновлении.'),
     h('div', { class: 'row-between' }, h('span', null, 'Сумма'), h('strong', null, money(o.amount))),
     p ? h('div', { class: 'row-between' }, h('span', null, 'Прибыль'), h('strong', null, `${money(p.profit)}${p.margin != null ? ` · ${Math.round(p.margin * 100)}%` : ''}${p.complete ? '' : ' *'}`)) : null,
@@ -573,6 +583,7 @@ async function staffSync(el, { quiet = false } = {}) {
 }
 
 async function renderStaff() {
+  await loadPhotos();
   const view = { queue: staffQueueView, search: staffSearchView, profile: staffProfile }[state.tab] || staffQueueView;
   shell(STAFF_TABS, state.tab, await view(), { queue: 'Очередь упаковки', search: 'Поиск заказа', profile: 'Профиль' }[state.tab]);
 }
@@ -607,7 +618,7 @@ function staffOrderSheet(o) {
     if (line) (line.done = true), paint();
     else toast('Такого товара нет в этом заказе', 'error');
   } });
-  const paint = () => clear(listEl).append(...lines.map((l) => h('li', null, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: l.done, onchange: (ev) => ((l.done = ev.target.checked), paint()) }), h('span', { class: 'list__main' }, l.name || l.sku, h('small', { class: 'muted' }, `${l.sku} × ${l.quantity}`))))));
+  const paint = () => clear(listEl).append(...lines.map((l) => h('li', null, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: l.done, onchange: (ev) => ((l.done = ev.target.checked), paint()) }), productPhoto(l.sku, 64), h('span', { class: 'list__main' }, l.name || l.sku, h('small', { class: 'muted' }, `${l.sku} × ${l.quantity}`))))));
   paint();
   const canAccept = !!state.staff?.member?.can_accept;
   const act = async (action, el) => busy(el, async () => {

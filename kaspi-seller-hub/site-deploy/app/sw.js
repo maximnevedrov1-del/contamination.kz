@@ -8,7 +8,7 @@ self.__SHELL__ = ["./","./app.css","./core/background/billing.js","./core/backgr
  * Those requests are not intercepted at all — they go straight to the network.
  * The build (tools/build-app.mjs) fills SHELL and VERSION.
  */
-const VERSION = 'd88ffcee801c';
+const VERSION = '042d057d3a83';
 const CACHE = `sp-shell-${VERSION}`;
 const SHELL = self.__SHELL__ || ['./', './index.html', './app.css', './manifest.webmanifest'];
 
