@@ -311,7 +311,8 @@ async function support(env, f, { chat, text, lang, linked }) {
     if (r?.ok) return say(t.ticketOk(r.id), menuKb(lang));
     if (r?.error === 'ticket_limit') return say(t.ticketLimit, menuKb(lang));
   }
-  const base = await call('bot_faq', {}).catch((e) => {
+  // bot_faq(p_key) takes no chat: PostgREST matches functions by their argument names
+  const base = await rpc(env, 'bot_faq', { p_key: env.BOT_KEY }, null, f).catch((e) => {
     console.warn('[telegram-bot] bot_faq failed', String(e?.message || e).slice(0, 100));
     return null;
   });

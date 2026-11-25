@@ -1,7 +1,7 @@
 -- Seller Hub: function, table and Storage privileges, deterministic and idempotent.
 -- Apply AFTER restoring a dump (pg_restore --no-owner ...):
 --   psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql
--- Mirrors the grants of migrations 001..032 (verified against a database built from them).
+-- Mirrors the grants of migrations 001..033 (verified against a database built from them).
 -- Keep in sync: when a migration adds a function or changes who may call it, update this file too.
 
 -- 1. everything closed first (also for future functions)
@@ -97,7 +97,7 @@ grant execute on function
   public.bot_link(text, text, bigint, text), public.bot_unlink(text, bigint, boolean), public.bot_jobs(text), public.bot_sent(text, jsonb),
   public.bot_lock(text, text, int), public.bot_unlock(text, text), public.bot_key_ok(text), public.ops_digest(text),
   public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.bot_langs(text,uuid[],bigint[]), public.bot_verify_phone(text,bigint,text),
-  public.bot_faq(text), public.bot_ask(text,bigint,text,text,int,text), public.bot_feedback(text,bigint,boolean),
+  public.bot_faq(text), public.bot_faq(text,bigint), public.bot_ask(text,bigint,text,text,int,text), public.bot_feedback(text,bigint,boolean),
   public.bot_ticket_wait(text,bigint,boolean), public.bot_ticket(text,bigint,text)
 to service_role;
 

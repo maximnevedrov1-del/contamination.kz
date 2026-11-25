@@ -72,12 +72,27 @@ test('greetings and thanks are not questions', () => {
 
 /* ---------- the dialogue, against a fake database ---------- */
 const env = { SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'svc', BOT_KEY: 'k', BOT_TOKEN: 't', TELEGRAM_API: 'https://tg.test', WEBHOOK_SECRET: 'secret-secret-0123' };
+/** Argument names of the SQL functions (032_support_bot.sql, 029, 005): checked on every call. */
+const SIGNATURES = {
+  bot_faq: ['p_key'],
+  bot_ask: ['p_key', 'p_chat_id', 'p_lang', 'p_text', 'p_faq', 'p_source'],
+  bot_feedback: ['p_key', 'p_chat_id', 'p_helped'],
+  bot_ticket_wait: ['p_key', 'p_chat_id', 'p_on'],
+  bot_ticket: ['p_key', 'p_chat_id', 'p_text'],
+  bot_langs: ['p_key', 'p_user_ids', 'p_chat_ids'],
+  admin_ticket_tg: ['p_id'],
+};
 function fakeDb({ linked = { 9: 'ru' } } = {}) {
-  const db = { asked: [], feedback: [], waiting: new Set(), tickets: [], sent: [] };
+  const db = { asked: [], feedback: [], waiting: new Set(), tickets: [], sent: [], badCalls: [] };
   const ok = (v) => new Response(JSON.stringify(v), { status: 200 });
   db.f = async (url, opts) => {
     const b = opts?.body ? JSON.parse(opts.body) : {};
     const rpcName = url.includes('/rpc/') ? url.split('/rpc/')[1] : null;
+    // like PostgREST: a call whose argument names do not match the SQL function is a 404
+    if (rpcName && SIGNATURES[rpcName] && Object.keys(b).sort().join() !== [...SIGNATURES[rpcName]].sort().join()) {
+      db.badCalls.push(`${rpcName}(${Object.keys(b).join(', ')})`);
+      return new Response(JSON.stringify({ message: `Could not find the function public.${rpcName}` }), { status: 404 });
+    }
     if (rpcName === 'bot_langs') return ok({ users: {}, chats: Object.fromEntries((b.p_chat_ids || []).filter((c) => linked[c]).map((c) => [String(c), linked[c]])) });
     if (rpcName === 'bot_faq') return ok({ items: BASE, support_url: 'https://wa.me/77000000000' });
     if (rpcName === 'bot_ask') { db.asked.push(b); return ok({ id: db.asked.length }); }
@@ -188,4 +203,12 @@ test('the owner\'s answer goes to the client\'s Telegram (admin token only)', as
   assert.equal(db.sent.at(-1).chat_id, 9);
   assert.equal(db.sent.at(-1).text, TEXTS.kk.ticketReply(7, 'Баптаулар → «Токенді қайта қосу»'));
   assert.deepEqual(await (await handle(req(8, 'admin-jwt'), env, db.f)).json(), { sent: false, reason: 'no_telegram' });
+});
+
+test('every RPC the dialogue makes matches the SQL function\'s argument names', async () => {
+  const db = fakeDb();
+  for (const m of ['Салем', TEXTS.ru.topics.payment, 'Как оплатить подписку?', TEXTS.ru.btnYes, 'где взять токен', TEXTS.ru.btnNo,
+    TEXTS.ru.btnWrite, 'текст обращения', TEXTS.ru.btnWrite, TEXTS.ru.btnCancel, 'какая погода']) await db.say(m);
+  assert.deepEqual(db.badCalls, []);
+  assert.ok(db.asked.length >= 3, 'questions were logged');
 });

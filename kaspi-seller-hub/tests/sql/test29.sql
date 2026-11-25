@@ -33,6 +33,7 @@ select pg_temp.ok('bot functions: service_role only',
 set role service_role;
 do $$ begin perform bot_faq('wrong-key-0123456789abcdef0123456789'); raise notice 'FAIL wrong bot key'; exception when others then raise notice '% wrong bot key refused', case when sqlerrm = 'bad_key' then 'PASS' else 'FAIL' end; end $$;
 select pg_temp.ok('bot_faq: enabled answers with keywords', (select jsonb_array_length(r->'items') >= 20 and r->'items'->0 ? 'kw' and r->'items'->0 ? 'a_kk' from (select bot_faq(:K) r) x));
+select pg_temp.ok('bot_faq with a chat id (bot v12) gives the same answer', bot_faq(:K, 2002) = bot_faq(:K));
 reset role;
 set role authenticated; select pg_temp.as_user('f2000000-0000-0000-0000-00000000000b');
 do $$ begin perform admin_faq(); raise notice 'FAIL seller read the admin base'; exception when others then raise notice 'PASS seller cannot read the admin base (%)', sqlerrm; end $$;
