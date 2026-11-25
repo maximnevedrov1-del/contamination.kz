@@ -283,3 +283,12 @@ Open (by design or for later):
 | `e2e/phonecard.js` | all pass | the QR drawn in the real extension decodes to the store token and cost price |
 
 The unit suites, robust (38) and locales (1184 keys) all pass. The release build ships `vendor/qrcode/` and `shared/qr-transfer.js`, and the 0.1.2 zip is unchanged.
+
+## 8. Published (2026-11-25)
+
+- Edge Function `kaspi-relay` deployed to `kaspi-seller-hub` (`zraktrilvwrfpcbmkqwi`): version 1, `verify_jwt = false`, status ACTIVE.
+  - Nothing else on the project changed: no SQL and no secrets. The existing `telegram-bot` was not touched.
+  - Allowed page origins are built into `handler.js` (`DEFAULT_ORIGINS`): `https://saudapulse.kz`, `https://www.saudapulse.kz` and `https://saudapulse.pages.dev`.
+  - Rollback: delete the function in Supabase → Edge Functions → kaspi-relay.
+- Site: Cloudflare Pages project `saudapulse`, connected to this repository (branch `claude/magical-maxwell-6yq76b`, output `kaspi-seller-hub/site-deploy`). It is live at `saudapulse.pages.dev`; the `saudapulse.kz` nameservers were moved to Cloudflare and activation is pending.
+

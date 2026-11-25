@@ -72,12 +72,14 @@ export function createLimiter({ perMinute = 300, maxUsers = 5000, now = () => Da
   };
 }
 
-const parseOrigins = (s) => String(s || 'https://saudapulse.kz').split(',').map((x) => x.trim().replace(/\/$/, '')).filter(Boolean);
+/** Pages allowed to use the relay when RELAY_ALLOWED_ORIGINS is not set: the site, its www alias, the Cloudflare Pages address. */
+export const DEFAULT_ORIGINS = 'https://saudapulse.kz,https://www.saudapulse.kz,https://saudapulse.pages.dev';
+const parseOrigins = (s) => String(s || DEFAULT_ORIGINS).split(',').map((x) => x.trim().replace(/\/$/, '')).filter(Boolean);
 
 /**
  * @param {{ env: Record<string,string|undefined>, fetchImpl?: typeof fetch, now?: () => number, jwks?: object[] }} opts
  *   env.SUPABASE_URL           project URL (set by Supabase automatically)
- *   env.RELAY_ALLOWED_ORIGINS  comma-separated page origins (default https://saudapulse.kz)
+ *   env.RELAY_ALLOWED_ORIGINS  comma-separated page origins (default DEFAULT_ORIGINS)
  *   env.RELAY_JWKS             optional: the project's public JWKs as JSON (else read once from
  *                              <SUPABASE_URL>/auth/v1/.well-known/jwks.json and kept 10 min)
  *   env.RELAY_RATE_PER_MINUTE  optional, default 300
