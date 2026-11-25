@@ -30,7 +30,7 @@ const check = (n, ok, i = '') => { if (!ok) fails++; console.log(ok ? 'PASS' : '
   await d.fill('[data-field=sp-pass]', 'short');
   await d.fill('[data-field=sp-pass2]', 'short');
   await d.click('[data-action=sp-pass-ok]');
-  check('weak passphrase refused in the dialog', /не короче 10/.test(await d.textContent('dialog[open]')));
+  check('weak passphrase refused in the dialog', /не короче 12/.test(await d.textContent('dialog[open]')));
   await d.fill('[data-field=sp-pass]', 'desktop-to-phone-1');
   await d.fill('[data-field=sp-pass2]', 'desktop-to-phone-1');
   const dlP = d.waitForEvent('download');

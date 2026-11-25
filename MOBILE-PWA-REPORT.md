@@ -57,7 +57,7 @@ All data lives only on the phone, encrypted with AES-GCM 256 under a non-extract
   - Kaspi tokens are encrypted twice: `token-crypto.js` (`enc1:`) inside the encrypted record.
 - **`shared/api-sync.js`**: `apiSnapshot` / `apiTopProducts` moved **verbatim** out of `background/service-worker.js`. The worker now imports them (diff: 2 lines changed, 82 moved). Both platforms compute orders, returns, refusals and top products the same way.
 - **`shared/spbackup.js`**: the `.spbackup` transfer file.
-  - Encryption: PBKDF2-SHA-256 with 600 000 iterations and a random 16-byte salt derives an AES-GCM 256 key. The authenticated header (format, version, scope, date, KDF, IV) is the additional data. Changing `staff`→`owner` or lowering the iterations makes the file fail to open. Passphrase is at least 10 characters.
+  - Encryption: PBKDF2-SHA-256 with 600 000 iterations and a random 16-byte salt derives an AES-GCM 256 key. The authenticated header (format, version, scope, date, KDF, IV) is the additional data. Changing `staff`→`owner` or lowering the iterations makes the file fail to open. Passphrase is at least 12 characters.
   - Scope `owner` contains stores, tokens, cost prices, profit and deadline settings.
   - Scope `staff` contains stores, tokens and the owner id only. `sanitizePayload` runs on write **and** on read, so a hand-edited staff file cannot bring money data onto a packer's phone.
 - **Licence**: `licenseView()` from `billing.js`. The subscription is read only from the ES256-signed access token (`license-signature.js`). Store keys come from `store-key.js`: `SHA-256('ksh:api:' + SHA-256('ksh-api:' + token))`. The same token gives the same store id and the same trial key on the computer and on the phone (tested: importing a file for an already connected token creates no duplicate).
@@ -188,7 +188,7 @@ Honest residual risks and limits:
 6. The extension zip now also carries `shared/storage-adapter.js` and `shared/kaspi-relay-client.js`. The extension never loads them (dead code, about 15 KB).
 7. **Waybill PDF download** from Kaspi subdomains is not available on the phone. The relay allowlist is `kaspi.kz/shop/api` only. Printing stays on the computer.
 
-_Independent review: see section 6._
+_Independent review and fixes: see section 6._
 
 ## 5. Deployment (do on a staging project first)
 
@@ -224,4 +224,24 @@ TURNSTILE_SITE_KEY=0x… node tools/build-app.mjs     # same site key as saudapu
 
 ## 6. Independent security review
 
-_Pending (see the note in the conversation)._
+A separate read-only review of the relay, the client, storage, `.spbackup`, the app, the service worker, the build and the extension handlers found **no critical issues**. These checks held up: the allowlist, redirects, JWT checks, CORS, the service worker, XSS, field whitelisting for packers, AES-GCM IVs and the authenticated header.
+
+Fixed after the review (all tests rerun and passing):
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | The packer file held tokens for every store; the per-packer store restriction was applied only on screen | after `team_join` / `team_check`, tokens and stores the owner did not give this packer (`shop_ids`) are **deleted from the phone** (`pruneStaffStores`) |
+| 2 | Cloudflare's captcha script stayed loaded next to decrypted data | the page **reloads after login**, so the script is gone before any data is decrypted |
+| 3 | Another account on the same phone saw the previous account's data | the phone remembers whose data it holds (`pwa.user`); a different account **wipes everything first** |
+| 4 | Gaps in wipe on revocation | a revoked or deleted session on a packer phone now wipes; the wipe awaits the deletion of the token-key database; logout happens before wipe |
+| 5 | Relay accepted anonymous Supabase users; flooding the limiter could reset counters | `is_anonymous` is refused; a full limiter refuses newcomers instead of evicting active users (tests added) |
+| 6 | Passphrase floor was 10 characters | raised to **12** (PBKDF2 600k), ru/kk texts updated |
+| 8 | `__proto__` / `constructor` as a store id in a hand-made file | refused (test added) |
+
+Open (by design or for later):
+- **Clickjacking.** `frame-ancestors` and `X-Frame-Options` only work as HTTP headers. GitHub Pages cannot send them; Cloudflare Pages or Netlify can (`_headers` is generated). With only a meta CSP, the page can be framed. The impact is limited: there are no one-click destructive actions without a confirmation sheet.
+- **Relay accepts any signed-in SaudaPulse user**, without a licence or team check. The impact is free use of the relay, not data access. The rate limit applies.
+- **"Encrypted at rest" protects the stored data against reading the browser's files and DevTools dumps.** It does not protect against code running inside the app's own origin, or a fully copied browser profile. There is no PIN lock on the phone yet. A PIN lock is a good next step, especially for owners.
+- **Wording.** Platform logs (Supabase gateway / Cloudflare) still record request **metadata**: IP, time, status, size, user id in the gateway. The right claim is "no tokens, orders or prices are logged or stored", not "no logs at all".
+- **Packer token.** A packer still holds a full-power Kaspi token for their stores. Switching them off wipes the phone if it is online, but cannot revoke the token. **Rotate the Kaspi token when dismissing a packer.**
+- **Captcha.** Turnstile fails open on the client, as in the extension. It is real only once captcha is turned on in Supabase Auth.

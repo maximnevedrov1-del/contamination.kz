@@ -626,7 +626,7 @@
     "billing_invalid_choice": "Нұсқаны таңдаңыз.",
     "billing_bot_not_configured": "Telegram-ботты сервис иесі әлі баптамаған.",
     "backupWrongPassphrase": "файл құпиясөзі сәйкес келмеді",
-    "backupWeakPassphrase": "файл құпиясөзі — кемінде 10 таңба",
+    "backupWeakPassphrase": "файл құпиясөзі — кемінде 12 таңба",
     "backupNoStores": "API токенімен қосылған дүкен жоқ",
     "backupNoOwner": "қаптаушыға файл жасау үшін SaudaPulse аккаунтына кіріңіз",
     "backupIsStaff": "бұл қаптаушыға арналған файл — оны қаптаушының телефонындағы қосымшада ашыңыз",

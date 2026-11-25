@@ -80,7 +80,7 @@ await t('signed-in users only: no token, anon key, wrong signature, expired, oth
   const h = relay(up);
   const other = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const anonHs = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.x';
-  const cases = [null, '', anonHs, await jwt({ role: 'anon', aud: 'anon' }), await jwt({}, other.privateKey), await jwt({ exp: Math.floor(Date.now() / 1000) - 10 }), await jwt({ iss: 'https://other.supabase.co/auth/v1' }), await jwt({ role: 'service_role' })];
+  const cases = [null, '', anonHs, await jwt({ role: 'anon', aud: 'anon' }), await jwt({}, other.privateKey), await jwt({ exp: Math.floor(Date.now() / 1000) - 10 }), await jwt({ iss: 'https://other.supabase.co/auth/v1' }), await jwt({ role: 'service_role' }), await jwt({ is_anonymous: true })];
   for (const a of cases) {
     const r = await call(h, ok, { auth: a });
     assert.equal(r.status, 401, String(a).slice(0, 30));
@@ -155,6 +155,10 @@ await t('rate limit per user → 429 with Retry-After; other users unaffected', 
   assert.equal(lim('b'), null);
   now += 60000;
   assert.equal(lim('a'), null);
+  const full = createLimiter({ perMinute: 5, maxUsers: 2, now: () => now });
+  full('x'); full('y');
+  assert.ok(full('z') > 0); // full: newcomer refused, nobody evicted
+  assert.equal(full('x'), null);
   const h = relay(upstream(), { RELAY_RATE_PER_MINUTE: '2' });
   assert.equal((await call(h, ok)).status, 200);
   assert.equal((await call(h, ok)).status, 200);

@@ -21,7 +21,7 @@ export const SPBACKUP_VERSION = 1;
 export const KDF_ITERATIONS = 600000;
 const MIN_ITERATIONS = 200000;
 const MAX_ITERATIONS = 5000000;
-export const MIN_PASSPHRASE = 10;
+export const MIN_PASSPHRASE = 12;
 const MAX_FILE = 20 * 1024 * 1024;
 
 const enc = new TextEncoder();
@@ -58,6 +58,7 @@ export const passphraseOk = (p) => typeof p === 'string' && p.normalize('NFC').l
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const TOKEN_RE = /^[A-Za-z0-9+/=_.\-]{8,512}$/;
 const ID_RE = /^[A-Za-z0-9_.:\-]{1,64}$/;
+const BAD_IDS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
  * Keep only what a transfer file may carry, per scope. Applied when the file is made AND when it
@@ -68,7 +69,7 @@ export function sanitizePayload(p, scope) {
   const stores = {};
   const tokens = {};
   for (const [id, st] of Object.entries(p.stores || {}).slice(0, 50)) {
-    if (!ID_RE.test(id) || !st || typeof st !== 'object') continue;
+    if (!ID_RE.test(id) || BAD_IDS.has(id) || !st || typeof st !== 'object') continue;
     stores[id] = { name: str(st.name, 120) || id, alias: str(st.alias, 60), color: /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : '#2a78d6' };
     const tok = p.tokens?.[id];
     if (typeof tok === 'string' && TOKEN_RE.test(tok.trim())) tokens[id] = tok.trim();

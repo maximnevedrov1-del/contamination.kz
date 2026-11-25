@@ -160,9 +160,15 @@ function renderLogin(step = 'email', email = '') {
       h('p', { class: 'muted' }, `Мы отправили код на ${email}.`),
       field('Код', code),
       btn('Войти', async (e) => busy(e.currentTarget, async () => {
+        const prevUser = await D.getPhoneUser();
         await B.verifyCode(email, code.value);
+        const user = await B.ownerUserId();
+        // another account on this phone: the previous account's stores, tokens and orders are wiped first
+        if (prevUser && user && prevUser !== user) await D.wipeKeepSession();
+        await D.setPhoneUser(user);
         await D.setRole(state.role || 'owner');
-        await start();
+        // fresh page: Cloudflare's captcha script never stays loaded next to decrypted data
+        location.reload();
       }), 'btn--primary btn--block', { dataset: { action: 'verify-code' } }),
       btn('Другая почта', () => renderLogin('email', email), 'btn--ghost btn--block'),
     ),
@@ -456,15 +462,17 @@ async function staffCheck({ join = false, quiet = false } = {}) {
   if (!staff?.ownerId) return renderStaffSetup();
   try {
     const token = await B.currentToken();
-    if (!token) return signOut();
+    if (!token) return signOut({ wipe: true }); // session revoked / user deleted: nothing stays on a packer phone
     const member = await B.rpcWith(token, join ? 'team_join' : 'team_check', { p_owner: staff.ownerId });
     state.staff = { ...staff, member, lastOkAt: Date.now() };
     await D.setStaff(state.staff);
+    await D.pruneStaffStores(member?.shop_ids); // tokens of stores not given to this packer leave the phone
+    state.staff = await D.getStaff();
   } catch (e) {
     const reason = String(e?.detail || e?.message || '').match(/not_invited|access_disabled|owner_subscription_required/)?.[0];
     if (reason) {
-      await D.wipePhone();
       await B.logout().catch(() => {});
+      await D.wipePhone();
       clearInterval(state.timer);
       shell([['setup', 'Доступ', '☰']], 'setup', card('Доступ закрыт', h('p', { role: 'alert' }, ERR[reason]), h('p', { class: 'muted small' }, 'Данные магазина удалены с этого телефона.'), btn('Войти снова', () => location.reload(), 'btn--primary btn--block')), 'Упаковка');
       return;

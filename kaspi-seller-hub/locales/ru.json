@@ -662,7 +662,7 @@
     "billing_invalid_choice": "Выберите вариант.",
     "billing_bot_not_configured": "Telegram-бот ещё не настроен владельцем сервиса.",
     "backupWrongPassphrase": "пароль файла не подошёл",
-    "backupWeakPassphrase": "пароль файла — не короче 10 символов",
+    "backupWeakPassphrase": "пароль файла — не короче 12 символов",
     "backupNoStores": "нет магазинов, подключённых по токену API",
     "backupNoOwner": "войдите в аккаунт SaudaPulse, чтобы сделать файл для упаковщика",
     "backupIsStaff": "это файл для упаковщика — откройте его в приложении на телефоне упаковщика",

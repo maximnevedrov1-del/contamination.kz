@@ -63,7 +63,7 @@ export function createLimiter({ perMinute = 300, maxUsers = 5000, now = () => Da
     let h = hits.get(sub);
     if (!h || t - h.start >= 60000) {
       if (hits.size >= maxUsers) for (const [k, v] of hits) if (t - v.start >= 60000) hits.delete(k);
-      if (hits.size >= maxUsers) hits.delete(hits.keys().next().value);
+      if (hits.size >= maxUsers) return 60; // full of active users: refuse newcomers rather than evict (no counter reset by flooding)
       h = { start: t, n: 0 };
       hits.set(sub, h);
     }
@@ -133,7 +133,7 @@ export function createRelay({ env = {}, fetchImpl = globalThis.fetch, now = () =
     const v = jwt ? await getVerifier() : null;
     if (jwt && !v) return refuse(503, 'keys', origin);
     const claims = v ? await v.verifiedClaims(jwt) : null;
-    if (!claims || claims.role !== 'authenticated' || !claims.sub || claims.exp * 1000 <= now()) return refuse(401, 'auth', origin);
+    if (!claims || claims.role !== 'authenticated' || !claims.sub || claims.is_anonymous === true || claims.exp * 1000 <= now()) return refuse(401, 'auth', origin);
     const wait = limit(claims.sub);
     if (wait) return refuse(429, 'rate', origin, { 'Retry-After': String(wait) });
 

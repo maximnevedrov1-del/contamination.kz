@@ -22,9 +22,12 @@ export const APP_KEYS = Object.freeze({
   staffOrders: 'pwa.staffOrders', // { [shopId]: StaffOrder[] } — no money fields
   staffLog: 'pwa.staffLog', // packing journal on this phone
   lastSync: 'pwa.lastSync',
+  user: 'pwa.user', // account the data on this phone belongs to
 });
 
 export const getRole = () => get(APP_KEYS.role);
+export const getPhoneUser = () => get(APP_KEYS.user);
+export const setPhoneUser = (id) => set(APP_KEYS.user, id || null);
 export const setRole = (r) => set(APP_KEYS.role, r === 'staff' ? 'staff' : 'owner');
 
 /* ======================= owner ======================= */
@@ -205,6 +208,19 @@ export function toStaffOrder(it, shopId) {
 }
 
 export const getStaff = () => get(APP_KEYS.staff);
+
+/** After team_join / team_check: drop the tokens of stores the owner did not give this packer. */
+export async function pruneStaffStores(shopIds) {
+  if (!Array.isArray(shopIds) || !shopIds.length) return;
+  const tokens = await S.getApiTokens();
+  const keep = Object.fromEntries(Object.entries(tokens).filter(([id]) => shopIds.includes(id)));
+  if (Object.keys(keep).length !== Object.keys(tokens).length) await S.setApiTokens(keep);
+  const staff = await getStaff();
+  if (staff?.stores) {
+    staff.stores = Object.fromEntries(Object.entries(staff.stores).filter(([id]) => shopIds.includes(id)));
+    await setStaff(staff);
+  }
+}
 export const setStaff = (v) => set(APP_KEYS.staff, v);
 
 /** Packer .spbackup → the stores' tokens only (storage.js keeps them double-encrypted). */
@@ -312,11 +328,23 @@ export async function staffFind(code, allowedIds) {
   return null;
 }
 
+/** Another account signed in: wipe everything but the new session. */
+export async function wipeKeepSession() {
+  const session = (await local().get('ksh.session'))['ksh.session'];
+  await wipePhone();
+  if (session) await local().set({ 'ksh.session': session });
+}
+
 /** «Стереть всё с телефона»: every record and the encryption key itself. */
 export async function wipePhone() {
   await chrome.storage.local.destroy?.();
   await chrome.storage.session.clear();
-  try {
-    indexedDB.deleteDatabase('ksh-secrets'); // token-crypto's key
-  } catch { /* ignore */ }
+  await new Promise((ok) => {
+    try {
+      const r = indexedDB.deleteDatabase('ksh-secrets'); // token-crypto's key
+      r.onsuccess = r.onerror = r.onblocked = () => ok();
+    } catch {
+      ok();
+    }
+  });
 }

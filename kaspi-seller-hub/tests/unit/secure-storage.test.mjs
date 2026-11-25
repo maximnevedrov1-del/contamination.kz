@@ -206,13 +206,15 @@ await t('.spbackup: wrong passphrase, edited header (staff→owner, fewer iterat
 
 await t('.spbackup: weak passphrase refused; header readable without passphrase', async () => {
   assert.equal(passphraseOk('short'), false);
+  assert.equal(passphraseOk('elevenchars'), false); // 11 < 12
+  assert.equal(passphraseOk('twelve-chars'), true);
   await assert.rejects(encryptBackup(ownerPayload, 'short', { scope: 'owner' }), { code: 'backupWeakPassphrase' });
   const f = await encryptBackup(ownerPayload, PASS, { scope: 'owner' });
   assert.equal(readHeader(f).scope, 'owner');
 });
 
 await t('sanitizePayload drops junk ids, bad tokens and prototype tricks', async () => {
-  const p = sanitizePayload({ stores: { '../x': { name: 'x' }, ok: { name: 'Ok', color: 'red' } }, tokens: { ok: 'bad token with spaces' }, costs: { a: 'x' } }, 'owner');
+  const p = sanitizePayload({ stores: JSON.parse('{"__proto__":{"name":"p"},"constructor":{"name":"c"},"../x":{"name":"x"},"ok":{"name":"Ok","color":"red"}}'), tokens: { ok: 'bad token with spaces' }, costs: { a: 'x' } }, 'owner');
   assert.deepEqual(Object.keys(p.stores), ['ok']);
   assert.equal(p.stores.ok.color, '#2a78d6');
   assert.deepEqual(p.tokens, {});
