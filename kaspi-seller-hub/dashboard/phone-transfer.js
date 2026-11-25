@@ -67,7 +67,7 @@ function askPassphrase(t, { confirm }) {
     const p1 = h('input', { type: 'password', class: 'input', autocomplete: confirm ? 'new-password' : 'current-password', minlength: MIN_PASSPHRASE, dataset: { field: 'sp-pass' } });
     const p2 = confirm ? h('input', { type: 'password', class: 'input', autocomplete: 'new-password', dataset: { field: 'sp-pass2' } }) : null;
     const msg = h('p', { class: 'muted small', role: 'alert' });
-    const dlg = h('dialog', { class: 'dialog', 'aria-label': t('phone.passTitle') });
+    const dlg = h('dialog', { class: 'dialog', 'aria-label': t('phone.passTitle'), dataset: { padded: '' } });
     const close = (v) => (dlg.close(), dlg.remove(), resolve(v));
     dlg.append(
       h('h2', { class: 'dialog__title' }, t('phone.passTitle')),

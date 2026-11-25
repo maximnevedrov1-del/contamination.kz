@@ -704,3 +704,5 @@ tr.row--problem td { background: var(--danger-bg); }
 .cancel__done { font-size: 15px; margin: 12px 0; }
 .tg__list { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); }
 @media (max-width: 720px) { .store-meter__text { white-space: normal; } }
+/* dialogs built without an inner <form> get the same inner spacing as the others */
+#photoDialog, .dialog[data-padded] { padding: var(--space-5); }
