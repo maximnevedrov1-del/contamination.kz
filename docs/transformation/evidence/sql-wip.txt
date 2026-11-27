@@ -1,0 +1,62 @@
+test.sql: 34 passed, 0 failed
+test10.sql: 47 passed, 0 failed
+test11.sql: 13 passed, 0 failed
+test12.sql: 10 passed, 1 failed
+   FAIL new email with the orphaned store → trial ends
+test13.sql: 21 passed, 0 failed
+test14.sql: 25 passed, 0 failed
+test15.sql: 14 passed, 0 failed
+test16.sql: 21 passed, 0 failed
+test17.sql: 11 passed, 0 failed
+test18.sql: 6 passed, 0 failed
+test19.sql: 13 passed, 0 failed
+test2.sql: 18 passed, 8 failed
+   FAIL 4th store in trial → add-on 5 000 ₸ (30 days left)
+   FAIL 45 stores → same add-on updated to 42 × 5 000 = 210 000
+   FAIL renewal for 45 stores = 20 000 + 42 × 5 000 = 230 000
+   FAIL store added in the renewal window → SAME invoice, 47 stores = 240 000
+   FAIL 2 extra stores, 15 days left → 2 × 5 000 × 15/30 = 5 000
+   FAIL 1 extra store, 10 days left → 5 000 × 10/30 = 1 667 → rounded up to 1 700
+   FAIL expired: status expired
+   FAIL expired: add-on request becomes the renewal for all 47 stores
+test20.sql: 32 passed, 0 failed
+test21.sql: 26 passed, 0 failed
+test22.sql: 18 passed, 0 failed
+test23.sql: 21 passed, 0 failed
+test24.sql: 23 passed, 0 failed
+test25.sql: 43 passed, 0 failed
+test26.sql: 22 passed, 0 failed
+test27.sql: 3 passed, 9 failed
+   FAIL no discount: 12 months «Мульти» = 240 000
+   FAIL 12 months with the offer: only the first month is −30 % (14 000 + 11 × 20 000 = 234 000)
+   FAIL 1 month with the offer: 14 000
+   FAIL expired offer: full price again
+   FAIL victim pays 20 000 by QR from +77015554433 (no invoice id) → review, not confirmed
+   FAIL the review row names the candidate invoice for the admin
+   FAIL the same payment with our invoice id → confirmed
+   FAIL the victim's invoice is paid
+   FAIL new reason is allowed by the check constraint
+test28.sql: 12 passed, 5 failed
+   FAIL payment from the confirmed phone, no invoice id → confirmed automatically
+   FAIL the honest invoice is paid
+   FAIL payment from that phone → review phone_only (the attacker never confirmed it)
+   FAIL still review: invoice phone ≠ the account's confirmed phone
+   FAIL no confirmed phone → review phone_only
+test29.sql: 41 passed, 0 failed
+test3.sql: 16 passed, 1 failed
+   FAIL invoice allowed after consent
+test4.sql: 21 passed, 2 failed
+   FAIL third account with store 1001 (already used) → no trial, expired
+   FAIL token hook adds licence claims
+test5.sql: 10 passed, 0 failed
+test6.sql: 15 passed, 2 failed
+   psql:/home/user/contamination.kz/kaspi-seller-hub/tests/sql/test6.sql:15: NOTICE:  FAIL 4th feed on a 3-store trial
+   FAIL expired: update refused
+test7.sql: 29 passed, 0 failed
+test8.sql: 41 passed, 0 failed
+test9.sql: 28 passed, 0 failed
+SQL: 634 passed, 28 failed
+
+real	1m0.510s
+user	0m28.642s
+sys	0m7.220s

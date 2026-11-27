@@ -1,0 +1,34 @@
+test.sql: 34 passed, 0 failed
+test10.sql: 48 passed, 0 failed
+test11.sql: 13 passed, 0 failed
+test12.sql: 11 passed, 0 failed
+test13.sql: 21 passed, 0 failed
+test14.sql: 25 passed, 0 failed
+test15.sql: 14 passed, 0 failed
+test16.sql: 21 passed, 0 failed
+test17.sql: 11 passed, 0 failed
+test18.sql: 6 passed, 0 failed
+test19.sql: 13 passed, 0 failed
+test2.sql: 26 passed, 0 failed
+test20.sql: 32 passed, 0 failed
+test21.sql: 26 passed, 0 failed
+test22.sql: 18 passed, 0 failed
+test23.sql: 21 passed, 0 failed
+test24.sql: 23 passed, 0 failed
+test25.sql: 43 passed, 0 failed
+test26.sql: 22 passed, 0 failed
+test27.sql: 12 passed, 0 failed
+test28.sql: 17 passed, 0 failed
+test29.sql: 41 passed, 0 failed
+test3.sql: 17 passed, 0 failed
+test4.sql: 23 passed, 0 failed
+test5.sql: 10 passed, 0 failed
+test6.sql: 17 passed, 0 failed
+test7.sql: 29 passed, 0 failed
+test8.sql: 41 passed, 0 failed
+test9.sql: 28 passed, 0 failed
+SQL: 663 passed, 0 failed
+
+real	0m58.902s
+user	0m28.166s
+sys	0m7.006s

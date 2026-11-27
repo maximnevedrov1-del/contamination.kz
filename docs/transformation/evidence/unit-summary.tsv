@@ -1,0 +1,32 @@
+A	0	2.5	syntax check (node --check)
+B	0	0.1	JSON validity manifest + locales
+C	0	0.4	TZ=America/New_York node tests/unit/robust.test.mjs
+D	0	0.1	node tests/unit/locales.test.mjs
+E-storage-split	0	0.1	node tests/unit/storage-split.test.mjs
+E-token-crypto	0	0.1	node tests/unit/token-crypto.test.mjs
+E-license-signature	0	0.1	node tests/unit/license-signature.test.mjs
+E-license-flow	0	0.2	node tests/unit/license-flow.test.mjs
+E-bot-run	0	0.2	node tests/unit/bot-run.test.mjs
+E-feature-flags	0	0.1	node tests/unit/feature-flags.test.mjs
+E-notices	0	0.1	node tests/unit/notices.test.mjs
+E-backup	0	3.1	node tests/unit/backup.test.mjs
+E-ux-telemetry	0	0.1	node tests/unit/ux-telemetry.test.mjs
+E-store-key	0	0.1	node tests/unit/store-key.test.mjs
+E-sync-breaker	0	0.1	node tests/unit/sync-breaker.test.mjs
+E-captcha	0	0.1	node tests/unit/captcha.test.mjs
+E-payment-webhook	0	0.1	node tests/unit/payment-webhook.test.mjs
+E-secure-storage	0	1.2	node tests/unit/secure-storage.test.mjs
+E-kaspi-relay	0	0.2	node tests/unit/kaspi-relay.test.mjs
+E-spbackup-ext	0	1.3	node tests/unit/spbackup-ext.test.mjs
+E-qr-transfer	0	0.4	node tests/unit/qr-transfer.test.mjs
+E-stock-moves	0	0.0	node tests/unit/stock-moves.test.mjs
+E-price-list-import	0	0.0	node tests/unit/price-list-import.test.mjs
+E-kaspi-photo	0	0.0	node tests/unit/kaspi-photo.test.mjs
+F-bot-greeting	0	0.1	node tests/unit/bot-greeting.test.mjs (other unit test)
+F-bot-support	0	0.2	node tests/unit/bot-support.test.mjs (other unit test)
+F-ops-daily	0	0.1	node tests/unit/ops-daily.test.mjs (other unit test)
+G	0	0.1	node tools/build-app.mjs
+H	0	0.3	node tools/build-release.mjs
+I	1	0.0	grep eval/new Function
+J	0	0.0	postgres availability probe
+L	1	0.1	python3 -I -m pytest site-landing tests (landing py tests, check deps)
