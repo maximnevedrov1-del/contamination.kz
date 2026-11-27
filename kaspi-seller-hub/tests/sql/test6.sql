@@ -12,7 +12,7 @@ select pg_temp.ok('feed created', (select ensure_price_feed('shop-abc')->>'feed_
 select pg_temp.ok('same store → same feed', (select ensure_price_feed('shop-abc') = ensure_price_feed('shop-abc')));
 do $$ begin perform ensure_price_feed('../etc'); raise notice 'FAIL bad shop key'; exception when others then raise notice 'PASS bad shop key rejected (%)', sqlerrm; end $$;
 select ensure_price_feed('shop-two') is not null; select ensure_price_feed('shop-three') is not null;
-do $$ begin perform ensure_price_feed('shop-four'); raise notice 'FAIL 4th feed on a 3-store trial'; exception when others then raise notice 'PASS 4th store over the limit refused (%)', sqlerrm; end $$;
+select pg_temp.ok('4th feed allowed: no per-plan store limit any more (abuse ceiling is store_cap, see test30)', (select ensure_price_feed('shop-four')->>'feed_id' is not null));
 
 -- writes into storage, through the real policies
 select set_config('t.feed', (select ensure_price_feed('shop-abc')->>'feed_id'), false) is not null;
@@ -29,11 +29,11 @@ with x as (update storage.objects set metadata = '{"hacked":1}' where name like 
 with x as (delete from storage.objects where name like current_setting('t.feed') || '%' returning 1) select pg_temp.ok('cannot delete another client''s price list', count(*) = 0) from x;
 do $$ declare n int; begin select count(*) into n from public.price_feeds; raise notice '% cannot see other clients feeds', case when n = 0 then 'PASS' else 'FAIL' end; exception when insufficient_privilege then raise notice 'PASS cannot see other clients feeds (no table rights)'; end $$;
 
--- subscription over → uploads stop (the last file stays where Kaspi reads it)
+-- subscription over → uploads and new feeds KEEP working (free access, Stage 03)
 reset role;
 update accounts set trial_ends_at = now() - interval '1 minute' where email = 'a@example.kz';
 set role authenticated; select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000001', false) is not null;
-with x as (update storage.objects set metadata = '{"v":3}' where name = current_setting('t.feed') || '/shop-abc.xml' returning 1) select pg_temp.ok('expired: update refused', count(*) = 0) from x;
-do $$ begin perform ensure_price_feed('shop-new'); raise notice 'FAIL feed while expired'; exception when others then raise notice 'PASS no new feed while expired (%)', sqlerrm; end $$;
+with x as (update storage.objects set metadata = '{"v":3}' where name = current_setting('t.feed') || '/shop-abc.xml' returning 1) select pg_temp.ok('expired: update still allowed', count(*) = 1) from x;
+select pg_temp.ok('expired: new feed still allowed', (select ensure_price_feed('shop-new')->>'feed_id' is not null));
 reset role;
 select pg_temp.ok('file still there for Kaspi', (select count(*) = 1 from storage.objects where bucket_id = 'pricelists'));

@@ -190,29 +190,52 @@ async function view(ksh, { lic = {}, extra } = {}) {
   cacheLicence({ pricing: { base_stores: 3 }, ...lic }, 60000);
   return B.licenseView();
 }
-await t('trial → canUse, trial store limit', async () => {
+await t('trial → canUse, no store limit', async () => {
   const v = await view({ te: now + 10 * DAY, sl: 1, tsl: 3 });
   assert.equal(v.status, 'trial');
   assert.equal(v.canUse, true);
-  assert.equal(v.storeLimit, 3);
+  assert.equal(v.storeLimit, null);
+  assert.equal(v.freeAccess, true);
 });
 await t('paid period over, grace until in the future → grace, full access', async () => {
   const v = await view({ pu: now - DAY, gu: now + 3 * DAY, sl: 3, tsl: 1 });
   assert.equal(v.status, 'grace');
   assert.equal(v.canUse, true);
-  assert.equal(v.storeLimit, 3);
-  assert.equal(v.renewalDue, true);
+  assert.equal(v.storeLimit, null);
+  assert.equal(v.renewalDue, false, 'no renewal pressure under free access');
 });
-await t('frozen → no access, limit 0, paid days kept', async () => {
+await t('frozen (history) → full access, no limit, paid days still reported', async () => {
   const v = await view({ pu: now + 20 * DAY, fu: now + 5 * DAY, sl: 3, tsl: 1 });
   assert.equal(v.status, 'frozen');
-  assert.equal(v.canUse, false);
-  assert.equal(v.storeLimit, 0);
+  assert.equal(v.canUse, true);
+  assert.equal(v.storeLimit, null);
+  assert.ok(v.paidUntil, 'billing history kept');
 });
-await t('nothing left → expired', async () => {
+await t('nothing left → status expired (history) but canUse, no limit, no renewal', async () => {
   const v = await view({ pu: now - 10 * DAY, te: now - 40 * DAY, sl: 3, tsl: 1 });
   assert.equal(v.status, 'expired');
-  assert.equal(v.canUse, false);
+  assert.equal(v.canUse, true);
+  assert.equal(v.storeLimit, null);
+  assert.equal(v.renewalDue, false);
+  assert.equal(v.freeAccess, true);
+});
+await t('never paid, trial long over, 1-store legacy limit → all business features open', async () => {
+  const v = await view({ te: now - 90 * DAY, sl: 1, tsl: 1 });
+  assert.equal(v.canUse, true);
+  assert.equal(v.storeLimit, null);
+});
+await t('identity/legal/integrity gates still close access even when free', async () => {
+  assert.equal((await view({ pu: now + 30 * DAY, sl: 3, tv: 'a', tr: 'b' })).canUse, false, 'offer not accepted');
+  await signIn({ ksh: { pu: now + 30 * DAY, sl: 3 } });
+  store['ksh.session'] = undefined; delete store['ksh.session'];
+  assert.equal((await B.licenseView()).canUse, false, 'signed out');
+});
+await t('no automatic billing: reconcileInvoice never calls the server', async () => {
+  calls = [];
+  const expired = await view({ pu: now - 10 * DAY, te: now - 40 * DAY, sl: 3, tsl: 1 });
+  assert.equal(await B.reconcileInvoice(50, expired), false);
+  assert.equal(await B.reconcileInvoice(50, { ...expired, renewalDue: true }), false);
+  assert.equal(calls.length, 0);
 });
 await t('new offer version not accepted → needsConsent, no access', async () => {
   const v = await view({ pu: now + 30 * DAY, sl: 3, tsl: 1, tv: '2026-11-16', tr: '2026-11-21' });
@@ -234,9 +257,9 @@ await t('token expired 1 day ago (offline) → still works', async () => {
   assert.equal(v.status, 'active');
   assert.equal(v.canUse, true);
 });
-await t('stores in use on another computer reduce the limit', async () => {
+await t('stores in use on another computer no longer reduce anything (still reported)', async () => {
   const v = await view({ pu: now + 30 * DAY, sl: 3, tsl: 1 }, { lic: { shared_stores: 1 } });
-  assert.equal(v.storeLimit, 2);
+  assert.equal(v.storeLimit, null);
   assert.equal(v.sharedStores, 1);
 });
 await t('server down and no cache → offline view, still signed in', async () => {

@@ -27,7 +27,7 @@ do $$ declare n int; begin select count(*) into n from public.store_claims; rais
 set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
 select pg_temp.ok('second account with a NEW store keeps its trial', (select l->>'status' = 'trial' from (select get_license(1, array[:k3]) l) x));
 set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000003';
-select pg_temp.ok('third account with store 1001 (already used) → no trial, expired', (select l->>'status' = 'expired' and (l->>'trial_blocked')::boolean and (l->>'store_limit')::int = 0 from (select get_license(1, array[:k1]) l) x));
+select pg_temp.ok('third account with store 1001 (already used) → no trial (history: expired), access stays free', (select l->>'status' = 'expired' and (l->>'trial_blocked')::boolean and (l->>'store_limit')::int = 50 from (select get_license(1, array[:k1]) l) x));
 select pg_temp.ok('garbage keys ignored', (select get_license(1, array['not-a-hash', 'x']) is not null));
 reset role;
 select pg_temp.ok('claims belong to their first account', (select count(*) = 3 and bool_and(user_id <> 'a0000000-0000-0000-0000-000000000003') from store_claims));

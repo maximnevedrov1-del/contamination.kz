@@ -210,6 +210,7 @@ async function billingMaintenance(force = false, reconcile = force) {
 /** Image notification with the Kaspi QR: once a day per invoice amount. */
 async function notifyPayment(lic) {
   const inv = lic?.pendingInvoice;
+  if (lic?.freeAccess) return; // free access: no payment reminders (a legacy open invoice stays visible in the account page)
   if (!inv || !(lic.renewalDue || !lic.canUse || inv.kind === 'addon')) return;
   const key = `${inv.id}:${inv.amount}:${new Date().toDateString()}`;
   const { 'ksh.payNotified': last } = await chrome.storage.local.get('ksh.payNotified');

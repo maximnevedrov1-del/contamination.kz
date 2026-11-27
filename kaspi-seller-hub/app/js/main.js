@@ -501,7 +501,7 @@ async function importBackupFlow(el, expectScope) {
 
 async function ownerMore() {
   const l = state.license || {};
-  const st = { active: 'Оплачена', trial: 'Пробный период', grace: 'Льготные дни', expired: 'Закончилась', frozen: 'Заморожена', offline: 'Нет связи', invalid: 'Ошибка лицензии' }[l.status] || l.status || '—';
+  const st = l.freeAccess ? 'Бесплатно' : { active: 'Оплачена', trial: 'Пробный период', grace: 'Льготные дни', expired: 'Закончилась', frozen: 'Заморожена', offline: 'Нет связи', invalid: 'Ошибка лицензии' }[l.status] || l.status || '—';
   return h('div', null,
     card('Аккаунт', h('p', null, l.email || ''), h('div', { class: 'row-between' }, h('span', null, 'Подписка'), h('strong', null, st)), l.daysLeft != null && l.canUse ? h('div', { class: 'row-between' }, h('span', null, 'Осталось дней'), h('strong', null, String(l.daysLeft))) : null, l.storeLimit != null ? h('div', { class: 'row-between' }, h('span', null, 'Магазинов по тарифу'), h('strong', null, String(l.storeLimit))) : null, h('p', { class: 'muted small' }, 'Оплата и счета — в расширении SaudaPulse на компьютере.')),
     card('Безопасность', h('p', null, 'Токены, заказы и себестоимость хранятся только на этом телефоне, зашифрованы (AES-256). Наш сервер их не получает и не хранит. Запросы к Kaspi идут через проходной узел без журнала.')),

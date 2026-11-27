@@ -14,7 +14,7 @@ select pg_temp.ok('trigger creates account with 14-day trial',
 
 -- ===== as the seller =====
 set role authenticated; set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select pg_temp.ok('license: trial, 3 stores', (select (l->>'status') = 'trial' and (l->>'store_limit')::int = 3 from (select get_license(2) l) x));
+select pg_temp.ok('license: trial, no plan limit (store_cap 50)', (select (l->>'status') = 'trial' and (l->>'store_limit')::int = 50 from (select get_license(2) l) x));
 select pg_temp.ok('price 3 stores x1 = 20000', billing_price(3, 1) = 20000);
 select pg_temp.ok('price 5 stores x1 = 30000', billing_price(5, 1) = 30000);
 select pg_temp.ok('price 4 stores x3 = 75000', billing_price(4, 3) = 75000);
@@ -58,17 +58,17 @@ select pg_temp.ok('admin accounts list', (select jsonb_array_length((admin_accou
 
 -- ===== seller after payment =====
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select pg_temp.ok('paid during trial: active at once with 5 stores, QR from config', (select (l->>'status') = 'active' and (l->>'store_limit')::int = 5 and l->'payment'->>'qr_url' = 'https://example.kz/qr.png' from (select get_license(4) l) x));
+select pg_temp.ok('paid during trial: active at once, paid stores 5 kept as history, QR from config', (select (l->>'status') = 'active' and (l->>'store_limit')::int = 50 and (l->>'paid_store_limit')::int = 5 and l->'payment'->>'qr_url' = 'https://example.kz/qr.png' from (select get_license(4) l) x));
 
 -- ===== expiry: move the trial into the past =====
 reset role; update accounts set trial_ends_at = now() - interval '1 day', paid_until = null where email = 'other@example.kz';
 set role authenticated; set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-select pg_temp.ok('expired: status expired, store_limit 0', (select (l->>'status') = 'expired' and (l->>'store_limit')::int = 0 from (select get_license(1) l) x));
+select pg_temp.ok('expired: status expired (history) but no restriction (store_cap 50)', (select (l->>'status') = 'expired' and (l->>'store_limit')::int = 50 and (l->>'free_access')::boolean from (select get_license(1) l) x));
 select accept_terms() is not null;
 select create_invoice(3, 1, '87770001122') is not null;
 reset role; set role authenticated; set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select pg_temp.ok('confirm for expired user starts now (≈ +1 month)', (select (r->>'period_from')::timestamptz between now() - interval '1 minute' and now() + interval '1 minute'
    from (select pg_temp.cf((select (e->>'id')::bigint from jsonb_array_elements((admin_invoices('pending')->'rows')) e where e->>'email' = 'other@example.kz'), null) r) x));
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-select pg_temp.ok('after payment: active, 3 stores', (select (l->>'status') = 'active' and (l->>'store_limit')::int = 3 from (select get_license(1) l) x));
+select pg_temp.ok('after payment: active, paid stores 3 kept as history', (select (l->>'status') = 'active' and (l->>'paid_store_limit')::int = 3 and (l->>'store_limit')::int = 50 from (select get_license(1) l) x));
 reset role;

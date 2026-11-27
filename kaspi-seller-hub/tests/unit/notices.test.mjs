@@ -23,6 +23,8 @@ assert.deepEqual(expiryNotice(v('active', 2)), { days: 2, kind: 'paid' });
 assert.deepEqual(expiryNotice({ status: 'active', daysLeft: 2, cancelAt: '2026-12-01' }), { days: 2, kind: 'paid' });
 for (const s of ['grace', 'expired', 'frozen', 'offline', 'loggedOut']) assert.equal(expiryNotice(v(s, 2)), null, s);
 assert.equal(expiryNotice(null), null);
+assert.equal(expiryNotice({ status: 'trial', daysLeft: 2, freeAccess: true }), null, 'free access: nothing expires');
+assert.equal(expiryNotice({ status: 'active', daysLeft: 2, freeAccess: true }), null);
 assert.equal(expiryNotice({ status: 'trial' }), null);
 assert.equal(expiryNotice({ status: 'trial', daysLeft: 'x' }), null);
 console.log('notices: ok');

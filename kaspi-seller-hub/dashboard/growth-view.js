@@ -38,7 +38,7 @@ export function storeMeter({ lic, used, current, onAdd }) {
 }
 
 /** Does adding a store need the upsell window first? («Старт», limit reached) */
-export const needsUpsell = (lic, used) => !!lic && ['active', 'grace'].includes(lic.status) && lic.plan === 'start' && used >= (lic.storeLimit || 1);
+export const needsUpsell = (lic, used) => !!lic && !lic.freeAccess && ['active', 'grace'].includes(lic.status) && lic.plan === 'start' && used >= (lic.storeLimit || 1);
 
 /**
  * Soft paywall: never a dead end — 24 hours free, or upgrade with the proration shown.
@@ -173,7 +173,7 @@ export function openCancelFlow(ctx) {
 
 /** Grace / frozen / cancelled: one line and the button that helps. */
 export function planNotice(lic, { onPay, onResume }) {
-  if (!lic) return null;
+  if (!lic || lic.freeAccess) return null; // free access: grace/freeze/cancel are history, nothing to warn about
   if (lic.status === 'grace')
     return h('div', { class: 'banner banner--warn', role: 'alert', dataset: { banner: 'grace' } },
       h('span', { class: 'banner__text' }, t('plan.grace', { date: formatDate(lic.graceUntil, 'datetime') })),

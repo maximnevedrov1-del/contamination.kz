@@ -389,12 +389,12 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   // paid period over, renewal not paid yet (not cancelled): grace days with full access
   const grace = !frozen && !paid && !trial && after(graceUntil);
   const status = frozen ? 'frozen' : paid ? 'active' : trial ? 'trial' : grace ? 'grace' : 'expired';
-  let storeLimit = ['expired', 'frozen'].includes(status) ? 0 : (paid || grace ? paidLimit : trialLimit) || lic.pricing?.base_stores || 3;
+  // Free access (Stage 03): paid/trial/grace/expired/frozen are billing HISTORY, not entitlements. No store limit
+  // here (null = every store); the server keeps its own abuse ceiling (store_cap) for price-list feeds.
+  const storeLimit = null;
   const boosted = (paid || grace) && after(boostUntil);
-  if (boosted) storeLimit = Math.max(storeLimit, baseStores);
-  // Stores of this login in use on other computers right now count against the same limit.
+  // Informational only: stores of this login seen on other computers. They no longer reduce anything.
   const sharedStores = Math.max(0, Math.floor(Number(lic.shared_stores) || 0));
-  if (sharedStores && storeLimit != null) storeLimit = Math.max(0, storeLimit - sharedStores);
   const coverageEnd = paid ? paidUntil : trial ? trialEnds : grace ? graceUntil : paidUntil || trialEnds;
   const msLeft = coverageEnd ? new Date(coverageEnd).getTime() - now : 0;
   const remindDays = lic.remind_days ?? 5;
@@ -402,7 +402,8 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
   const needsConsent = !termsOk;
   return {
     status,
-    canUse: !['expired', 'frozen'].includes(status) && !needsConsent,
+    canUse: !needsConsent, // identity, signature, clock and offer acceptance still gate; subscription state does not
+    freeAccess: true,
     plan: (paidLimit || 0) <= 1 && lic.pricing?.start_price ? 'start' : 'multi',
     boostUntil: boosted ? boostUntil : null,
     canBoost: !!lic.can_boost && paid,
@@ -423,7 +424,7 @@ export async function licenseView({ force = false, storeCount, storeKeys } = {})
     coverageEnd,
     daysLeft: Math.max(0, Math.ceil(msLeft / DAY)),
     remindDays,
-    renewalDue: status === 'expired' || msLeft <= remindDays * DAY,
+    renewalDue: false, // nothing is renewed or billed automatically any more
     email: lic.email || session.email,
     phone: lic.phone,
     phoneVerified: lic.phone_verified === true,
@@ -530,11 +531,9 @@ export async function createInvoice({ stores, months, phone }) {
  * @returns {Promise<boolean>} true when the server was asked (licence then re-read)
  */
 export async function reconcileInvoice(storeCount, view) {
-  if (!isConfigured() || !view || ['loggedOut', 'offline', 'unconfigured', 'invalid', 'clock'].includes(view.status)) return false;
-  if (view.renewalDue) await rpc('ensure_renewal_invoice', { p_stores: storeCount });
-  else if (storeCount > view.storeLimit) await rpc('request_store_addon', { p_total_stores: storeCount });
-  else return false;
-  return true;
+  // Free access: invoices are never created or changed automatically (the server RPCs are no-ops as well).
+  void storeCount; void view;
+  return false;
 }
 
 export async function requestAddon({ total }) {

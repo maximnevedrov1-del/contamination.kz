@@ -26,18 +26,22 @@ select pg_temp.ok('4 stores = 25 000, 5 = 30 000', billing_price(4, 1) = 25000 a
 
 set role authenticated;
 select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
-select pg_temp.ok('licence: plan «start», 1 store, boost available', (select l->>'plan' = 'start' and (l->>'store_limit')::int = 1 and (l->>'can_boost')::boolean from (select get_license(1, null) l) x));
+select pg_temp.ok('licence: plan «start» kept as history (1 paid store), no limit, boost flag still reported', (select l->>'plan' = 'start' and (l->>'paid_store_limit')::int = 1 and (l->>'store_limit')::int = 50 and (l->>'can_boost')::boolean from (select get_license(1, null) l) x));
 -- 2. upgrade quote: (20 000 − 12 000) / 30 × 15 = 4 000
 select pg_temp.ok('upgrade quote to 2 stores: (20 000 − 12 000) / 30 × 15 days = 4 000', (select (q->>'upgrade_cost')::int = 4000 and (q->>'stores')::int = 3 and (q->>'monthly_diff')::int = 8000 from (select upgrade_quote(2) q) x));
-select pg_temp.ok('add-on invoice uses the same formula, covers 3 stores', (select (i->>'amount')::int = 4000 and (i->>'stores')::int = 3 and i->>'kind' = 'addon' from (select request_store_addon(2) i) x));
+select pg_temp.ok('add-on request no longer creates an invoice (free access)', (select request_store_addon(2) is null));
+-- a legacy add-on invoice that was already open stays confirmable
+reset role;
+insert into invoices (user_id, kind, stores, months, amount) select user_id, 'addon', 3, 0, 4000 from accounts where email = 'start@example.kz';
+set role authenticated; select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
 -- 3. trial boost: 3 stores for 24 hours, once
-select pg_temp.ok('boost: 3 stores now', (select (l->>'store_limit')::int = 3 and l->>'boost_until' is not null from (select start_trial_boost() l) x));
+select pg_temp.ok('boost: recorded, store_limit stays the cap', (select (l->>'store_limit')::int = 50 and l->>'boost_until' is not null from (select start_trial_boost() l) x));
 do $$ begin perform start_trial_boost(); raise notice 'FAIL boost twice'; exception when others then raise notice 'PASS boost only once (%)', sqlerrm; end $$;
 reset role;
 select pg_temp.ok('boost is in the signed token (bu, bs)', (select (custom_access_token_hook(jsonb_build_object('user_id', 'c1000000-0000-0000-0000-00000000000b', 'claims', '{}'::jsonb))->'claims'->'ksh'->>'bu') is not null));
 update public.accounts set boost_until = now() - interval '1 minute' where email = 'start@example.kz';
 set role authenticated; select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
-select pg_temp.ok('boost over → back to 1 store', (select (l->>'store_limit')::int = 1 from (select get_license(2, null) l) x));
+select pg_temp.ok('boost over → nothing changes for the user (cap, 1 paid store kept as history)', (select (l->>'store_limit')::int = 50 and (l->>'paid_store_limit')::int = 1 from (select get_license(2, null) l) x));
 -- confirm the add-on → «Мульти» for the rest of the period
 reset role;
 select set_config('request.jwt.claim.sub', 'c1000000-0000-0000-0000-00000000000a', false);
@@ -46,16 +50,15 @@ select pg_temp.ok('paid add-on → store_limit 3, same end date', (select store_
 -- 4. renewal: a «Мульти» payer with 1 store keeps «Мульти» unless «перейти на Старт»
 update public.accounts set paid_until = now() + interval '3 days' where email = 'start@example.kz';
 set role authenticated; select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
-select pg_temp.ok('renewal keeps the paid plan (3 stores, 20 000)', (select (i->>'amount')::int = 20000 from (select ensure_renewal_invoice(1) i) x));
+select pg_temp.ok('renewal request creates no invoice (free access)', (select ensure_renewal_invoice(1) is null));
 
 -- 5. cancellation flow
 do $$ begin perform cancel_flow('price', 'bribe'); raise notice 'FAIL unknown outcome'; exception when others then raise notice 'PASS unknown outcome refused (%)', sqlerrm; end $$;
 select pg_temp.ok('«Дорого» → 30 % on the next 2 invoices', (select (l->'discount'->>'pct')::int = 30 and (l->'discount'->>'left')::int = 2 from (select cancel_flow('price', 'discount') l) x));
-select pg_temp.ok('the open renewal now costs 14 000', (select (i->>'amount')::int = 14000 from (select ensure_renewal_invoice(1) i) x));
+select pg_temp.ok('discount recorded, still no invoice is created', (select ensure_renewal_invoice(1) is null));
 do $$ begin perform cancel_flow('price', 'discount'); raise notice 'FAIL discount twice'; exception when others then raise notice 'PASS discount offer once per 180 days (%)', sqlerrm; end $$;
-select pg_temp.ok('«Перейти на Старт» → next renewal for 1 store, 12 000 − 30 % = 8 400', (select (l->>'downgrade_next')::boolean from (select cancel_flow('price', 'downgrade') l) x)
-   and (select (i->>'amount')::int = 8400 and (i->>'stores')::int = 1 from (select ensure_renewal_invoice(1) i) x));
-select pg_temp.ok('«Закрыл магазин» → frozen 30 days, paid days kept', (select l->>'status' = 'frozen' and (l->>'store_limit')::int = 0 from (select cancel_flow('closed', 'freeze') l) x));
+select pg_temp.ok('«Перейти на Старт» → downgrade_next recorded (history only)', (select (l->>'downgrade_next')::boolean from (select cancel_flow('price', 'downgrade') l) x));
+select pg_temp.ok('«Закрыл магазин» → frozen 30 days, paid days kept, access not restricted', (select l->>'status' = 'frozen' and (l->>'store_limit')::int = 50 from (select cancel_flow('closed', 'freeze') l) x));
 reset role;
 select pg_temp.ok('freeze moved the paid end by 30 days', (select paid_until between now() + interval '32 days' and now() + interval '34 days' from accounts where email = 'start@example.kz'));
 set role authenticated; select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
@@ -114,16 +117,16 @@ set role service_role; select pg_temp.ok('6 days without the cabinet → care me
 reset role;
 update public.accounts set paid_until = now() - interval '1 day' where email = 'start@example.kz';
 set role anon;
-set role service_role; select pg_temp.ok('grace: daily reminder with days left', (select exists (select 1 from jsonb_array_elements(bot_jobs('bot-key-0123456789abcdef0123456789abcdef')->'items') e where e->>'kind' = 'grace' and (e->'data'->>'days_left')::int = 3))); set role anon;
+set role service_role; select pg_temp.ok('grace: no renewal reminder is sent (free access)', (select not exists (select 1 from jsonb_array_elements(bot_jobs('bot-key-0123456789abcdef0123456789abcdef')->'items') e where e->>'kind' = 'grace'))); set role anon;
 reset role;
 update public.accounts set paid_until = now() - interval '62 days', trial_ends_at = now() - interval '100 days' where email = 'start@example.kz';
 set role anon;
 set role service_role; select set_config('t.jobs', bot_jobs('bot-key-0123456789abcdef0123456789abcdef')::text, false) is not null; set role anon;
-select pg_temp.ok('60 days after the end → win-back offer 50 %', (select exists (select 1 from jsonb_array_elements(current_setting('t.jobs')::jsonb->'items') e where e->>'kind' = 'winback60')));
+select pg_temp.ok('60 days after the end → no win-back offer (free access)', (select not exists (select 1 from jsonb_array_elements(current_setting('t.jobs')::jsonb->'items') e where e->>'kind' like 'winback%')));
 set role service_role; select bot_sent('bot-key-0123456789abcdef0123456789abcdef', (select jsonb_agg(jsonb_build_object('user_id', e->>'user_id', 'kind', e->>'kind', 'key', e->>'key', 'ok', true)) from jsonb_array_elements(current_setting('t.jobs')::jsonb->'items') e where e->>'kind' = 'winback60')) >= 1; set role anon;
 reset role;
 set role authenticated; select pg_temp.as_user('c1000000-0000-0000-0000-00000000000b');
-select pg_temp.ok('the offer is real: next invoice 12 000 − 50 % = 6 000', (select (i->>'amount')::int = 6000 from (select create_invoice(1, 1, null) i) x));
+select pg_temp.ok('no win-back 50 % was granted: only the earlier 30 % cancel-flow discount applies (12 000 − 30 % = 8 400)', (select (i->>'amount')::int = 8400 from (select create_invoice(1, 1, null) i) x));
 reset role; set role anon;
 set role service_role; select pg_temp.ok('blocked bot (403) → chat marked, nothing more sent', (select bot_sent('bot-key-0123456789abcdef0123456789abcdef', jsonb_build_array(jsonb_build_object('user_id', 'c1000000-0000-0000-0000-00000000000b', 'kind', 'care', 'key', 'x', 'ok', false, 'error', 'Forbidden: bot was blocked by the user', 'blocked', true))) = 1)
    and (select not exists (select 1 from jsonb_array_elements(bot_jobs('bot-key-0123456789abcdef0123456789abcdef')->'items') e where (e->>'chat_id')::bigint = 555001))); set role anon;

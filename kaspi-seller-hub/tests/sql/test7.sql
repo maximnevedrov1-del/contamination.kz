@@ -53,12 +53,12 @@ select team_update((select (r->>'id')::uuid from jsonb_array_elements(team_list(
 select pg_temp.as_user('d0000000-0000-0000-0000-00000000000c');
 select pg_temp.ok('new rights at the next check (store A only, may accept)', (select r->'shop_ids' = '["A"]' and (r->>'can_accept')::boolean from (select team_check('d0000000-0000-0000-0000-00000000000a') r) x));
 
--- owner's subscription over → the packer cannot work either
+-- owner's subscription over → the packer keeps working (free access; disabling a packer is still the owner's explicit action)
 reset role;
 update public.accounts set trial_ends_at = now() - interval '1 minute', paid_until = null where user_id = 'd0000000-0000-0000-0000-00000000000a';
 set role authenticated;
 select pg_temp.as_user('d0000000-0000-0000-0000-00000000000c');
-do $$ begin perform team_check('d0000000-0000-0000-0000-00000000000a'); raise notice 'FAIL packer works without the owner''s subscription'; exception when others then raise notice 'PASS packer stops when the owner''s subscription ends (%)', sqlerrm; end $$;
+do $$ begin perform team_check('d0000000-0000-0000-0000-00000000000a'); raise notice 'PASS packer keeps working after the owner''s subscription ends (free access)'; exception when others then raise notice 'FAIL packer stopped by the owner''s subscription (%)', sqlerrm; end $$;
 reset role;
 update public.accounts set trial_ends_at = now() + interval '10 days' where user_id = 'd0000000-0000-0000-0000-00000000000a';
 set role authenticated;

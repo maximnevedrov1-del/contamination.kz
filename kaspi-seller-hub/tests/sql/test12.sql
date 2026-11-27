@@ -12,7 +12,7 @@ insert into auth.users (id, email) values ('11111111-1111-1111-1111-111111111111
 update public.accounts set paid_until = now() + interval '30 days', store_limit = 1 where user_id = '11111111-1111-1111-1111-111111111111';
 
 set role authenticated; set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select pg_temp.ok('computer A, store A: limit 1, nothing shared', (select (l->>'store_limit')::int = 1 and (l->>'shared_stores')::int = 0 from (select get_license(1, array[:ka]) l) x));
+select pg_temp.ok('computer A, store A: no plan limit, nothing shared', (select (l->>'store_limit')::int = 50 and (l->>'paid_store_limit')::int = 1 and (l->>'shared_stores')::int = 0 from (select get_license(1, array[:ka]) l) x));
 select pg_temp.ok('computer A again: own store is not counted as shared', (select (l->>'shared_stores')::int = 0 from (select get_license(1, array[:ka]) l) x));
 select pg_temp.ok('computer B, store B: store A is in use elsewhere → shared 1', (select (l->>'shared_stores')::int = 1 from (select get_license(1, array[:kb]) l) x));
 select pg_temp.ok('computer C, same store A as computer A: counted once', (select (l->>'shared_stores')::int = 1 from (select get_license(1, array[:ka]) l) x));

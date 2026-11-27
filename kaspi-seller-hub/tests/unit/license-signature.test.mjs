@@ -87,13 +87,14 @@ await t('licenseKeys cannot be extended at runtime', async () => {
   assert.throws(() => { BILLING.licenseKeys[0].x = 'x'; });
 });
 
-await t('DevTools: editing cached licence does not extend an expired subscription', async () => {
+await t('DevTools: editing cached licence cannot rewrite the (historic) status; access is free anyway', async () => {
   store['ksh.session'] = { access_token: await jwt(base), user_id: 'u1', email: 'a@b.c', expires_at: now + 3600 };
   const far = new Date(Date.now() + 365 * DAY * 1000).toISOString();
   store['ksh.license'] = { data: { paid_until: far, trial_ends_at: far, paid_store_limit: 99, store_limit: 99 }, fetchedAt: Date.now() - 60000, skew: 0 };
   const v = await B.licenseView();
-  assert.equal(v.status, 'expired');
-  assert.equal(v.canUse, false);
+  assert.equal(v.status, 'expired', 'status still comes from the signed token');
+  assert.equal(v.canUse, true, 'expired no longer restricts');
+  assert.equal(v.storeLimit, null);
 });
 await t('DevTools: forged token in storage → invalid', async () => {
   const [h, , s] = (await jwt(base)).split('.');
@@ -106,7 +107,7 @@ await t('genuine paid token → active', async () => {
   store['ksh.session'].access_token = await jwt({ ...base, ksh: { pu: now + 30 * DAY, sl: 3, tsl: 1 } });
   const v = await B.licenseView();
   assert.equal(v.status, 'active');
-  assert.equal(v.storeLimit, 3);
+  assert.equal(v.storeLimit, null);
 });
 
 console.log(`\n${n} passed`);

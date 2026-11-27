@@ -37,7 +37,7 @@ function render() {
   const lic = state.license;
   const blocked = lic && !lic.canUse;
   const inv = lic?.pendingInvoice;
-  const needPay = !!inv && !lic.needsConsent && (lic.renewalDue || blocked || inv.kind === 'addon');
+  const needPay = !!inv && !lic.freeAccess && !lic.needsConsent && (lic.renewalDue || blocked || inv.kind === 'addon');
   $('licenseNotice').hidden = !(blocked || needPay);
   if (lic?.needsConsent) $('licenseNotice').textContent = `${t('terms.popup')} →`;
   else if (needPay) $('licenseNotice').textContent = `${t('notifications.payTitle', { amount: formatMoney(inv.amount) })} — ${t('pay.openQr')}`;

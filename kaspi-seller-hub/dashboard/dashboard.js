@@ -2191,8 +2191,7 @@ const memo = {
  * @returns {'blocking'|'show'|null}
  */
 function payMode(lic) {
-  if (!lic || ['unconfigured', 'loggedOut', 'offline', 'invalid', 'clock', 'frozen'].includes(lic.status)) return null;
-  if (lic.status === 'expired') return 'blocking';
+  if (!lic || lic.freeAccess || ['unconfigured', 'loggedOut', 'offline', 'invalid', 'clock', 'frozen'].includes(lic.status)) return null; // free access: no payment prompts, nothing blocks
   const inv = lic.pendingInvoice;
   if (!inv) return null;
   if (inv.kind === 'addon' && memo.get('ksh.payShown.addon') !== `${inv.id}:${inv.amount}`) return 'show';
@@ -2221,8 +2220,7 @@ function rememberShown(lic) {
 function openPay(blocking = false) {
   const dlg = $('payDialog');
   pay.open = true;
-  pay.blocking = blocking || state.data?.license?.status === 'expired';
-  if (state.data?.license?.status === 'expired') send('ui:trackFunnel', { event: 'trial_expired_view' }).catch(() => {});
+  pay.blocking = !!blocking && !state.data?.license?.freeAccess;
   renderPay();
   if (!dlg.open) dlg.showModal();
   rememberShown(state.data.license);
@@ -2377,7 +2375,7 @@ async function resumeSubscription() {
 
 /** Account page: the plan, a running discount, «перейти на Старт» planned, «Отменить подписку». */
 function subscriptionCard(lic) {
-  if (!['active', 'grace', 'frozen'].includes(lic.status) || !lic.paidUntil) return null;
+  if (lic.freeAccess || !['active', 'grace', 'frozen'].includes(lic.status) || !lic.paidUntil) return null; // free access: no cancel / freeze / discount flows
   const pr = lic.pricing || {};
   const name = lic.plan === 'start' ? t('plan.start', { price: formatMoney(pr.start_price || 12000) }) : t('plan.multi', { price: formatMoney(pr.base_price || 20000), stores: pr.base_stores || 3, extra: formatMoney(pr.extra_store_price || 5000) });
   const disc = lic.discount?.pct > 0 ? h('p', { dataset: { block: 'discount' } }, '🎁 ', t('plan.discount', { pct: lic.discount.pct, count: lic.discount.left })) : null;
@@ -2544,14 +2542,14 @@ function viewAccount() {
   const days = until ? Math.max(0, Math.ceil((new Date(until).getTime() - Date.now()) / 86400000)) : 0;
   const statusBadge = h(
     'span',
-    { class: ['badge', lic.status === 'active' ? 'badge--ok' : lic.status === 'trial' ? 'badge--info' : 'badge--danger'] },
-    t(`account.status.${lic.status}`, { date: until ? formatDate(until) : '' }),
+    { class: ['badge', lic.freeAccess || lic.status === 'active' ? 'badge--ok' : lic.status === 'trial' ? 'badge--info' : 'badge--danger'] },
+    lic.freeAccess ? t('account.freeAccess') : t(`account.status.${lic.status}`, { date: until ? formatDate(until) : '' }),
   );
   const used = enabledStores().length;
   const statusCard = card(
     t('account.title'),
     lic.email ? t('account.loggedInAs', { email: lic.email }) : null,
-    h('div', { class: 'field' }, h('div', null, statusBadge, ' ', (lic.status === 'trial' || lic.status === 'active') && h('span', { class: 'muted' }, t('account.daysLeft', { count: days }))), h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => run(async () => (await send('ui:billingLogout'), await loadState())) }, t('account.logout'))),
+    h('div', { class: 'field' }, h('div', null, statusBadge, ' ', !lic.freeAccess && (lic.status === 'trial' || lic.status === 'active') && h('span', { class: 'muted' }, t('account.daysLeft', { count: days }))), h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => run(async () => (await send('ui:billingLogout'), await loadState())) }, t('account.logout'))),
     lic.storeLimit != null && h('div', { class: ['muted', used > lic.storeLimit && 'neg'] }, t('account.storeUsage', { used, limit: lic.storeLimit })),
   );
 
@@ -2721,7 +2719,7 @@ function viewAccount() {
   );
 
   // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
-  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, referralCard, planCard, historyCard);
+  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, referralCard, lic.freeAccess ? null : planCard, historyCard);
 }
 
 /* ===================================================================== */
@@ -2881,8 +2879,8 @@ function viewHome() {
     unread && { tone: 'info', icon: 'chat', text: t('home.todo.chat', { count: unread }), action: t('home.open'), go: () => (location.hash = 'chat') },
     unreadAnswers(state.tickets) && { tone: 'info', icon: 'chat', text: t('home.todo.support', { count: unreadAnswers(state.tickets) }), action: t('home.open'), go: () => (location.hash = 'help') },
     state.packProblems?.length && { tone: 'danger', icon: 'warn', text: t('home.todo.packProblems', { count: state.packProblems.length }), action: t('home.open'), go: () => ((location.hash = 'settings'), setTimeout(() => document.querySelector('[data-card=journal]')?.scrollIntoView({ block: 'start' }), 300)) },
-    lic.pendingInvoice && { tone: 'warn', icon: 'card', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
-    lic.status === 'trial' && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: 'hourglass', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
+    lic.pendingInvoice && !lic.freeAccess && { tone: 'warn', icon: 'card', text: t('home.todo.invoice', { amount: formatMoney(lic.pendingInvoice.amount) }), action: t('home.pay'), go: () => (location.hash = 'pay') },
+    lic.status === 'trial' && !lic.freeAccess && lic.daysLeft != null && lic.daysLeft <= 5 && !lic.pendingInvoice && { tone: 'warn', icon: 'hourglass', text: t('home.todo.trial', { count: lic.daysLeft }), action: t('home.open'), go: () => (location.hash = 'account') },
     unpaid.length && { tone: 'muted', icon: 'wallet', text: t('home.todo.unpaid', { count: unpaid.length }), action: t('home.open'), go: () => ((state.paymentGroup = 'pending'), (location.hash = 'payments')) },
   ].filter(Boolean);
   const todoCard = h(

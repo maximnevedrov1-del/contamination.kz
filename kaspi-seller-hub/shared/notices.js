@@ -12,7 +12,7 @@ export function bannerFrom(view) {
 
 /** «Subscription / trial ends in 1–3 days»: {days, kind:'trial'|'paid'} or null. A pending cancellation still reminds. */
 export function expiryNotice(view) {
-  if (!view || typeof view !== 'object') return null;
+  if (!view || typeof view !== 'object' || view.freeAccess) return null; // free access: nothing expires
   const days = Number(view.daysLeft);
   if (!Number.isFinite(days) || days <= 0 || days > 3) return null;
   if (view.status === 'trial') return { days, kind: 'trial' };

@@ -1,0 +1,25 @@
+tests/unit/backup.test.mjs	0	8 passed
+tests/unit/bot-greeting.test.mjs	0	# duration_ms 31.585547
+tests/unit/bot-run.test.mjs	0	16 passed
+tests/unit/bot-support.test.mjs	0	# duration_ms 144.032341
+tests/unit/captcha.test.mjs	0	ok captcha messages
+tests/unit/feature-flags.test.mjs	0	feature-flags: ok
+tests/unit/kaspi-photo.test.mjs	0	3 checks passed
+tests/unit/kaspi-relay.test.mjs	0	14 checks passed
+tests/unit/license-flow.test.mjs	0	38 passed
+tests/unit/license-signature.test.mjs	0	11 passed
+tests/unit/locales.test.mjs	0	ALL PASSED (1209 keys)
+tests/unit/notices.test.mjs	0	notices: ok
+tests/unit/ops-daily.test.mjs	0	# duration_ms 13.272625
+tests/unit/payment-webhook.test.mjs	0	11 passed
+tests/unit/price-list-import.test.mjs	0	3 checks passed
+tests/unit/qr-transfer.test.mjs	0	5 checks passed
+tests/unit/robust.test.mjs	0	ALL 38 PASSED
+tests/unit/secure-storage.test.mjs	0	18 checks passed
+tests/unit/spbackup-ext.test.mjs	0	6 checks passed
+tests/unit/stock-moves.test.mjs	0	8 checks passed
+tests/unit/storage-split.test.mjs	0	16 passed
+tests/unit/store-key.test.mjs	0	ok   dedupe: a known token resolves to the existing store (by tokenHash or derived id)
+tests/unit/sync-breaker.test.mjs	0	ok   does not mutate its input
+tests/unit/token-crypto.test.mjs	0	7 passed
+tests/unit/ux-telemetry.test.mjs	0	10 passed
