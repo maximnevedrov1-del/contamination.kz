@@ -27,6 +27,7 @@ import { startUx } from './ux-wire.js';
 import { legalUrl, SUPPORT } from '../shared/billing-config.js';
 import { getCaptchaToken } from '../shared/captcha.js';
 import { createCatalogView, copyText } from './catalog-view.js';
+import { mountAdBanner } from './ad-banner.js';
 import { FEATURES } from '../shared/features.js';
 import { svgIcon } from '../shared/icons.js';
 import { phoneTransferCard } from './phone-transfer.js';
@@ -95,6 +96,8 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+/** The single advertising placement (dashboard/ad-banner.js); null until the page is wired. Never awaited by business code. */
+let adBanner = null;
 const send = (type, payload) => chrome.runtime.sendMessage({ type, payload });
 
 // page crashes go to the local journal for support (shared/errorlog.js)
@@ -2387,7 +2390,7 @@ function supporterCard(lic) {
   const ui2 = (state.supUi ??= { months: 1, msg: '' });
   const act = (type, payload) => run(async () => {
     const r = await send(type, payload);
-    if (r?.ok) { state.supEnt = r.entitlements; ui2.msg = ''; } else { const k = `account.supporter.err.${r?.error}`; ui2.msg = hasKey(k) ? t(k) : errorText(r?.error); }
+    if (r?.ok) { state.supEnt = r.entitlements; ui2.msg = ''; adBanner?.refresh(); } else { const k = `account.supporter.err.${r?.error}`; ui2.msg = hasKey(k) ? t(k) : errorText(r?.error); }
     renderView();
     return r;
   });
@@ -3552,7 +3555,7 @@ function bindShell() {
     applyTheme();
     if (pollChanged) manageChatPolling();
   });
-  onLangChange(() => renderAll());
+  onLangChange(() => { renderAll(); adBanner?.rerender(); });
   // photos: set here, or products added in «Выгрузка товаров» (their first image)
   onKeyChange(KEYS.photos, (next) => {
     state.photos = next || {};
@@ -3593,6 +3596,7 @@ async function main() {
   bindShell();
   await refreshInvoiceCount();
   await loadState();
+  try { adBanner = mountAdBanner({ root: $('adSlot'), send, t, enabled: () => !staffMode() }); adBanner.start(); } catch { /* an advertising failure must never stop the dashboard */ }
   if (state.route === 'help') refreshTickets();
   noteSection();
   manageChatPolling();

@@ -1,0 +1,74 @@
+ok   ready state
+ok   desktop height 60–80 px
+ok   placed directly below the main header (header → sync line → ad → notices)
+ok   exactly one ad slot / one banner element
+ok   sponsored content is labelled
+ok   shows 3 campaigns, "1 / 3"
+ok   image shown
+ok   link: https, new tab, noopener, sponsored, no referrer
+ok   impression sent once for the first ad, ids only
+ok   no change before 30 s (25 s in)
+ok   auto-rotates at 30 s → ad 2
+ok   → ad 3
+ok   wraps → ad 1
+ok   each campaign counted once (3 impressions)
+ok   no layout shift from rotation (view top constant)
+ok   height identical across ads
+ok   next → ad 2
+ok   prev ×2 wraps → ad 3
+ok   pause button flips to play (aria-label)
+ok   paused: no rotation in 2 min
+ok   resume → rotates again
+ok   hover pauses
+ok   mouse leaves → rotates
+ok   hidden tab: no rotation, no new impression
+ok   visible again: full interval first
+ok   …then rotates
+ok   click sends {id, click} only
+ok   page never sent anything but ids (no order/store data in ad calls)
+ok   a11y: group/carousel with a name, labelled buttons, link name mentions "Реклама", decorative image alt=""
+ok   a11y: live region is "off" while auto-rotating
+ok   keyboard: Tab reaches controls, Enter activates, focus stays on the button after re-render
+ok   keyboard focus inside the banner pauses rotation
+ok   polite live region when paused
+ok   language switch re-renders the label (kk: «Жарнама»)
+ok   no page errors (ad scenario)
+ok   navigation works with the banner visible; banner persists, one only
+ok   mobile-390: height 50–60 px
+ok   mobile-390: no horizontal scroll, controls inside viewport and ≥24 px, label visible, headline has room
+ok   mobile-360: height 50–60 px
+ok   mobile-360: no horizontal scroll, controls inside viewport and ≥24 px, label visible, headline has room
+ok   mobile-320: height 50–60 px
+ok   mobile-320: no horizontal scroll, controls inside viewport and ≥24 px, label visible, headline has room
+ok   tablet-768: height 60–80 px
+ok   tablet-768: no horizontal scroll, controls inside viewport and ≥24 px, label visible, headline has room
+ok   one ad: controls not drawn
+ok   one ad: stays
+ok   missing image: no hole, no img element
+ok   internal promo shown when no sponsor, labelled "SaudaPulse" (not "Реклама")
+ok   SUPPORTER: slot hidden, zero height, no ad nodes, even when the ads answer has campaigns
+ok   SUPPORTER: no impression/click sent
+ok   SUPPORTER: loading placeholder cleared (hint did not leave an empty box)
+ok   SUPPORTER: no page errors
+ok   SUPPORTER: stays hidden over time
+ok   SUPPORTER (entitlement unknown, server says show_ads=false): hidden
+ok   empty list: slot hidden (state empty), takes no room, no error text
+ok   empty list: business navigation still works, no page errors
+ok   worker error (ok:false): slot hidden (state error), takes no room, no error text
+ok   worker error (ok:false): business navigation still works, no page errors
+ok   request rejected: slot hidden (state error), takes no room, no error text
+ok   request rejected: business navigation still works, no page errors
+ok   garbage answer: slot hidden (state error), takes no room, no error text
+ok   garbage answer: business navigation still works, no page errors
+ok   both calls fail: slot hidden (state error), takes no room, no error text
+ok   both calls fail: business navigation still works, no page errors
+ok   hang: banner hidden/loading-free while waiting, dashboard usable
+ok   hang: navigation works while the ad request is pending
+ok   hang: gives up after the 8 s timeout → error state
+ok   error → automatic retry after 60 s recovers
+ok   loading: space reserved at final height (skeleton, aria-busy)
+ok   loading → ready: content does not move
+ok   prefers-reduced-motion: no automatic rotation; manual navigation still works
+ok   reduced motion: next works
+
+72/72 checks passed

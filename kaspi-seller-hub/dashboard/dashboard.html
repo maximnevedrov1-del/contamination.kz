@@ -131,6 +131,8 @@
         </header>
         <div class="topbar__meta"><span id="lastSync"></span><div class="progress" id="progress" hidden><div class="progress__bar"></div><span class="progress__label"></span></div></div>
 
+        <!-- The one advertising placement (dashboard/ad-banner.js). Hidden and zero-height unless the server returns ads. -->
+        <section id="adSlot" class="ad-slot" data-ad-state="idle" hidden></section>
         <div id="banners" class="banners" aria-live="polite"></div>
         <main id="view" class="view" tabindex="-1"></main>
       </div>
