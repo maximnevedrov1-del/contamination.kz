@@ -1312,6 +1312,9 @@ const uiHandlers = {
   'ui:supporterCreate': (p) => billingCall(async () => ({ ok: true, invoice: await B.createSupporterInvoice(p), entitlements: await B.entitlements() })),
   'ui:supporterCancel': () => billingCall(async () => (await B.cancelSupporter(), { ok: true, entitlements: await B.entitlements() })),
   'ui:supporterResume': () => billingCall(async () => (await B.resumeSupporter(), { ok: true, entitlements: await B.entitlements() })),
+  // Advertising never blocks anything: these answer an empty/false result on any failure and are not part of any business flow.
+  'ui:adsGet': ({ force } = {}) => B.ads({ force: !!force }).then((r) => ({ ok: true, ...r })).catch(() => ({ ok: true, showAds: true, fallback: false, ads: [] })),
+  'ui:adsEvent': (p) => B.adEvent(p || {}).then((ok) => ({ ok })).catch(() => ({ ok: false })),
   'ui:billingCancelInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.cancelInvoice(p) })),
   'ui:billingLogout': async () => {
     await B.logout();

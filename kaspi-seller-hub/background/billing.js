@@ -8,14 +8,15 @@
  */
 import { BILLING } from '../shared/billing-config.js';
 import { createLicenseVerifier } from '../shared/license-signature.js';
-import { normalizeEntitlements } from '../shared/ads.js';
+import { normalizeEntitlements, normalizeAds } from '../shared/ads.js';
 
 const SESSION_KEY = 'ksh.session';
 const LAST_USER_KEY = 'ksh.lastUser';
 /** Per-account data on this computer (support questions, «ответ помог?» marks, unsent usage counts). */
-const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage', 'ksh.tg', 'ksh.entitlements'];
+const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage', 'ksh.tg', 'ksh.entitlements', 'ksh.ads'];
 const LICENSE_KEY = 'ksh.license';
 const ENT_KEY = 'ksh.entitlements';
+const ADS_KEY = 'ksh.ads';
 const DAY = 86400000;
 
 export const isConfigured = () => !!(BILLING.supabaseUrl && BILLING.supabaseAnonKey);
@@ -193,7 +194,7 @@ export async function acceptTerms() {
 export async function logout() {
   const s = await get(SESSION_KEY);
   if (s?.access_token) await http('/auth/v1/logout', { token: s.access_token }).catch(() => {});
-  await chrome.storage.local.remove([SESSION_KEY, LICENSE_KEY, ENT_KEY]);
+  await chrome.storage.local.remove([SESSION_KEY, LICENSE_KEY, ENT_KEY, ADS_KEY]);
   return { ok: true };
 }
 
@@ -555,6 +556,45 @@ export async function entitlements({ force = false } = {}) {
     return normalizeEntitlements(null);
   }
 }
+/**
+ * Advertisements (Stage 05). NEVER throws and is never awaited by a business flow: any failure (offline, server error,
+ * bad data, signed out) is an empty list. Ad-free supporters get nothing: the server decides, and the entitlement is
+ * checked here too. Cached ADS_TTL_MIN minutes per user. The request carries only the sign-in token the server needs
+ * to tell a free user from a supporter; no store, order or product data is sent.
+ */
+const ADS_TTL_MIN = 15;
+const NO_ADS = Object.freeze({ showAds: true, fallback: false, ads: [] });
+export async function ads({ force = false } = {}) {
+  try {
+    if (!isConfigured()) return NO_ADS;
+    const session = await get(SESSION_KEY);
+    if (!session) return NO_ADS;
+    const cache = await get(ADS_KEY);
+    const mine = cache && cache.user === session.user_id;
+    const age = mine ? Date.now() - cache.fetchedAt : Infinity;
+    let view;
+    if (mine && age >= -60000 && age < ADS_TTL_MIN * 60000 && !force) view = normalizeAds(cache.data);
+    else {
+      const data = await rpc('get_ads');
+      await set(ADS_KEY, { data, fetchedAt: Date.now(), user: session.user_id });
+      view = normalizeAds(data);
+    }
+    if (view.ads.length && !normalizeEntitlements(await get(ENT_KEY).then((c) => (c && c.user === session.user_id ? c.data : null))).showAds) return { showAds: false, fallback: false, ads: [] };
+    return view;
+  } catch {
+    return NO_ADS;
+  }
+}
+/** Aggregate counter only (server stores +1 per campaign per day, nothing about the caller). Fire and forget. */
+export async function adEvent({ id, event }) {
+  try {
+    if (!['impression', 'click'].includes(event) || !Number.isSafeInteger(Number(id))) return false;
+    return (await rpc('ad_record', { p_campaign: Number(id), p_event: event })) === true;
+  } catch {
+    return false;
+  }
+}
+
 const supporterCall = async (fn, args) => {
   const data = await rpc(fn, args);
   await entitlements({ force: true });

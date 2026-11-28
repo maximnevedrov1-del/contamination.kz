@@ -1,7 +1,7 @@
 -- Seller Hub: function, table and Storage privileges, deterministic and idempotent.
 -- Apply AFTER restoring a dump (pg_restore --no-owner ...):
 --   psql "$TARGET_DB_URL" -f kaspi-seller-hub/billing/supabase/grants.sql
--- Mirrors the grants of migrations 001..033, 035 and 036 (036 adds the supporter functions; verified against a database built from them).
+-- Mirrors the grants of migrations 001..033, 035, 036 and 037 (036 adds the supporter functions, 037 the advertising functions; verified against a database built from them).
 -- Keep in sync: when a migration adds a function or changes who may call it, update this file too.
 
 -- 1. everything closed first (also for future functions)
@@ -91,14 +91,16 @@ grant execute on function
   public.upgrade_quote(int),
   public.usage_report(jsonb,jsonb,text),
   public.get_entitlements(), public.create_supporter_invoice(int,text), public.cancel_supporter(), public.resume_supporter(),
-  public.admin_set_supporter_payments(boolean)
+  public.admin_set_supporter_payments(boolean),
+  public.admin_ad_list(text), public.admin_ad_save(bigint,jsonb), public.admin_ad_set_status(bigint,text), public.admin_ad_config(boolean,text[],text[]),
+  public.admin_ad_stats(bigint,int), public.get_ads(), public.ad_record(bigint,text)
 to authenticated;
 
 -- 4. server side only (Telegram bot Edge Function, ops-alert job, retention job): service_role
 grant execute on function
   public.bot_link(text, text, bigint, text), public.bot_unlink(text, bigint, boolean), public.bot_jobs(text), public.bot_sent(text, jsonb),
   public.bot_lock(text, text, int), public.bot_unlock(text, text), public.bot_key_ok(text), public.ops_digest(text),
-  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.payment_failed(text,text,int,bigint), public.bot_langs(text,uuid[],bigint[]), public.bot_verify_phone(text,bigint,text),
+  public.enqueue_retention_nudges(), public.payment_received(text,text,int,bigint,text), public.payment_failed(text,text,int,bigint), public.expire_ad_campaigns(), public.bot_langs(text,uuid[],bigint[]), public.bot_verify_phone(text,bigint,text),
   public.bot_faq(text), public.bot_faq(text,bigint), public.bot_ask(text,bigint,text,text,int,text), public.bot_feedback(text,bigint,boolean),
   public.bot_ticket_wait(text,bigint,boolean), public.bot_ticket(text,bigint,text)
 to service_role;
