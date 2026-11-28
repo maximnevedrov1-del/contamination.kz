@@ -124,10 +124,10 @@ const tick = async (p, ms) => { await p.clock.runFor(ms); await p.waitForTimeout
     const a11y = await p.evaluate(() => {
       const bar = document.querySelector('.ad-banner');
       const names = [...bar.querySelectorAll('button')].map((x) => x.getAttribute('aria-label'));
-      return { region: bar.getAttribute('role') + '/' + bar.getAttribute('aria-roledescription') + '/' + bar.getAttribute('aria-label'), names, live: bar.querySelector('.ad-banner__stage').getAttribute('aria-live'), link: document.querySelector('.ad-banner__link').getAttribute('aria-label'), imgAlt: document.querySelector('.ad-banner__img')?.getAttribute('alt'), tiny: [...bar.querySelectorAll('button')].filter((x) => x.getBoundingClientRect().width < 24 || x.getBoundingClientRect().height < 24).length };
+      return { region: bar.getAttribute('role') + '/' + bar.getAttribute('aria-roledescription') + '/' + bar.getAttribute('aria-label'), names, status: document.querySelectorAll('#adSlot [role=status]').length, link: document.querySelector('.ad-banner__link').innerText, imgAlt: document.querySelector('.ad-banner__img')?.getAttribute('alt'), tiny: [...bar.querySelectorAll('button')].filter((x) => x.getBoundingClientRect().width < 24 || x.getBoundingClientRect().height < 24).length };
     });
-    check('a11y: group/carousel with a name, labelled buttons, link name mentions "Реклама", decorative image alt=""', /group\/carousel\/Реклама/.test(a11y.region) && a11y.names.every(Boolean) && a11y.names.length === 3 && /^Реклама Sponsor \d:/.test(a11y.link) && a11y.imgAlt === '' && a11y.tiny === 0, JSON.stringify(a11y));
-    check('a11y: live region is "off" while auto-rotating', a11y.live === 'off', a11y.live);
+    check('a11y: group/carousel with a name, labelled buttons, link name mentions "Реклама", decorative image alt=""', /group\/carousel\/Реклама/.test(a11y.region) && a11y.names.every(Boolean) && a11y.names.length === 3 && /Headline \d/.test(a11y.link) && /новой вкладке/.test(a11y.link) && a11y.imgAlt === '' && a11y.tiny === 0, JSON.stringify(a11y));
+    check('a11y: exactly one persistent status region (auto-rotation never writes to it)', a11y.status === 1, JSON.stringify(a11y));
     // keyboard
     await p.mouse.move(5, 5);
     await p.focus('.ad-banner__link'); await p.keyboard.press('Tab'); await p.keyboard.press('Tab'); // → prev? order: link, prev, next
@@ -137,7 +137,7 @@ const tick = async (p, ms) => { await p.clock.runFor(ms); await p.waitForTimeout
     check('keyboard: Tab reaches controls, Enter activates, focus stays on the button after re-render', f1 === 'next' && f2 === 'next', `${f1}/${f2}`);
     const h0 = await head(p); await tick(p, 90000);
     check('keyboard focus inside the banner pauses rotation', (await head(p)) === h0);
-    check('polite live region when paused', (await p.locator('.ad-banner__stage').getAttribute('aria-live')) === 'polite');
+    check('manual navigation is announced via the status region', /Headline \d/.test(await p.locator('#adSlot [role=status]').textContent()), await p.locator('#adSlot [role=status]').textContent());
     await p.keyboard.press('Shift+Tab'); await p.keyboard.press('Shift+Tab'); await p.keyboard.press('Shift+Tab'); await p.keyboard.press('Shift+Tab');
     await p.screenshot({ path: `${SHOTS}/stage06-desktop-focus.png`, clip: { x: 0, y: 0, width: 1440, height: 220 } });
     // language
@@ -255,6 +255,16 @@ const tick = async (p, ms) => { await p.clock.runFor(ms); await p.waitForTimeout
     await tick(p, 900); await p.waitForTimeout(300);
     console.log('   CLS log (loading→ready):', JSON.stringify(await p.evaluate(() => window.__clsLog)));
     check('loading → ready: content does not move', (await state(p)) === 'ready' && (await box(p, '#view')).y === topBefore);
+    await p.close();
+  }
+
+  // ---------- 8b. supporter pays while the tab stays open ----------
+  {
+    const { p } = await open(ctx, id, { sup: FREE, ads: { ok: true, showAds: true, ads: [AD(1), AD(2)] } });
+    check('open tab, free user: ads shown', (await state(p)) === 'ready');
+    await p.evaluate((s) => { window.__stub.sup = s; window.__stub.ads = { ok: true, showAds: false, ads: [] }; }, SUP);
+    await tick(p, 10 * 60000 + 1000); await p.waitForTimeout(300);
+    check('SUPPORTER activates while the tab is open: banner disappears by itself within 10 min', (await state(p)) === 'adfree' && !(await box(p, '#adSlot'))?.vis && (await p.locator('.ad-banner').count()) === 0, await state(p));
     await p.close();
   }
 

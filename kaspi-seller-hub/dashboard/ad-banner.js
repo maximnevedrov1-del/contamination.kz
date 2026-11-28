@@ -19,6 +19,7 @@ export const ROTATE_MS = 30000;
 export const MAX_AD_SLOTS = 3;
 export const REQUEST_TIMEOUT_MS = 8000;
 export const STALE_MS = 15 * 60000; // same as the worker's cache: a long-open tab asks again when it becomes visible
+export const REVALIDATE_MS = 10 * 60000;
 const HINT_KEY = 'ksh.adHint';
 
 /**
@@ -127,6 +128,9 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
   let loading = null;
   let retries = 0;
   let retryTimer = null;
+  const status = h('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });   // persistent: only content changes inside it are announced
+  root.append(status);
+  const wipe = () => { root.querySelectorAll('.ad-banner').forEach((n) => n.remove()); };
   const seen = new Set();       // impressions: once per campaign per page load
 
   const hint = {
@@ -139,7 +143,7 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
 
   function impression() {
     const ad = ads[rot.index];
-    if (!ad || document.hidden || root.hidden || seen.has(ad.id)) return;
+    if (!ad || document.hidden || root.hidden || !enabled() || seen.has(ad.id)) return;
     seen.add(ad.id);
     try { track('impression', ad); } catch { /* analytics must never break the page */ }
   }
@@ -149,11 +153,11 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
     const label = sponsored ? t('ads.label') : t('ads.internal');
     const link = h('a', {
       class: 'ad-banner__link', href: ad.url, target: '_blank', rel: 'noopener noreferrer sponsored', referrerpolicy: 'no-referrer',
-      'aria-label': `${label}${sponsored && ad.sponsor ? ` ${ad.sponsor}` : ''}: ${ad.headline}. ${t('ads.opensNew')}`,
       dataset: { adId: String(ad.id) },
     },
       h('span', { class: 'ad-banner__headline' }, ad.headline),
-      ad.body ? h('span', { class: 'ad-banner__body' }, ad.body) : null);
+      ad.body ? h('span', { class: 'ad-banner__body' }, ad.body) : null,
+      h('span', { class: 'sr-only' }, ` — ${t('ads.opensNew')}`));
     const onClick = () => { try { track('click', ad); } catch { /* ignore */ } };
     link.addEventListener('click', onClick);
     link.addEventListener('auxclick', (e) => e.button === 1 && onClick());
@@ -175,12 +179,15 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
   }
 
   function paint() {
-    const focused = root.contains(document.activeElement) ? document.activeElement.dataset?.adAction : null;   // keyboard users keep their place
-    const box = clear(root);
+    const act = document.activeElement;
+    const focused = root.contains(act) ? act.dataset?.adAction : null;
+    const onLink = root.contains(act) && act.matches?.('.ad-banner__link');   // keyboard users keep their place
+    wipe();
+    const box = root;
     if (!ads.length) return;
     const multi = ads.length > 1;
     const userPaused = rot.has('user');
-    const stage = h('div', { class: 'ad-banner__stage', 'aria-live': 'off', 'aria-atomic': 'true' }, slide(ads[rot.index], rot.index));
+    const stage = h('div', { class: 'ad-banner__stage' }, slide(ads[rot.index], rot.index));
     const controls = multi ? h('div', { class: 'ad-banner__controls' },
       btn('prev', 'ads.prev', () => rot.prev()),
       h('span', { class: 'ad-banner__pos', 'aria-hidden': 'true' }, t('ads.position', { n: rot.index + 1, total: ads.length })),
@@ -189,16 +196,18 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
     const bar = h('div', { class: 'ad-banner', role: 'group', 'aria-roledescription': 'carousel', 'aria-label': t('ads.region'), dataset: { count: String(ads.length), paused: String(rot.paused) } }, stage, controls);
     box.append(bar);
     if (focused) bar.querySelector(`[data-ad-action="${focused === 'pause' || focused === 'play' ? (userPaused ? 'play' : 'pause') : focused}"]`)?.focus();
+    if (onLink) bar.querySelector('.ad-banner__link')?.focus();
     // a rebuilt DOM fires no focusout for the old node: recompute the keyboard-focus pause from where the focus really is
     const a = document.activeElement;
     rot.setPause('focus', multi && root.contains(a) && !!a.matches?.(':focus-visible'));
     syncLive();
   }
 
+  function announce() { const a = ads[rot.index]; status.textContent = a ? `${t('ads.slide', { n: rot.index + 1, total: ads.length })}: ${a.kind === 'sponsor' ? t('ads.label') : t('ads.internal')}. ${a.headline}` : ''; }
+
   /** Auto-rotating: the slide is not announced. Paused / user-driven: announce changes politely (W3C carousel pattern). */
   function syncLive() {
     const stage = root.querySelector('.ad-banner__stage');
-    if (stage) stage.setAttribute('aria-live', ads.length < 2 || rot.running ? 'off' : 'polite');
     const bar = root.querySelector('.ad-banner');
     if (bar) bar.dataset.paused = String(rot.paused);
   }
@@ -212,9 +221,9 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
 
   function applyReady(list) {
     ads = list;
-    seen.clear();
+    root.removeAttribute('aria-busy');
     rot.destroy();
-    rot = createRotation({ interval, count: ads.length, onChange: () => { paint(); impression(); } });
+    rot = createRotation({ interval, count: ads.length, onChange: (i, why) => { paint(); impression(); if (why === 'manual') announce(); } });
     rot.setPause('hidden', !!document.hidden);
     rot.setPause('motion', !!reduced?.matches);
     setState('ready');
@@ -226,7 +235,8 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
   function applyNone(state) {
     ads = [];
     rot.destroy();
-    clear(root);
+    wipe();
+    status.textContent = '';
     root.removeAttribute('aria-busy');
     setState(state);
     show(false);
@@ -238,7 +248,8 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
     if (!enabled()) { applyNone('off'); return Promise.resolve(); }
     // reserve the room only when the last visit showed an ad: no jump when it arrives, no empty box for supporters
     if (!ads.length && hint.get()) {
-      clear(root).append(h('div', { class: 'ad-banner ad-banner--loading', 'aria-hidden': 'true' }, h('span', { class: 'ad-banner__bar' }), h('span', { class: 'ad-banner__bar ad-banner__bar--short' })));
+      wipe();
+      root.append(h('div', { class: 'ad-banner ad-banner--loading', 'aria-hidden': 'true' }, h('span', { class: 'ad-banner__bar' }), h('span', { class: 'ad-banner__bar ad-banner__bar--short' })));
       root.setAttribute('aria-busy', 'true');
       setState('loading');
       show(true);
@@ -263,13 +274,17 @@ export function mountAdBanner({ root, send, t, enabled = () => true, onEvent, in
       else impression();
     }
   });
+  // a tab that stays open: re-check eligibility (supporter paid elsewhere, campaign paused) while visible
+  setInterval(() => { if (!document.hidden && enabled() && !loading) { loadedAt = 0; load(); } }, REVALIDATE_MS);
   reduced?.addEventListener?.('change', () => { rot.setPause('motion', reduced.matches); if (ads.length) paint(); });
 
   return {
     /** First load. */
     start: () => load(),
     /** After the subscription changed (e.g. the supporter paid): ask again, now. */
-    refresh: () => { retries = 0; loadedAt = 0; return loading ? loading.then(load) : load(); },
+    refresh: () => { retries = 0; loadedAt = 0; clearTimeout(retryTimer); return loading ? loading.then(load) : load(); },
+    /** Cheap, no network unless the mode changed: packer / locked screen starting or ending after the first load. */
+    sync: () => { if (!enabled()) { if (root.dataset.adState !== 'off') applyNone('off'); } else if (root.dataset.adState === 'off') return load(); },
     /** Re-render in the new language. */
     rerender: () => { if (ads.length) paint(); },
     get state() { return root.dataset.adState || 'idle'; },

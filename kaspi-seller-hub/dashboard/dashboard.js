@@ -3345,6 +3345,7 @@ function renderStaffRoot() {
   const mode = staffMode();
   const root = $('staffRoot');
   document.body.classList.toggle('staff-mode', !!mode);
+  adBanner?.sync();
   root.hidden = !mode;
   if (mode === 'lock') renderLockScreen(root, staffCtx());
   else if (mode === 'packer') renderPacker(root, staffCtx());
