@@ -76,6 +76,25 @@ await t('other events are acknowledged and ignored', async () => {
   assert.deepEqual(await res.json(), { ok: true, ignored: true });
   assert.equal(calls.length, 0);
 });
+await t('payment.failed → payment_failed (no phone, no confirmation), 200; duplicates are the database\'s job', async () => {
+  const { f, calls } = db([200, { outcome: 'failed', reason: 'provider_failed', invoice_id: 5, duplicate: false }]);
+  const res = await run(await signed({ event: 'payment.failed', payment_id: 'pay_9', amount: 5000, invoice_id: 5, phone: '+7 701 111 11 11' }), f);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, outcome: 'failed', reason: 'provider_failed', duplicate: false });
+  assert.equal(calls[0].url, 'https://p.supabase.co/rest/v1/rpc/payment_failed');
+  assert.deepEqual(calls[0].body, { p_provider: 'generic', p_payment_id: 'pay_9', p_amount: 5000, p_invoice_id: 5 });
+});
+await t("ids: 'failed:' prefix reserved, > 120 chars refused (400), database not called", async () => {
+  const { f, calls } = db();
+  for (const id of ['failed:abc', 'x'.repeat(121)]) assert.equal((await run(await signed({ event: 'payment.paid', payment_id: id, amount: 5000, invoice_id: 5 }), f)).status, 400);
+  assert.equal((await run(await signed({ event: 'payment.failed', payment_id: 'x'.repeat(120), amount: 5000 }), f)).status, 200);
+  assert.equal(calls.length, 1);
+});
+await t('payment.failed needs a valid signature too', async () => {
+  const { f, calls } = db();
+  assert.equal((await run(await signed({ event: 'payment.failed', payment_id: 'p', amount: 5000 }, { secret: 'x'.repeat(40) }), f)).status, 401);
+  assert.equal(calls.length, 0);
+});
 await t('unknown provider → 404; aipay not connected yet → 501; GET → 405', async () => {
   const { f, calls } = db();
   assert.equal((await run(await signed(PAID, { provider: 'evil' }), f)).status, 404);

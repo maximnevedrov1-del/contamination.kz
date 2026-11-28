@@ -8,12 +8,14 @@
  */
 import { BILLING } from '../shared/billing-config.js';
 import { createLicenseVerifier } from '../shared/license-signature.js';
+import { normalizeEntitlements } from '../shared/ads.js';
 
 const SESSION_KEY = 'ksh.session';
 const LAST_USER_KEY = 'ksh.lastUser';
 /** Per-account data on this computer (support questions, «ответ помог?» marks, unsent usage counts). */
-const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage', 'ksh.tg'];
+const ACCOUNT_KEYS = ['ksh.tickets', 'ksh.csat', 'ksh.usage', 'ksh.tg', 'ksh.entitlements'];
 const LICENSE_KEY = 'ksh.license';
+const ENT_KEY = 'ksh.entitlements';
 const DAY = 86400000;
 
 export const isConfigured = () => !!(BILLING.supabaseUrl && BILLING.supabaseAnonKey);
@@ -191,7 +193,7 @@ export async function acceptTerms() {
 export async function logout() {
   const s = await get(SESSION_KEY);
   if (s?.access_token) await http('/auth/v1/logout', { token: s.access_token }).catch(() => {});
-  await chrome.storage.local.remove([SESSION_KEY, LICENSE_KEY]);
+  await chrome.storage.local.remove([SESSION_KEY, LICENSE_KEY, ENT_KEY]);
   return { ok: true };
 }
 
@@ -530,6 +532,38 @@ export async function createInvoice({ stores, months, phone }) {
  * @param {number} storeCount enabled stores in the extension
  * @returns {Promise<boolean>} true when the server was asked (licence then re-read)
  */
+/**
+ * Supporter (Stage 04): the server decides whether advertisements are shown. Cached for ENT_TTL_MIN minutes; on a
+ * network failure the last server answer is used for offlineGraceDays, otherwise the free tier (ads) applies.
+ * Nothing here is consulted for business functionality.
+ */
+const ENT_TTL_MIN = 10;
+export async function entitlements({ force = false } = {}) {
+  if (!isConfigured()) return normalizeEntitlements(null);
+  const session = await get(SESSION_KEY);
+  if (!session) return normalizeEntitlements(null);
+  const cache = await get(ENT_KEY);
+  const mine = cache && cache.user === session.user_id;
+  const age = mine ? Date.now() - cache.fetchedAt : Infinity;
+  if (mine && age >= -60000 && age < ENT_TTL_MIN * 60000 && !force) return normalizeEntitlements(cache.data);
+  try {
+    const data = await rpc('get_entitlements');
+    await set(ENT_KEY, { data, fetchedAt: Date.now(), user: session.user_id });
+    return normalizeEntitlements(data);
+  } catch (e) {
+    if (mine && age >= -60000 && age < BILLING.offlineGraceDays * DAY) return normalizeEntitlements(cache.data);
+    return normalizeEntitlements(null);
+  }
+}
+const supporterCall = async (fn, args) => {
+  const data = await rpc(fn, args);
+  await entitlements({ force: true });
+  return data;
+};
+export const createSupporterInvoice = ({ months, phone }) => supporterCall('create_supporter_invoice', { p_months: Number(months), p_phone: phone ? String(phone) : null });
+export const cancelSupporter = () => supporterCall('cancel_supporter', {});
+export const resumeSupporter = () => supporterCall('resume_supporter', {});
+
 export async function reconcileInvoice(storeCount, view) {
   // Free access: invoices are never created or changed automatically (the server RPCs are no-ops as well).
   void storeCount; void view;

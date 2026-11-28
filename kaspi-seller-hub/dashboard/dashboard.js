@@ -2374,6 +2374,62 @@ async function resumeSubscription() {
 }
 
 /** Account page: the plan, a running discount, «перейти на Старт» planned, «Отменить подписку». */
+/** «Поддержать проект» (Stage 04): the server says whether ads are shown; nothing here limits any function. */
+function supporterCard(lic) {
+  if (!lic || ['loggedOut', 'unconfigured'].includes(lic.status)) return null;
+  if (state.supEnt === undefined && !state.supLoading) {
+    state.supLoading = true;
+    send('ui:supporterGet', { force: true }).then((r) => { state.supEnt = r?.ok ? r.entitlements : null; })
+      .catch(() => { state.supEnt = null; }).finally(() => { state.supLoading = false; if (state.route === 'account') renderView(); });
+  }
+  const e = state.supEnt;
+  if (!e) return null;
+  const ui2 = (state.supUi ??= { months: 1, msg: '' });
+  const act = (type, payload) => run(async () => {
+    const r = await send(type, payload);
+    if (r?.ok) { state.supEnt = r.entitlements; ui2.msg = ''; } else { const k = `account.supporter.err.${r?.error}`; ui2.msg = hasKey(k) ? t(k) : errorText(r?.error); }
+    renderView();
+    return r;
+  });
+  const inv = e.pendingInvoice;
+  const price = formatMoney(e.priceMonth);
+  const body = [];
+  if (e.adFree) {
+    body.push(h('p', null, h('span', { class: 'badge badge--ok' }, t('account.supporter.active')), ' ', t(e.cancelAt ? 'account.supporter.endsCancelled' : 'account.supporter.until', { date: formatDate(e.endsAt) })));
+    body.push(h('p', { class: 'muted' }, t('account.supporter.same')));
+  } else {
+    body.push(h('p', null, t(e.status === 'expired' ? 'account.supporter.expired' : 'account.supporter.free', { price })));
+    body.push(h('p', { class: 'muted' }, t('account.supporter.same')));
+  }
+  if (inv) {
+    body.push(h('div', { class: 'pending-invoice__body' },
+      h('div', null,
+        h('p', null, t('account.supporter.invoice', { amount: formatMoney(inv.amount), months: inv.months })),
+        h('p', { class: 'muted' }, t('notices.payHint')),
+        lic.payment?.instructions && h('p', { class: 'pending-invoice__instr' }, lic.payment.instructions),
+        h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+          h('button', { type: 'button', class: 'btn', disabled: ui.busy, onclick: () => act('ui:supporterGet', { force: true }) }, t('account.checkStatus')),
+          h('button', { type: 'button', class: 'btn btn--ghost btn--danger', disabled: ui.busy, onclick: () => act('ui:supporterCancel') }, t('account.supporter.cancelInvoice'))),
+      ),
+      safeQrUrl(lic.payment?.qr_url) && h('img', { class: 'pending-invoice__qr', src: safeQrUrl(lic.payment.qr_url), alt: t('account.qrAlt'), referrerpolicy: 'no-referrer' })));
+  } else if (e.paymentsEnabled) {
+    const months = [1, 3, 6, 12].filter((m) => m <= e.maxMonths);
+    const sel = h('select', { class: 'input', 'aria-label': t('account.supporter.months'), onchange: (ev) => { ui2.months = Number(ev.target.value); renderView(); } },
+      ...months.map((m) => h('option', { value: String(m), selected: m === ui2.months }, t('account.supporter.monthsOpt', { count: m, amount: formatMoney(e.priceMonth * m) }))));
+    body.push(h('div', { class: 'field', style: { justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' } }, sel,
+      h('button', { type: 'button', class: 'btn btn--primary', disabled: ui.busy, dataset: { action: 'supporter-subscribe' }, onclick: () => act('ui:supporterCreate', { months: ui2.months }) },
+        t(e.adFree ? 'account.supporter.extend' : 'account.supporter.subscribe'))));
+  } else {
+    body.push(h('p', { class: 'muted', dataset: { block: 'supporter-unavailable' } }, t('account.supporter.unavailable')));
+  }
+  if (e.adFree && !e.cancelAt) body.push(h('button', { type: 'button', class: 'btn btn--ghost btn--sm', disabled: ui.busy, onclick: () => act('ui:supporterCancel') }, t('account.supporter.cancel')));
+  if (e.adFree && e.cancelAt) body.push(h('button', { type: 'button', class: 'btn btn--sm', disabled: ui.busy, onclick: () => act('ui:supporterResume') }, t('account.supporter.resume')));
+  if (ui2.msg) body.push(h('p', { class: 'muted', role: 'status' }, ui2.msg));
+  return h('section', { class: 'card', dataset: { card: 'supporter' } },
+    h('div', { class: 'card__header' }, h('div', null, h('h2', { class: 'card__title' }, t('account.supporter.title')), h('div', { class: 'card__sub' }, t('account.supporter.sub', { price })))),
+    h('div', { class: 'card__body' }, ...body));
+}
+
 function subscriptionCard(lic) {
   if (lic.freeAccess || !['active', 'grace', 'frozen'].includes(lic.status) || !lic.paidUntil) return null; // free access: no cancel / freeze / discount flows
   const pr = lic.pricing || {};
@@ -2601,7 +2657,7 @@ function viewAccount() {
     errBox(),
   );
 
-  const inv = lic.pendingInvoice;
+  const inv = lic.pendingInvoice && lic.pendingInvoice.kind !== 'supporter' ? lic.pendingInvoice : null;
   const pendingCard =
     inv &&
     h(
@@ -2719,7 +2775,7 @@ function viewAccount() {
   );
 
   // With an open invoice the plan form stays below it: choosing another plan replaces the invoice.
-  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), exitEl(), pendingCard, referralCard, lic.freeAccess ? null : planCard, historyCard);
+  return h('div', { class: 'settings' }, statusCard, subscriptionCard(lic), supporterCard(lic), exitEl(), pendingCard, referralCard, lic.freeAccess ? null : planCard, historyCard);
 }
 
 /* ===================================================================== */

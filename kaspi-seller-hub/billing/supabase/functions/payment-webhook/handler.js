@@ -8,7 +8,7 @@
  *
  * Providers:
  *   generic — our own documented format, for tests and for any bridge we control:
- *       POST JSON { "event": "payment.paid", "payment_id": "…", "amount": 12000, "invoice_id": 123?, "phone": "+7…"? }
+ *       POST JSON { "event": "payment.paid" | "payment.failed", "payment_id": "…", "amount": 12000, "invoice_id": 123?, "phone": "+7…"? }
  *       headers  X-Timestamp: <unix seconds>,  X-Signature: hex(HMAC-SHA256(secret, `${timestamp}.${raw body}`))
  *       secret   PAYMENT_WEBHOOK_SECRET; a request older or newer than 5 minutes is refused (replay).
  *   aipay   — AiPay.kz (Kaspi Pay via the Cashier role). NOT CONNECTED YET: their API documentation could not be read
@@ -47,7 +47,8 @@ class HttpError extends Error {
 /** Common checks of what a provider adapter extracted. */
 function payment(p) {
   const id = String(p.payment_id ?? '').trim();
-  if (!id || id.length > 128) throw new HttpError(400, 'bad_payment_id');
+  // 120 so that the database's 'failed:' record key still fits; 'failed:' itself is reserved for failure records
+  if (!id || id.length > 120 || id.startsWith('failed:')) throw new HttpError(400, 'bad_payment_id');
   if (!Number.isInteger(p.amount) || p.amount <= 0 || p.amount > 100_000_000) throw new HttpError(400, 'bad_amount');
   let invoice = null;
   if (p.invoice_id != null && p.invoice_id !== '') {
@@ -70,8 +71,10 @@ export const PROVIDERS = {
       let body;
       try { body = JSON.parse(raw); } catch { throw new HttpError(400, 'bad_json'); }
       if (!body || typeof body !== 'object') throw new HttpError(400, 'bad_json');
-      if (body.event !== 'payment.paid') return null; // other events are acknowledged and ignored
-      return payment(body);
+      // payment.paid → confirm; payment.failed → recorded for the admin, changes no entitlement; other events are acknowledged and ignored
+      if (body.event === 'payment.paid') return { ...payment(body), event: 'paid' };
+      if (body.event === 'payment.failed') return { ...payment(body), event: 'failed' };
+      return null;
     },
   },
   aipay: {
@@ -100,10 +103,13 @@ export async function handle(req, env, f = fetch, { nowS = () => Math.floor(Date
     const p = await provider.parse(raw, req.headers, env, nowS());
     if (!p) return json(200, { ok: true, ignored: true });
 
-    const res = await f(`${env.SUPABASE_URL}/rest/v1/rpc/payment_received`, {
+    const failed = p.event === 'failed';
+    const res = await f(`${env.SUPABASE_URL}/rest/v1/rpc/${failed ? 'payment_failed' : 'payment_received'}`, {
       method: 'POST',
       headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_provider: name, p_payment_id: p.payment_id, p_amount: p.amount, p_invoice_id: p.invoice_id, p_phone: p.phone }),
+      body: JSON.stringify(failed
+        ? { p_provider: name, p_payment_id: p.payment_id, p_amount: p.amount, p_invoice_id: p.invoice_id }
+        : { p_provider: name, p_payment_id: p.payment_id, p_amount: p.amount, p_invoice_id: p.invoice_id, p_phone: p.phone }),
     });
     const text = await res.text();
     if (!res.ok) {

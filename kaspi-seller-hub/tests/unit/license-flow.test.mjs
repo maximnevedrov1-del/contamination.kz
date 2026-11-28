@@ -20,6 +20,7 @@ mkdirSync(path.join(dir, 'background'));
 mkdirSync(path.join(dir, 'shared'));
 writeFileSync(path.join(dir, 'background/billing.js'), readFileSync(path.join(ROOT, 'background/billing.js')));
 writeFileSync(path.join(dir, 'shared/license-signature.js'), readFileSync(path.join(ROOT, 'shared/license-signature.js')));
+writeFileSync(path.join(dir, 'shared/ads.js'), readFileSync(path.join(ROOT, 'shared/ads.js')));
 const cfg = readFileSync(path.join(ROOT, 'shared/billing-config.js'), 'utf8')
   .replace(/supabaseUrl: '[^']*'/, `supabaseUrl: '${URL_}'`)
   .replace(/supabaseAnonKey: '[^']*'/, "supabaseAnonKey: 'anon'")

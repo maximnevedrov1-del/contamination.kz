@@ -1308,6 +1308,10 @@ const uiHandlers = {
       return { ok: true, result: r };
     }),
   'ui:billingCreateInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.createInvoice(p) })),
+  'ui:supporterGet': ({ force } = {}) => billingCall(async () => ({ ok: true, entitlements: await B.entitlements({ force: !!force }) })),
+  'ui:supporterCreate': (p) => billingCall(async () => ({ ok: true, invoice: await B.createSupporterInvoice(p), entitlements: await B.entitlements() })),
+  'ui:supporterCancel': () => billingCall(async () => (await B.cancelSupporter(), { ok: true, entitlements: await B.entitlements() })),
+  'ui:supporterResume': () => billingCall(async () => (await B.resumeSupporter(), { ok: true, entitlements: await B.entitlements() })),
   'ui:billingCancelInvoice': (p) => billingCall(async () => ({ ok: true, license: await B.cancelInvoice(p) })),
   'ui:billingLogout': async () => {
     await B.logout();
